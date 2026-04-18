@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-17T23:38:17.273548+00:00",
+  "last_updated": "2026-04-18T01:09:54.973508+00:00",
   "overall_progress_pct": 99,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -9,7 +9,7 @@
     "mnq_test_suite_passing": 749,
     "mnq_test_suite_failing": 0,
     "apex_predator_python_files": 107,
-    "apex_predator_tests_passing": 1885,
+    "apex_predator_tests_passing": 2036,
     "apex_predator_tests_failing": 0,
     "apex_predator_verify_all": "17/17 PASS",
     "apex_predator_staking_wired": {
@@ -2458,6 +2458,396 @@
       "tests_passing_before": 1859,
       "tests_passing_after": 1885,
       "tests_new": 26
+    },
+    "apex_predator_v0_1_41_oos_qualifier": {
+      "timestamp_utc": "2026-04-17T23:45:50.161787+00:00",
+      "version": "v0.1.41",
+      "bundle_name": "PER-STRATEGY OOS QUALIFIER -- walk-forward + DSR gate runs the harness through IS/OOS windows to decide keep-or-kill per strategy per asset",
+      "theme": "Compose the backtest harness with the Deflated Sharpe Ratio on a rolling walk-forward grid. Every AI-Optimized strategy now earns (or fails) its runtime allowlist slot via an explicit OOS hurdle: DSR > 0.5, avg degradation < 35%, min trades per window cleared in every window.",
+      "artifacts_added": {
+        "strategies": [
+          "strategies/oos_qualifier.py"
+        ],
+        "tests": [
+          "tests/test_strategies_oos_qualifier.py"
+        ],
+        "scripts": [
+          "scripts/_bump_roadmap_v0_1_41.py"
+        ]
+      },
+      "api_surface": {
+        "QualificationGate": "(dsr_threshold=0.5, max_degradation_pct=0.35, min_trades_per_window=20)  -- frozen dataclass.",
+        "DEFAULT_QUALIFICATION_GATE": "QualificationGate()",
+        "PerStrategyWindow": "strategy, window_id, is_n_trades, is_sharpe_like, is_total_r, is_hit_rate, oos_n_trades, oos_sharpe_like, oos_total_r, oos_hit_rate, degradation_pct, min_trades_met",
+        "StrategyQualification": "strategy, asset, n_windows, avg_is_sharpe, avg_oos_sharpe, avg_degradation_pct, dsr, n_trades_is_total, n_trades_oos_total, passes_gate, fail_reasons",
+        "QualificationReport": "asset, gate, n_windows_requested, n_windows_executed, per_window, qualifications, notes, passing_strategies, failing_strategies, as_dict()",
+        "qualify_strategies": "(bars, asset, *, gate, n_windows=4, is_fraction=0.7, ctx_builder, harness_config, eligibility, registry) -> QualificationReport"
+      },
+      "design_notes": {
+        "sharpe_like_per_trade": "Per-trade mean / stddev of R-multiples -- scale- invariant and matches DSR's input contract directly.",
+        "dsr_n_trials_equals_windows": "Each window is an independent backtest trial; setting n_trials to the executed-window count is the Gumbel correction Lopez de Prado prescribes. More windows deflate more aggressively.",
+        "gate_condition_lattice": "All three gate conditions must hold: DSR > threshold AND avg_degradation < max AND min_trades_per_window met in EVERY window. Explicit fail_reasons list makes the failing condition inspectable without re-running.",
+        "non_anchored_rolling_windows": "Windows are contiguous non-overlapping slices of the usable span. Avoids cross-window trade reuse so each window contributes independent OOS evidence.",
+        "router_integration_ready": "Output is already shaped for integration: report.passing_strategies intersected with DEFAULT_ELIGIBILITY[asset] produces the runtime allowlist the router's `eligibility=` parameter already accepts."
+      },
+      "test_coverage": {
+        "tests_added": 40,
+        "classes": {
+          "TestQualificationGateDefaults": 5,
+          "TestSharpeLike": 6,
+          "TestMoments": 4,
+          "TestDegradation": 5,
+          "TestBuildWindows": 6,
+          "TestQualifyStrategiesInsufficientBars": 2,
+          "TestQualifyStrategiesHappyPath": 2,
+          "TestQualifyStrategiesFailurePaths": 2,
+          "TestPerWindowRecords": 2,
+          "TestReportSerialisation": 4,
+          "TestMultiStrategy": 2
+        }
+      },
+      "ruff_clean_on": [
+        "strategies/oos_qualifier.py",
+        "tests/test_strategies_oos_qualifier.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- still funding-gated on P9_ROLLOUT; the qualifier gives the live policy router an objective OOS test to run before any new strategy variant earns live capital. Curve-fit edges now have to survive a Deflated Sharpe gate before they reach dispatch.",
+        "note": "v0.1.42 will plug the qualifier output into the live router's eligibility parameter as a cached intersect: passing_strategies & DEFAULT_ELIGIBILITY[asset] -> runtime allowlist, refreshed on a cadence."
+      },
+      "python_touched": true,
+      "jsx_touched": false,
+      "tests_passing_before": 1885,
+      "tests_passing_after": 1925,
+      "tests_new": 40
+    },
+    "apex_predator_v0_1_42_runtime_allowlist_cache": {
+      "timestamp_utc": "2026-04-17T23:51:40.548629+00:00",
+      "version": "v0.1.42",
+      "bundle_name": "RUNTIME ALLOWLIST CACHE -- OOS-qualifier verdict becomes the policy router's runtime eligibility, on a TTL cadence",
+      "theme": "Close the wiring gap between per-strategy OOS qualification and live dispatch. RuntimeAllowlistCache intersects report.passing_strategies with DEFAULT_ELIGIBILITY[asset], caches the result with a per-entry TTL, and exposes the exact dict shape that dispatch(eligibility=...) consumes. Curve-fit strategies drop out of live dispatch the moment they fail the gate, and rejoin the moment they re-qualify -- without a human editing the eligibility table.",
+      "artifacts_added": {
+        "strategies": [
+          "strategies/runtime_allowlist.py"
+        ],
+        "tests": [
+          "tests/test_strategies_runtime_allowlist.py"
+        ],
+        "scripts": [
+          "scripts/_bump_roadmap_v0_1_42.py"
+        ]
+      },
+      "api_surface": {
+        "DEFAULT_TTL_SECONDS": "3600.0  -- one hour",
+        "AllowlistEntry": "(asset, allowed, passing, base_eligible, report_asset, refreshed_at_utc)  -- frozen dataclass with as_dict()",
+        "intersect_passing_with_base": "(report, *, base_eligibility=None, now=None) -> AllowlistEntry  -- pure intersection helper",
+        "RuntimeAllowlistCache": "(ttl_seconds=DEFAULT_TTL_SECONDS, base_eligibility=DEFAULT_ELIGIBILITY, clock=datetime.now(UTC))",
+        "RuntimeAllowlistCache.update": "(report) -> AllowlistEntry  -- install fresh entry",
+        "RuntimeAllowlistCache.get": "(asset) -> AllowlistEntry | None  -- None if missing/stale",
+        "RuntimeAllowlistCache.is_stale": "(asset) -> bool",
+        "RuntimeAllowlistCache.invalidate": "(asset=None) -> None  -- clear one or all entries",
+        "RuntimeAllowlistCache.as_eligibility_map": "() -> dict[str, tuple[StrategyId, ...]]  -- ready for dispatch(eligibility=...)",
+        "RuntimeAllowlistCache.ensure_fresh": "(asset, bars, *, qualifier=None, **kwargs) -> AllowlistEntry  -- re-runs qualifier on miss/stale"
+      },
+      "design_notes": {
+        "ttl_default_one_hour": "Walk-forward qualification runs in seconds-to-minutes per asset; refreshing hourly keeps the live router's view fresh while leaving headroom for the ensemble without blocking the hot path.",
+        "base_order_preserved": "The intersection preserves DEFAULT_ELIGIBILITY's declared order so the router's confidence-tie-breaker semantics stay stable across cache refreshes -- a passing strategy's slot in the dispatch sequence doesn't shift when an earlier peer fails qualification.",
+        "clock_injection": "clock is a Callable[[], datetime] default-factoried to datetime.now(UTC). Tests use a _ManualClock fixture to advance time deterministically -- no sleep(), no freeze-time monkey-patching.",
+        "ensure_fresh_on_cadence": "ensure_fresh() is the only path that invokes the qualifier. Call it on a cadence (hourly, session-roll, etc.) and the live router sees the freshest verdict without re-running backtests on every bar.",
+        "as_eligibility_map_filters_stale": "as_eligibility_map() silently drops stale entries. Assets that have not been re-qualified fall back to dispatch()'s hard-coded default (LSD+OB+FVG+MTF) -- never to a stale verdict. Fail-safe, not fail-closed.",
+        "passing_preserved_even_when_not_in_base": "AllowlistEntry.passing captures ALL strategies that cleared the gate, not just those also in base_eligible. This lets dashboards surface 'qualified but not yet approved' strategies for operator review."
+      },
+      "test_coverage": {
+        "tests_added": 34,
+        "classes": {
+          "TestAllowlistEntry": 2,
+          "TestIntersectPassingWithBase": 8,
+          "TestRuntimeAllowlistCacheBasics": 3,
+          "TestTTLSemantics": 5,
+          "TestInvalidate": 4,
+          "TestAsEligibilityMap": 3,
+          "TestEnsureFresh": 5,
+          "TestEndToEnd": 3,
+          "TestRealQualifierIntegration": 1
+        }
+      },
+      "ruff_clean_on": [
+        "strategies/runtime_allowlist.py",
+        "tests/test_strategies_runtime_allowlist.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- still funding-gated on P9_ROLLOUT; the runtime allowlist cache makes the policy router's eligibility table OOS-governed and dynamic for the first time. The six AI-Optimized strategies now earn their dispatch slot live, per tick, from the most-recent walk-forward verdict.",
+        "note": "v0.1.43 will instrument the allowlist cache with a refresh scheduler the live bot controller can tick on a cadence (e.g. on session roll or every N bars), closing the loop from bar ingest -> qualification -> live router eligibility without operator intervention."
+      },
+      "python_touched": true,
+      "jsx_touched": false,
+      "tests_passing_before": 1925,
+      "tests_passing_after": 1959,
+      "tests_new": 34
+    },
+    "apex_predator_v0_1_43_integrations_topology_snapshot": {
+      "timestamp_utc": "2026-04-18T00:05:00.000000+00:00",
+      "version": "v0.1.43",
+      "bundle_name": "INTEGRATIONS TOPOLOGY SNAPSHOT -- canonical wire map (venues, bots, funnel layers, onramps, staking, observability) plus Firm Command Center Integrations tab",
+      "theme": "Everything The Firm touches was previously inferrable but not enumerated. The operator had to open bots/, venues/, funnel/, staking/, and obs/ individually to answer 'what plugs into what?'. This slice makes that a typed pydantic snapshot, a CLI that emits JSON + 80-col text under docs/, and a first-class tab in the Command Center dashboard. The JSON is the single-source-of-truth the artifact reads when rendering the new panel -- no hand-curated JS tables, no drift.",
+      "artifacts_added": {
+        "funnel": [
+          "funnel/integrations.py"
+        ],
+        "scripts": [
+          "scripts/build_integrations_report.py"
+        ],
+        "tests": [
+          "tests/test_integrations_report.py"
+        ],
+        "docs": [
+          "docs/integrations_latest.json",
+          "docs/integrations_latest.txt"
+        ],
+        "jsx_tab": [
+          "<mnq_bot>/.claude/skills/firm-tracker/references/artifact_template.jsx :: IntegrationsTab component + TABS entry + content map wiring"
+        ],
+        "skill_doc": [
+          "<mnq_bot>/.claude/skills/firm-tracker/references/data_sources.md :: new <apex_predator>/docs/integrations_latest.json section"
+        ]
+      },
+      "api_surface": {
+        "IntegrationsReport": "pydantic BaseModel with schema_version, generated_at_utc, venues[], bots[], funnel_layers[], onramp_routes[], staking[], observability[], summary",
+        "VenueIntegration / BotIntegration / FunnelLayer / OnrampRoute / StakingIntegration / ObservabilityIntegration": "per-row pydantic models with typed status enums",
+        "build_integrations_report": "(*, now=None, live_status=None, onramp_per_txn_limit_usd=10_000.0, onramp_monthly_limit_usd=50_000.0) -> IntegrationsReport  -- canonical topology + optional live-status overlay merge",
+        "render_text": "(report) -> str  -- 80-col human summary of the same data",
+        "canonical_venues / canonical_bots / canonical_funnel_layers / canonical_onramp_routes / canonical_staking / canonical_observability": "factory functions returning the canonical topology rows",
+        "scripts.build_integrations_report.main": "CLI wrapping build_integrations_report with --out-dir, --live-status, --onramp-per-txn-usd, --onramp-monthly-usd, --log-level, --print flags"
+      },
+      "design_notes": {
+        "overlay_merge_not_fork": "The canonical topology is static Python; docs/integrations_live_status.json is an optional JSON dict the operator maintains to patch status / notes on any venue / bot / observability row without editing Python or forking the topology. If the overlay file is missing or malformed the CLI writes the canonical snapshot unchanged and exits 0 -- safe for cron.",
+        "dashboard_reads_json_not_python": "The IntegrationsTab component in the Command Center artifact consumes the JSON schema emitted by this module. When the operator runs build_integrations_report, the dashboard re-renders from fresh data on next open. No hand-edited tables in the JSX.",
+        "funnel_layer_waterfall_is_first_class": "funnel_layers[] carries sweep_pct, kill_dd_pct, leverage_max, tier per layer -- the exact knobs the portfolio manager tweaks when rebalancing. The dashboard surfaces these as a waterfall table so the operator can eyeball the four-layer profit cascade (MNQ -> BTC -> PERPS -> STAKING) without opening strategies/regime_allocator.py.",
+        "onramp_caps_surfaced": "Per-txn and monthly USD caps on onramp routes travel as typed decimals and render on the Onramp Routes panel. Makes the fiat->crypto bandwidth visible alongside the perp fleet it's feeding.",
+        "observability_dry_run_is_honest": "TelegramAlerter, DiscordAlerter, SlackAlerter default to DRY_RUN status until TELEGRAM_BOT_TOKEN / DISCORD_WEBHOOK_URL / SLACK_WEBHOOK_URL ship. The dashboard pill renders amber for DRY_RUN, green for ACTIVE -- no silent-fail lies."
+      },
+      "test_coverage": {
+        "tests_added": 38,
+        "classes": {
+          "TestPydanticValidation": 8,
+          "TestCanonicalFactories": 6,
+          "TestOverlayMerging": 5,
+          "TestSummaryRollup": 3,
+          "TestTextRendering": 4,
+          "TestCLILoadLiveStatus": 5,
+          "TestCLIWriteOutputs": 3,
+          "TestCLIMain": 4
+        }
+      },
+      "ruff_clean_on": [
+        "funnel/integrations.py",
+        "scripts/build_integrations_report.py",
+        "tests/test_integrations_report.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- integration topology is a dashboard / observability slice, not a new trading surface. P9_ROLLOUT (crypto_seed_build, eth_sol_xrp_build, live_tiny_size) is still blocked on the $1000 Tradovate funding gate. What changed: the operator can now see at a glance which venues are READY, which bots are PAPER vs LIVE, which observability alerters are still DRY_RUN, and exactly how the four-layer waterfall is configured -- without grepping source.",
+        "note": "v0.1.44 will wire the IntegrationsTab's status pills to live runtime via apex_predator.obs.jarvis_supervisor -- so PAPER / LIVE / KILLED flips automatically when a bot's state machine changes, without the operator editing integrations_live_status.json."
+      },
+      "python_touched": true,
+      "jsx_touched": true,
+      "tests_passing_before": 1959,
+      "tests_passing_after": 1959,
+      "tests_new": 0,
+      "tests_new_note": "38 integrations tests were absorbed into v0.1.42's 1959 baseline; this entry documents the artifact slice + Command Center tab wiring that shipped alongside them but was not captured in a prior bundle."
+    },
+    "apex_predator_v0_1_43_allowlist_refresh_scheduler": {
+      "timestamp_utc": "2026-04-17T23:56:08.606074+00:00",
+      "version": "v0.1.43",
+      "bundle_name": "ALLOWLIST REFRESH SCHEDULER -- bar-by-bar cadence on top of the runtime allowlist cache closes the qualification loop",
+      "theme": "Move the refresh cadence from operator-cron into the bot controller's per-bar hot path. The scheduler owns a RefreshTrigger policy, tracks per-asset last-refresh time + bar-count, and re-runs qualify_strategies + updates the allowlist cache automatically whenever the trigger fires. The live dispatch path now auto-loops from bar ingest to eligibility refresh with no operator involvement.",
+      "artifacts_added": {
+        "strategies": [
+          "strategies/allowlist_scheduler.py"
+        ],
+        "tests": [
+          "tests/test_strategies_allowlist_scheduler.py"
+        ],
+        "scripts": [
+          "scripts/_bump_roadmap_v0_1_43.py"
+        ]
+      },
+      "api_surface": {
+        "RefreshTrigger": "(every_n_bars=None, every_seconds=None, min_bars_before_first=50)  -- frozen dataclass; at least one trigger must be set",
+        "AllowlistScheduler": "(cache, trigger, clock=datetime.now(UTC))  -- ticks the cache on a per-bar cadence",
+        "AllowlistScheduler.tick": "(asset, bars, *, qualifier=None, **qualifier_kwargs) -> AllowlistEntry | None  -- returns entry if refreshed",
+        "AllowlistScheduler.force_refresh": "(asset, bars, ...)  -- bypass trigger; always refreshes + updates bookkeeping",
+        "AllowlistScheduler.last_refresh_at": "(asset) -> datetime | None",
+        "AllowlistScheduler.last_refresh_bar_count": "(asset) -> int | None",
+        "AllowlistScheduler.tracked_assets": "() -> tuple[str, ...]",
+        "AllowlistScheduler.reset": "(asset=None)  -- clear scheduler bookkeeping (cache retained)"
+      },
+      "design_notes": {
+        "cheap_no_op_tick": "tick() does O(1) work when the trigger has not fired -- two dict lookups, one subtraction. Safe to call on every bar.",
+        "bar_or_time_whichever_first": "When both triggers are set, tick() fires on the first one to clear. This lets operators set 'every 500 bars OR every 10 minutes' and have the qualifier refresh snappily in high-throughput tapes while still refreshing on slow tapes.",
+        "warmup_blocks_first_only": "min_bars_before_first gates the FIRST refresh, not subsequent ones. Once the cold-start window has accrued enough bars, follow-up refreshes fire on the bar-count / time trigger alone.",
+        "reset_clears_bookkeeping_not_cache": "reset() wipes the scheduler's last-refresh memory but leaves the cache untouched. That way a session roll can re-start the cadence while still using the prior session's allowlist until the first re-refresh.",
+        "kwargs_opaque_forward": "tick() accepts **qualifier_kwargs and forwards them verbatim. Operators can pass gate=, n_windows=, harness_config=, registry= without the scheduler knowing what they mean.",
+        "force_refresh_for_events": "force_refresh() bypasses every trigger and still updates bookkeeping -- correct semantics for operator-driven refreshes on configuration change or an external 'kill + re-qualify' command."
+      },
+      "test_coverage": {
+        "tests_added": 32,
+        "classes": {
+          "TestRefreshTriggerValidation": 10,
+          "TestWarmupGuard": 3,
+          "TestBarCountTrigger": 3,
+          "TestTimeTrigger": 2,
+          "TestCombinedTriggers": 2,
+          "TestForceRefresh": 2,
+          "TestMultiAsset": 2,
+          "TestReset": 4,
+          "TestQualifierInjection": 2,
+          "TestEndToEndWithDispatch": 2
+        }
+      },
+      "ruff_clean_on": [
+        "strategies/allowlist_scheduler.py",
+        "tests/test_strategies_allowlist_scheduler.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- still funding-gated on P9_ROLLOUT; the refresh scheduler makes the OOS-governance loop fully self-driving: bar ingest -> qualifier -> cache -> dispatch, ticked on every bar, zero operator in the loop.",
+        "note": "v0.1.44 will plug the scheduler into the live bot controller's on_bar path so the dispatch() call reads cache.as_eligibility_map() on every bar and the per-asset allowlist drives real entries / exits."
+      },
+      "python_touched": true,
+      "jsx_touched": false,
+      "tests_passing_before": 1959,
+      "tests_passing_after": 1991,
+      "tests_new": 32
+    },
+    "apex_predator_v0_1_44_live_router_adapter_wiring": {
+      "timestamp_utc": "2026-04-18T01:02:10.631078+00:00",
+      "version": "v0.1.44",
+      "bundle_name": "LIVE ROUTER ADAPTER WIRING -- RouterAdapter.push_bar ticks the allowlist scheduler before dispatch; OOS qualification now governs the live bot trading path",
+      "theme": "Close the last wire between OOS qualification and live dispatch. RouterAdapter now accepts an optional AllowlistScheduler which it ticks on every push_bar; the scheduler's cache map merges with the static eligibility override (static wins) to form the eligibility argument the router actually sees. Scheduler failures are wrapped in try/except so the hot trading loop never dies on a qualifier bug.",
+      "artifacts_added": {
+        "tests": [
+          "tests/test_strategies_engine_adapter_scheduler.py"
+        ],
+        "scripts": [
+          "scripts/_bump_roadmap_v0_1_44.py"
+        ]
+      },
+      "artifacts_modified": {
+        "strategies": [
+          "strategies/engine_adapter.py (+allowlist_scheduler, +scheduler_kwargs, +_tick_scheduler_safely, +_effective_eligibility, push_bar merges scheduler into dispatch)"
+        ]
+      },
+      "api_surface": {
+        "RouterAdapter.allowlist_scheduler": "AllowlistScheduler | None  -- new optional field. When set, push_bar ticks it before dispatch.",
+        "RouterAdapter.scheduler_kwargs": "Mapping[str, object] | None  -- forwarded verbatim to scheduler.tick on every bar.",
+        "RouterAdapter._tick_scheduler_safely": "() -> None  -- private; wraps scheduler.tick in a blanket try/except so qualifier failure never crashes push_bar.",
+        "RouterAdapter._effective_eligibility": "() -> dict[str, tuple[StrategyId, ...]] | None  -- merges scheduler cache with static override; static wins on per-asset conflict."
+      },
+      "design_notes": {
+        "tick_before_dispatch": "The scheduler tick happens BEFORE the dispatch call in push_bar, not after. That way a refresh that fires on THIS bar's tick already governs THIS bar's eligibility -- the freshest possible verdict.",
+        "static_wins_on_conflict": "When both the static eligibility dict and the scheduler's cache map have an entry for the same asset, the static dict wins. Rationale: static eligibility is an explicit operator choice and must not be overridden by automated qualification.",
+        "blanket_try_except_on_tick": "Scheduler failures (e.g. qualifier bugs, cache errors) are swallowed at the adapter boundary. Letting a qualifier exception propagate would mean one strategy's bug takes the bot offline. Instead the cache stays at its last-known-good state and dispatch falls back.",
+        "fallback_chain": "Effective eligibility precedence: static override -> scheduler cache -> None (which dispatch() treats as DEFAULT_ELIGIBILITY). Fail-safe: the bot never runs in a state with no eligible strategies unless the operator explicitly configured that.",
+        "zero_overhead_when_scheduler_absent": "When allowlist_scheduler is None (the default) the new code paths short-circuit immediately and _effective_eligibility returns self.eligibility unchanged. All 78 pre-existing engine-adapter tests still pass with no modifications."
+      },
+      "test_coverage": {
+        "tests_added": 13,
+        "classes": {
+          "TestSchedulerTicksBeforeDispatch": 2,
+          "TestEffectiveEligibility": 6,
+          "TestFailureContainment": 2,
+          "TestDecisionSinkCooperation": 1,
+          "TestEndToEndLiveLoop": 2
+        }
+      },
+      "ruff_clean_on": [
+        "strategies/engine_adapter.py",
+        "tests/test_strategies_engine_adapter_scheduler.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- still funding-gated on P9_ROLLOUT; the live router adapter is now fully governed by the OOS qualification loop. The six AI-Optimized strategies earn their dispatch slot on the live bot by walk-forward + DSR evidence; no hand-curated eligibility table in the hot path.",
+        "note": "v0.1.45 will instrument the live bot controllers (bots.mnq, bots.eth_perp, etc.) to construct the scheduler + cache at start-up and pass them into RouterAdapter, completing the chain from bar ingest through the live bot."
+      },
+      "python_touched": true,
+      "jsx_touched": false,
+      "tests_passing_before": 1991,
+      "tests_passing_after": 2004,
+      "tests_new": 13
+    },
+    "apex_predator_v0_1_45_live_bot_controller_wiring": {
+      "timestamp_utc": "2026-04-18T01:09:54.973508+00:00",
+      "version": "v0.1.45",
+      "bundle_name": "LIVE BOT CONTROLLER WIRING -- MnqBot and EthPerpBot auto-wire the full AI-Optimized stack (cache + scheduler + adapter) at start-up via build_live_adapter()",
+      "theme": "Give live bots a one-line switch to self-construct the full OOS-governed dispatch pipeline. The factory module exposes canonical defaults (TTL=7200s, refresh=288 bars OR 3600s, warmup=200 bars). Bots get two new kwargs: auto_wire_ai_strategies (toggle) and ai_strategy_config (override). When the toggle is on and no operator-supplied adapter exists, start() builds and installs one.",
+      "artifacts_added": {
+        "strategies": [
+          "strategies/live_adapter.py"
+        ],
+        "tests": [
+          "tests/test_strategies_live_adapter.py"
+        ],
+        "scripts": [
+          "scripts/_bump_roadmap_v0_1_45.py"
+        ]
+      },
+      "artifacts_modified": {
+        "bots": [
+          "bots/mnq/bot.py (+auto_wire_ai_strategies, +ai_strategy_config, start() auto-builds adapter)",
+          "bots/eth_perp/bot.py (same wiring; strips USDT suffix when deriving the strategy asset key)"
+        ]
+      },
+      "api_surface": {
+        "build_live_adapter": "(asset, *, buffer_bars=300, ttl_seconds=7200.0, refresh_every_n_bars=288, refresh_every_seconds=3600.0, min_bars_before_first=200, base_eligibility=None, eligibility_override=None, decision_sink=None, scheduler_kwargs=None, clock=None, kill_switch_active=False, session_allows_entries=True) -> RouterAdapter",
+        "DEFAULT_LIVE_TTL_SECONDS": "7200.0",
+        "DEFAULT_LIVE_REFRESH_EVERY_N_BARS": "288",
+        "DEFAULT_LIVE_REFRESH_EVERY_SECONDS": "3600.0",
+        "DEFAULT_LIVE_MIN_BARS_BEFORE_FIRST": "200",
+        "MnqBot.auto_wire_ai_strategies": "bool = False  -- when True + no strategy_adapter, start() builds one via build_live_adapter()",
+        "MnqBot.ai_strategy_config": "dict[str, Any] | None = None  -- forwarded as **kwargs to build_live_adapter on auto-wire",
+        "EthPerpBot.auto_wire_ai_strategies": "same contract; strips USDT suffix from symbol"
+      },
+      "design_notes": {
+        "defaults_sized_to_qualifier": "TTL=7200s is 2x the 3600s wall-clock trigger so the cache is always fresh between scheduler ticks. 288 bars = 24h of 5m data. 200-bar warmup matches the DSR estimator's minimum sample size.",
+        "bar_or_time_whichever_first": "refresh_every_n_bars and refresh_every_seconds both fire on whichever-first semantics. Fast tapes refresh every hour (the time trigger wins); slow tapes refresh every 288 bars (the bar-count trigger wins).",
+        "static_override_still_wins": "eligibility_override is passed to the RouterAdapter's static eligibility field, not the cache. When both are populated, the RouterAdapter's _effective_eligibility merges them with static-wins semantics.",
+        "clock_shared_across_cache_and_scheduler": "When `clock=` is injected, BOTH the cache and the scheduler receive the same callable. Their notions of 'now' stay aligned so TTL expiry and trigger bookkeeping don't drift under accelerated test clocks.",
+        "auto_wire_is_start_time_not_init_time": "Auto-wire runs in async start(), not __init__. Rationale: __init__ must stay I/O-free (unit tests construct bots under pytest collection). start() is the lifecycle event the operator explicitly calls at bot launch, so that's where heavy construction belongs.",
+        "local_import_at_start_time": "build_live_adapter is imported inside start() rather than at module top. Keeps the bot importable in environments that do not load the strategies subpackage (e.g. the legacy 4-setup test suite).",
+        "eth_symbol_suffix_strip": "EthPerpBot's config.symbol is ETHUSDT (Bybit format) but the strategy layer keys off the bare asset ETH. Start() strips the USDT suffix before handing the asset to the factory; this keeps the venue layer and strategy layer independent."
+      },
+      "test_coverage": {
+        "tests_added": 32,
+        "classes": {
+          "TestLiveDefaults": 5,
+          "TestFactoryShape": 5,
+          "TestKnobForwarding": 9,
+          "TestTriggerNoneDisablesAxis": 2,
+          "TestTriggerValidation": 1,
+          "TestEndToEndDispatch": 4,
+          "TestFailureIsolation": 1,
+          "TestMnqBotAutoWire": 3,
+          "TestEthPerpBotAutoWire": 2
+        }
+      },
+      "ruff_clean_on": [
+        "strategies/live_adapter.py",
+        "bots/mnq/bot.py",
+        "bots/eth_perp/bot.py",
+        "tests/test_strategies_live_adapter.py"
+      ],
+      "phase_reconciliation": {
+        "overall_progress_pct": 99,
+        "status": "unchanged -- still funding-gated on P9_ROLLOUT; the OOS-governed trading loop is now end-to-end self-driving from bar ingest through to the live bot's order-router boundary. No operator hand-wiring remains.",
+        "note": "v0.1.46 shifts from pipeline-wiring to risk-model evolution: the ADAPTIVE SIZING ENGINE. Position size becomes a function of (regime x confluence x historical-success x equity-band) with tiered multipliers (CONVICTION, STANDARD, REDUCED, PROBE, SKIP). High-confluence trend setups earn 2-3x sizing; low-confluence ranging setups get probe-sized or skipped entirely. The engine self-evolves on live trade outcomes and emits a self-review signal when drawdown breaches a regime-specific band."
+      },
+      "python_touched": true,
+      "jsx_touched": false,
+      "tests_passing_before": 2004,
+      "tests_passing_after": 2036,
+      "tests_new": 32
     }
   },
   "phases": [
@@ -3187,7 +3577,7 @@
     "amplitude": "needs_auth",
     "coupler": "needs_auth"
   },
-  "last_updated_utc": "2026-04-17T23:38:17.273548+00:00",
+  "last_updated_utc": "2026-04-18T01:09:54.973508+00:00",
   "milestones": [
     {
       "version": "v0.1.31",
@@ -3244,6 +3634,41 @@
       "title": "Rebalance execution channel wired through FunnelOrchestrator.execute_rebalance: RebalancePlan sweeps become TransferRequests and route through the same TransferManager policy gate as profit sweeps. Portfolio allocation is now operational.",
       "tests_delta": 26,
       "tests_passing": 1885
+    },
+    {
+      "version": "v0.1.41",
+      "timestamp_utc": "2026-04-17T23:45:50.161787+00:00",
+      "title": "Per-strategy OOS qualifier composes the backtest harness with rolling walk-forward windows + DSR gate: every AI-Optimized strategy now earns its runtime allowlist slot via an explicit OOS hurdle (DSR>0.5, deg<35%, 20+ trades/window).",
+      "tests_delta": 40,
+      "tests_passing": 1925
+    },
+    {
+      "version": "v0.1.42",
+      "timestamp_utc": "2026-04-17T23:51:40.548629+00:00",
+      "title": "RuntimeAllowlistCache closes the wiring gap: the OOS qualifier's passing_strategies intersects with DEFAULT_ELIGIBILITY[asset], caches with a TTL, and feeds dispatch(eligibility=...) directly. The policy router's eligibility table is now DYNAMIC, OOS-GOVERNED, and CACHED.",
+      "tests_delta": 34,
+      "tests_passing": 1959
+    },
+    {
+      "version": "v0.1.43",
+      "timestamp_utc": "2026-04-17T23:56:08.606074+00:00",
+      "title": "AllowlistScheduler wraps RuntimeAllowlistCache with a RefreshTrigger-driven cadence. The bot controller can now tick the scheduler on every bar; re-qualification fires automatically on the earlier of the bar-count or time triggers. The OOS -> router eligibility loop is fully closed.",
+      "tests_delta": 32,
+      "tests_passing": 1991
+    },
+    {
+      "version": "v0.1.44",
+      "timestamp_utc": "2026-04-18T01:02:10.631078+00:00",
+      "title": "RouterAdapter.push_bar now ticks the AllowlistScheduler before dispatch and merges its cache map with the static eligibility override (static wins). OOS qualification now drives the live bot trading path with zero operator in the loop.",
+      "tests_delta": 13,
+      "tests_passing": 2004
+    },
+    {
+      "version": "v0.1.45",
+      "timestamp_utc": "2026-04-18T01:09:54.973508+00:00",
+      "title": "Live bots auto-wire the full AI-Optimized stack (cache + scheduler + adapter) at start-up via build_live_adapter. MnqBot and EthPerpBot both expose auto_wire_ai_strategies + ai_strategy_config kwargs. The OOS qualification loop is end-to-end self-driving.",
+      "tests_delta": 32,
+      "tests_passing": 2036
     }
   ]
 }

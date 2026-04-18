@@ -37,8 +37,11 @@ from apex_predator.strategies.policy_router import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
+    from apex_predator.strategies.allowlist_scheduler import (
+        AllowlistScheduler,
+    )
     from apex_predator.strategies.decision_sink import RouterDecisionSink
     from apex_predator.strategies.models import StrategyId
 
@@ -241,6 +244,21 @@ class RouterAdapter:
     #: after the router runs. Defaults to ``None`` so bots without an
     #: observability stack pay zero overhead.
     decision_sink: RouterDecisionSink | None = None
+    #: Optional :class:`AllowlistScheduler` that drives the live
+    #: OOS-qualification loop. When set, ``push_bar`` ticks the
+    #: scheduler with the current bar buffer BEFORE calling
+    #: :func:`dispatch`, so the eligibility map the router sees is
+    #: always the most-recently-cached verdict for this asset.
+    #: Ticks are wrapped in a try/except so a scheduler/qualifier
+    #: failure never crashes the hot trading loop -- the router falls
+    #: back to the static :attr:`eligibility` (or
+    #: :data:`DEFAULT_ELIGIBILITY` if that is also ``None``).
+    allowlist_scheduler: AllowlistScheduler | None = None
+    #: Keyword args forwarded verbatim to
+    #: :meth:`AllowlistScheduler.tick` on every bar. Typical keys are
+    #: ``gate``, ``n_windows``, ``harness_config``, ``is_fraction`` --
+    #: anything :func:`qualify_strategies` accepts.
+    scheduler_kwargs: Mapping[str, object] | None = None
 
     # private
     _bars: deque[Bar] = field(init=False, repr=False)
@@ -292,8 +310,18 @@ class RouterAdapter:
         into the decision journal before the signal is returned. Sink
         failures are swallowed so an observability issue cannot crash
         the hot trading loop.
+
+        When :attr:`allowlist_scheduler` is wired, the scheduler is
+        ticked with the current bar buffer BEFORE dispatch runs. The
+        scheduler's cache entry (if fresh) becomes the effective
+        eligibility map the router sees, merged with the static
+        :attr:`eligibility` override (static wins on conflict).
+        Scheduler failures are swallowed so a qualifier bug can never
+        take the bot offline -- the router falls back to the static
+        eligibility in that case.
         """
         self._append_bar_dict(bar_dict)
+        self._tick_scheduler_safely()
         ctx = context_from_dict(
             bar_dict,
             kill_switch_active=self.kill_switch_active,
@@ -303,7 +331,7 @@ class RouterAdapter:
             self.asset,
             list(self._bars),
             ctx,
-            eligibility=self.eligibility,
+            eligibility=self._effective_eligibility(),
             registry=self.registry,
         )
         self._last_decision = decision
@@ -316,6 +344,52 @@ class RouterAdapter:
             symbol=self.asset,
             price_fallback=price,
         )
+
+    # ── Allowlist-scheduler integration ──
+
+    def _tick_scheduler_safely(self) -> None:
+        """Tick the scheduler, swallowing any qualifier-layer error.
+
+        A failure in qualify_strategies or the scheduler bookkeeping
+        must never crash the bot's bar-ingest loop. If the scheduler
+        errors, the allowlist cache is simply not refreshed this tick
+        and dispatch falls back on whatever state it had.
+        """
+        if self.allowlist_scheduler is None:
+            return
+        try:
+            kwargs = (
+                dict(self.scheduler_kwargs) if self.scheduler_kwargs else {}
+            )
+            self.allowlist_scheduler.tick(
+                self.asset, list(self._bars), **kwargs,
+            )
+        except Exception:  # noqa: BLE001  -- never crash the hot loop
+            return
+
+    def _effective_eligibility(
+        self,
+    ) -> dict[str, tuple[StrategyId, ...]] | None:
+        """Merge the scheduler's cache map with the static override.
+
+        Precedence, per-asset:
+          1. Static :attr:`eligibility` entry (explicit operator choice).
+          2. Scheduler's cache entry (OOS-governed, fresh within TTL).
+          3. ``None`` -> dispatch() falls back to DEFAULT_ELIGIBILITY.
+        """
+        if self.allowlist_scheduler is None:
+            return self.eligibility
+        scheduler_map = (
+            self.allowlist_scheduler.cache.as_eligibility_map()
+        )
+        if not scheduler_map:
+            return self.eligibility
+        if not self.eligibility:
+            return dict(scheduler_map)
+        merged: dict[str, tuple[StrategyId, ...]] = dict(scheduler_map)
+        # static wins on conflict
+        merged.update(self.eligibility)
+        return merged
 
     # ── Internal ──
 

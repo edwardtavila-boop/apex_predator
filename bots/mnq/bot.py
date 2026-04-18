@@ -17,6 +17,15 @@ Injectable dependencies
   wired, ``on_bar`` first asks the adapter (the six AI-optimized SMC/ICT
   strategies) for a signal; on a miss it falls through to the legacy
   4-setup loop. Leave ``None`` for the pre-v0.1.34 path.
+* `auto_wire_ai_strategies`: when ``True`` and ``strategy_adapter`` is
+  ``None``, ``start()`` builds a fully-wired :class:`RouterAdapter`
+  (with :class:`RuntimeAllowlistCache` + :class:`AllowlistScheduler`)
+  via :func:`apex_predator.strategies.live_adapter.build_live_adapter`
+  so the live bot auto-loops bar ingest -> OOS qualifier -> allowlist
+  refresh -> dispatch with zero operator involvement. v0.1.45+.
+* `ai_strategy_config`: kwargs forwarded to ``build_live_adapter`` when
+  ``auto_wire_ai_strategies`` is active. Lets operators override TTL /
+  trigger cadence / warmup / decision_sink without subclassing the bot.
 
 Trailing stop
 -------------
@@ -88,6 +97,8 @@ class MnqBot(BaseBot):
         tradovate_symbol: str | None = None,
         trailing_drawdown_r: float = _DEFAULT_TRAILING_R,
         strategy_adapter: RouterAdapter | None = None,
+        auto_wire_ai_strategies: bool = False,
+        ai_strategy_config: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(config or MNQ_CONFIG)
         self._liquidity_levels: list[float] = list(session_levels or [])
@@ -95,12 +106,32 @@ class MnqBot(BaseBot):
         self._tradovate_symbol = tradovate_symbol or self.config.symbol
         self._trailing_drawdown_r = trailing_drawdown_r
         self._strategy_adapter = strategy_adapter
+        self._auto_wire_ai_strategies = auto_wire_ai_strategies
+        self._ai_strategy_config: dict[str, Any] = (
+            dict(ai_strategy_config) if ai_strategy_config else {}
+        )
         # position_id -> peak unrealized PnL since entry
         self._trailing_peak: dict[str, float] = {}
 
     # ── Lifecycle ──
 
     async def start(self) -> None:
+        # Auto-wire the OOS-governed AI-Optimized strategy stack if
+        # requested and none has been supplied by the operator. Local
+        # import so the bot stays importable in environments that
+        # don't load the strategies subpackage (e.g. unit tests for
+        # the legacy 4-setup path).
+        if self._auto_wire_ai_strategies and self._strategy_adapter is None:
+            from apex_predator.strategies.live_adapter import (
+                build_live_adapter,
+            )
+            self._strategy_adapter = build_live_adapter(
+                self.config.symbol, **self._ai_strategy_config,
+            )
+            logger.info(
+                "MNQ bot auto-wired AI-Optimized strategy adapter "
+                "(asset=%s, scheduler=on)", self.config.symbol,
+            )
         logger.info(
             "MNQ bot starting | capital=$%.2f symbol=%s levels=%d router=%s",
             self.config.starting_capital_usd,

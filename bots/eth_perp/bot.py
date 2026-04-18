@@ -62,11 +62,17 @@ class EthPerpBot(BaseBot):
         router: _Router | None = None,
         venue_symbol: str | None = None,
         strategy_adapter: RouterAdapter | None = None,
+        auto_wire_ai_strategies: bool = False,
+        ai_strategy_config: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(config or ETH_CONFIG)
         self._router = router
         self._venue_symbol = venue_symbol or self.config.symbol
         self._strategy_adapter = strategy_adapter
+        self._auto_wire_ai_strategies = auto_wire_ai_strategies
+        self._ai_strategy_config: dict[str, Any] = (
+            dict(ai_strategy_config) if ai_strategy_config else {}
+        )
 
     # ── Leverage Gating ──
 
@@ -105,6 +111,23 @@ class EthPerpBot(BaseBot):
     # ── Lifecycle ──
 
     async def start(self) -> None:
+        if self._auto_wire_ai_strategies and self._strategy_adapter is None:
+            from apex_predator.strategies.live_adapter import (
+                build_live_adapter,
+            )
+            # ETH perp symbol is ETHUSDT; the strategy layer keys off
+            # the asset prefix (ETH). The factory will upper-case it.
+            adapter_asset = self.config.symbol.replace("USDT", "") or (
+                self.config.symbol
+            )
+            self._strategy_adapter = build_live_adapter(
+                adapter_asset, **self._ai_strategy_config,
+            )
+            logger.info(
+                "%s auto-wired AI-Optimized strategy adapter "
+                "(asset=%s, scheduler=on)",
+                self.config.name, adapter_asset,
+            )
         logger.info(
             "ETH Perp bot starting | capital=$%.2f symbol=%s router=%s",
             self.config.starting_capital_usd, self._venue_symbol,

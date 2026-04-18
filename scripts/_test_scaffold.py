@@ -41,20 +41,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = ROOT / "tests"
 
-TEMPLATE_HEADER = '''"""Tests for ``{import_path}``.
+TEMPLATE_HEADER_BASE = '''"""Tests for ``{import_path}``.
 
 Auto-scaffolded by scripts/_test_scaffold.py -- the import smoke and
 the per-symbol smoke tests are boilerplate. Edit freely; the
 operator-specific edge cases belong here.
+
+WARNING: per-symbol smoke tests instantiate the class. If a class
+registers global state on construction (loggers, signal handlers,
+journal writers, kill switches, etc.) the smoke test will POLLUTE
+other tests in the suite. Convert those to per-test fixtures or
+delete the smoke test.
 """
 from __future__ import annotations
 
-import pytest
-
+import importlib
+{pytest_import}
 
 def test_import_smoke() -> None:
     """Module imports without raising."""
-    from {import_path} import *  # noqa: F401, F403
+    importlib.import_module("{import_path}")
 '''
 
 CLASS_TEMPLATE = '''
@@ -64,8 +70,8 @@ def test_{snake_name}_smoke() -> None:
     from {import_path} import {cls_name}
     try:
         obj = {cls_name}()  # type: ignore[call-arg]
-    except TypeError as e:
-        pytest.skip(f"{cls_name} requires args: {{e}}")
+    except Exception as e:  # noqa: BLE001 -- pydantic/dataclass/attrs all raise differently
+        pytest.skip(f"{cls_name} requires args: {{type(e).__name__}}: {{e}}")
     else:
         assert obj is not None
         # TODO: real assertions about default state
@@ -85,8 +91,9 @@ ASYNC_FUNC_TEMPLATE = '''
 @pytest.mark.asyncio
 async def test_{snake_name}_smoke() -> None:
     """``{fn_name}`` is an async callable (signature requires manual fill-in)."""
-    from {import_path} import {fn_name}
     import inspect
+
+    from {import_path} import {fn_name}
     assert inspect.iscoroutinefunction({fn_name})
     # TODO: await with realistic inputs and assert on output
 '''
@@ -154,7 +161,12 @@ def _scaffold_one(src: Path, *, force: bool) -> tuple[bool, str]:
         return (False, f"test file already exists: {test_path} (use --force)")
     import_path = _import_path(src)
     classes, sync_funcs, async_funcs = _scan_symbols(src)
-    body = TEMPLATE_HEADER.format(import_path=import_path)
+    # pytest is only needed when classes (skip) or async funcs (mark.asyncio) exist
+    pytest_needed = bool(classes) or bool(async_funcs)
+    pytest_import = "\nimport pytest\n" if pytest_needed else ""
+    body = TEMPLATE_HEADER_BASE.format(
+        import_path=import_path, pytest_import=pytest_import,
+    )
     for cls in classes:
         body += CLASS_TEMPLATE.format(
             snake_name=_to_snake(cls), cls_name=cls, import_path=import_path,

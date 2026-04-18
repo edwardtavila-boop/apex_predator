@@ -84,6 +84,8 @@ SENTINELS: list[tuple[str, list[str], bool]] = [
     ("secret-audit",     ["scripts/_secret_audit.py"],               True),
     ("dependency-drift", ["scripts/_dependency_drift.py"],           True),
     ("complexity",       ["scripts/_complexity_hotspots.py", "--threshold", "20", "--top", "10"], True),
+    ("strategy-pairing", ["scripts/_strategy_test_pairing.py"],      True),
+    ("orphan-files",     ["scripts/_orphan_files.py"],               True),
 ]
 
 

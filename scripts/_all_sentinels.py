@@ -81,6 +81,9 @@ SENTINELS: list[tuple[str, list[str], bool]] = [
     ("roadmap-drift+pytest", ["scripts/_roadmap_drift.py"],          False),
     ("bot-health-L0",    ["scripts/_bot_health_probe.py", "--level", "L0"], True),
     ("bot-health-L1",    ["scripts/_bot_health_probe.py", "--level", "L1"], True),
+    ("secret-audit",     ["scripts/_secret_audit.py"],               True),
+    ("dependency-drift", ["scripts/_dependency_drift.py"],           True),
+    ("complexity",       ["scripts/_complexity_hotspots.py", "--threshold", "20", "--top", "10"], True),
 ]
 
 

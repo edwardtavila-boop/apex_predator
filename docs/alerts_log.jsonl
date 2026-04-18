@@ -609,3 +609,66 @@
 {"ts": 1776469027.1695023, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
 {"ts": 1776469027.1706445, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
 {"ts": 1776469027.1716678, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469383.6782646, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776469383.6907136, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469383.6929479, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776469383.7044828, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469383.7140841, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776469383.7151349, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469383.7268946, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469383.7282438, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776469383.7292755, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469825.2544048, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776469825.2652063, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469825.2673686, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776469825.2786107, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469825.2808168, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776469825.281665, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469825.2937112, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469825.2950604, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776469825.296086, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469999.7946699, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776469999.8055406, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469999.8085394, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776469999.822003, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469999.8241322, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776469999.8252044, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776469999.8358595, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776469999.8370306, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776469999.8380048, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776470099.0229182, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776470099.0336764, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470099.0360043, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776470099.0480776, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470099.0501668, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776470099.0511508, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776470099.0627058, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470099.0641549, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776470099.0651996, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776470389.1595647, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776470389.1712968, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470389.1736174, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776470389.1857946, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470389.187865, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776470389.188841, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776470389.2001283, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776470389.2015545, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776470389.202749, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776474500.11072, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776474500.1294193, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776474500.1343954, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776474500.153909, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776474500.1658974, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776474500.1675618, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776474500.187375, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776474500.1892629, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776474500.1910088, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776475083.3195107, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": [], "live": false}}
+{"ts": 1776475083.3360622, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776475083.3389058, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 3}}
+{"ts": 1776475083.352661, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776475083.355278, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"reason": "operator kill phrase"}}
+{"ts": 1776475083.35646, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}
+{"ts": 1776475083.3686697, "event": "runtime_start", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"active_bots": ["mnq"], "live": false}}
+{"ts": 1776475083.3701518, "event": "kill_switch", "level": "critical", "channels": [], "delivered": [], "blocked": [], "payload": {"verdict": {"action": "FLATTEN_ALL", "severity": "CRITICAL", "reason": "portfolio DD 20.00% >= cap 0.01%", "scope": "global", "evidence": {"dd_pct": 20.0, "cap_pct": 0.01}}, "scope": "global"}}
+{"ts": 1776475083.3711562, "event": "runtime_stop", "level": "info", "channels": [], "delivered": [], "blocked": [], "payload": {"bars": 1}}

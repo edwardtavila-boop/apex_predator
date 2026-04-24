@@ -1,0 +1,38 @@
+[Unit]
+Description=JARVIS live context + supervisor loop (Apex Predator)
+Documentation=file://__INSTALL_DIR__/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+ExecStart=__INSTALL_DIR__/.venv/bin/python -m apex_predator.scripts.jarvis_live \
+  --inputs __INSTALL_DIR__/docs/premarket_inputs.json \
+  --out-dir %h/.local/state/apex_predator \
+  --interval 60
+Restart=always
+RestartSec=15
+StandardOutput=append:%h/.local/log/apex_predator/jarvis-live.log
+StandardError=append:%h/.local/log/apex_predator/jarvis-live.err
+
+# ------------------------------------------------------------------
+# Hardening (see obs.vps_hardening for rationale)
+# ------------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/apex_predator %h/.local/log/apex_predator __INSTALL_DIR__/docs __INSTALL_DIR__/runs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target

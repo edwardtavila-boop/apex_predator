@@ -23,15 +23,17 @@ evaluate() each tick and acts on the returned KillVerdict.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import BaseModel, Field
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-class KillAction(str, Enum):
+
+class KillAction(StrEnum):
     CONTINUE = "CONTINUE"
     HALVE_SIZE = "HALVE_SIZE"
     PAUSE_NEW_ENTRIES = "PAUSE_NEW_ENTRIES"
@@ -41,7 +43,7 @@ class KillAction(str, Enum):
     FLATTEN_TIER_A_PREEMPTIVE = "FLATTEN_TIER_A_PREEMPTIVE"
 
 
-class KillSeverity(str, Enum):
+class KillSeverity(StrEnum):
     INFO = "INFO"
     WARN = "WARN"
     CRITICAL = "CRITICAL"
@@ -65,6 +67,8 @@ class BotSnapshot(BaseModel):
     session_realized_pnl_usd: float = 0.0
     consecutive_losses: int = 0
     open_position_count: int = 0
+    market_context_summary: dict[str, Any] | None = None
+    market_context_summary_text: str | None = None
 
 
 class PortfolioSnapshot(BaseModel):
@@ -90,6 +94,105 @@ class ApexEvalSnapshot(BaseModel):
     """Apex account cushion vs trailing DD."""
     trailing_dd_limit_usd: float = 2500.0
     distance_to_limit_usd: float = 2500.0  # how close we are (smaller = worse)
+
+
+# ---------------------------------------------------------------------------
+# R2 closure -- tick-cadence validator
+# ---------------------------------------------------------------------------
+# Apex's trailing-DD enforcement is sub-second. Our runtime polls every
+# ``tick_interval_s`` seconds. Between ticks, equity can move further than
+# the cushion -- i.e. we can silently cross Apex's floor mid-tick. The
+# validator enforces a simple worst-case guard:
+#
+#   tick_interval_s * max_usd_move_per_sec <= cushion_usd / safety_factor
+#
+# i.e. even under a pathological one-tick price burst, the market is still
+# expected to print *inside* the cushion at the NEXT tick, giving the
+# KillSwitch at least one chance to fire FLATTEN_TIER_A_PREEMPTIVE before
+# Apex's real floor is crossed.
+#
+# Defaults come from empirical MNQ tick behavior:
+#   * Typical 1s MNQ move: 1-2 points = $2-4 on 1x, $10-20 on 5x sizing
+#   * Pathological (news spike): up to ~50 points/sec = $100 on 1x, $500 on 5x
+# We bake in ``DEFAULT_MAX_USD_MOVE_PER_SEC = 300`` as a Tier-A conservative
+# worst-case assuming max Apex sizing.
+
+
+DEFAULT_MAX_USD_MOVE_PER_SEC: float = 300.0
+DEFAULT_TICK_CADENCE_SAFETY_FACTOR: float = 2.0
+
+
+class ApexTickCadenceError(RuntimeError):
+    """Raised when tick_interval_s is too slow for the configured cushion.
+
+    R2 closure: an Apex eval with a 5-second tick and a $500 cushion can be
+    busted in a single tick during a fast move. Refusing to start is the
+    correct behavior -- better to halt the runtime than to silently fail
+    the eval on a latency gap.
+    """
+
+
+def validate_apex_tick_cadence(
+    *,
+    tick_interval_s: float,
+    cushion_usd: float,
+    max_usd_move_per_sec: float = DEFAULT_MAX_USD_MOVE_PER_SEC,
+    safety_factor: float = DEFAULT_TICK_CADENCE_SAFETY_FACTOR,
+    live: bool = False,
+) -> None:
+    """Enforce that tick cadence is fast enough for the configured cushion.
+
+    Parameters
+    ----------
+    tick_interval_s:
+        Seconds between runtime ticks. From ``RuntimeConfig.tick_interval_s``.
+    cushion_usd:
+        Apex-preemptive cushion in USD. From ``kill_switch.yaml``:
+        ``tier_a.apex_eval_preemptive.cushion_usd``.
+    max_usd_move_per_sec:
+        Conservative worst-case one-second equity move. Default tuned for
+        MNQ at max Apex sizing (see module comment).
+    safety_factor:
+        How many worst-case ticks must fit inside the cushion before it
+        is considered "safe". Default 2.0 means we require the cushion to
+        be at least 2x the worst-case one-tick move.
+    live:
+        If False, the validator no-ops (paper / backtest runs tolerate
+        arbitrary tick cadences). If True, any violation raises.
+
+    Raises
+    ------
+    ApexTickCadenceError
+        When ``tick_interval_s * max_usd_move_per_sec * safety_factor``
+        exceeds ``cushion_usd``.
+    ValueError
+        On non-positive inputs.
+    """
+    if tick_interval_s <= 0:
+        msg = f"tick_interval_s must be > 0 (got {tick_interval_s})"
+        raise ValueError(msg)
+    if cushion_usd <= 0:
+        msg = f"cushion_usd must be > 0 (got {cushion_usd})"
+        raise ValueError(msg)
+    if max_usd_move_per_sec <= 0:
+        msg = f"max_usd_move_per_sec must be > 0 (got {max_usd_move_per_sec})"
+        raise ValueError(msg)
+    if safety_factor <= 0:
+        msg = f"safety_factor must be > 0 (got {safety_factor})"
+        raise ValueError(msg)
+    if not live:
+        return
+    required = tick_interval_s * max_usd_move_per_sec * safety_factor
+    if required > cushion_usd:
+        msg = (
+            f"Apex tick cadence too slow for cushion: "
+            f"tick_interval_s={tick_interval_s} * max_usd_move_per_sec="
+            f"{max_usd_move_per_sec} * safety={safety_factor} = "
+            f"${required:.0f} required, but cushion_usd=${cushion_usd:.0f}. "
+            f"Either (a) drop tick_interval_s, or (b) raise cushion_usd in "
+            f"configs/kill_switch.yaml tier_a.apex_eval_preemptive."
+        )
+        raise ApexTickCadenceError(msg)
 
 
 class KillSwitch:

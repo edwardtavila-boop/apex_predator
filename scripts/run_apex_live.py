@@ -35,7 +35,8 @@ Modes
 --live                       orders go to venues.router.SmartRouter.
 --bot NAME                   only run that bot (still honors kill-switch).
 --max-bars N                 stop after N ticks; useful for smoke tests / CI.
---tick-interval SECS         default 5; 0 in dry-run for fast tests.
+--tick-interval SECS         default 1.0 (was 5.0 pre-R2); 0 in dry-run for fast tests.
+                             Live mode is validated against kill_switch cushion.
 --state-path PATH            override roadmap_state.json (tests).
 --config-dir PATH            override configs/.
 --log-path PATH              override docs/runtime_log.jsonl.
@@ -70,7 +71,7 @@ import yaml
 from eta_engine.core.consistency_guard import (
     ConsistencyGuard,
     ConsistencyStatus,
-    apex_trading_day_iso,
+    apex_trading_day_iso_cme,
 )
 from eta_engine.core.kill_switch_latch import KillSwitchLatch
 from eta_engine.core.kill_switch_runtime import (
@@ -83,6 +84,7 @@ from eta_engine.core.kill_switch_runtime import (
     KillSwitch,
     KillVerdict,
     PortfolioSnapshot,
+    validate_apex_tick_cadence,
 )
 from eta_engine.core.market_quality import format_market_context_summary
 from eta_engine.obs.alert_dispatcher import AlertDispatcher
@@ -161,7 +163,13 @@ class RuntimeConfig:
     dry_run: bool = True
     bot_filter: str | None = None
     max_bars: int = 0
-    tick_interval_s: float = 5.0
+    # R2 closure: default lowered from 5.0s -> 1.0s to match Apex's sub-second
+    # DD enforcement window. A 5s tick could silently cross Apex's floor
+    # mid-interval on a fast move; 1s keeps at least one tick per second
+    # inside the cushion. Paper/backtest runs can override downward freely
+    # (tick_interval_s=0.0 == as-fast-as-possible); live mode is validated
+    # against the cushion via validate_apex_tick_cadence().
+    tick_interval_s: float = 1.0
     state_path: Path = field(default_factory=lambda: ROOT / "roadmap_state.json")
     config_dir: Path = field(default_factory=lambda: ROOT / "configs")
     log_path: Path = field(default_factory=lambda: ROOT / "docs" / "runtime_log.jsonl")
@@ -206,6 +214,20 @@ def load_runtime_config(
             cfg.go_state = (rs.get("shared_artifacts", {}) or {}).get("apex_go_state", {}) or {}
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("failed to parse %s: %s", state_path, exc)
+    # R2 closure: in live mode, require tick cadence to be fast enough that
+    # the Apex cushion can absorb at least one worst-case tick-sized move.
+    # We read the cushion out of the just-loaded kill_switch.yaml. Non-live
+    # runs are exempt (paper / backtest can tolerate arbitrary cadence).
+    cushion_usd = float(
+        ((cfg.kill_switch.get("tier_a", {}) or {})
+         .get("apex_eval_preemptive", {}) or {})
+        .get("cushion_usd", 500.0),
+    )
+    validate_apex_tick_cadence(
+        tick_interval_s=max(tick_interval_s, 1e-9),
+        cushion_usd=cushion_usd,
+        live=live,
+    )
     return cfg
 
 
@@ -716,12 +738,14 @@ class ApexRuntime:
         # (existing positions are allowed to finish; only new entries are
         # blocked until the operator investigates).
         #
-        # Uses the Apex session-day helper (17:00 CT rollover, DST-aware)
-        # -- NOT UTC midnight. UTC midnight splits a US equity-futures
-        # session across two day buckets, which understates the real
-        # "largest day" and inflates the denominator.
+        # Uses the CME-calendar-aware Apex session-day helper (17:00 CT
+        # rollover + DST-aware + weekend/holiday roll-forward). Apex has no
+        # activity on CME-closed days (weekends, US federal closures), so
+        # the bucket rolls forward to the next real trading day -- matching
+        # Apex's own accounting. The earlier v0.1.58 fix handled the
+        # 17:00-CT rollover only; R4 closure in v0.1.59 adds the calendar.
         if self.consistency_guard is not None:
-            today = apex_trading_day_iso()
+            today = apex_trading_day_iso_cme()
             today_ta_pnl = float(
                 sum(
                     s.session_realized_pnl_usd
@@ -893,8 +917,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                     help="Only run this bot name (mnq|nq|crypto_seed|eth_perp|sol_perp|xrp_perp)")
     ap.add_argument("--max-bars", type=int, default=0,
                     help="Stop after N ticks (0 = forever). Used by CI smoke-tests.")
-    ap.add_argument("--tick-interval", type=float, default=5.0,
-                    help="Seconds between ticks (0 = tight loop for tests)")
+    ap.add_argument("--tick-interval", type=float, default=1.0,
+                    help=(
+                        "Seconds between ticks (0 = tight loop for tests; "
+                        "default 1.0 post-R2 to match Apex sub-second DD window)"
+                    ))
     ap.add_argument("--state-path", type=Path, default=ROOT / "roadmap_state.json")
     ap.add_argument("--config-dir", type=Path, default=ROOT / "configs")
     ap.add_argument("--log-path", type=Path, default=ROOT / "docs" / "runtime_log.jsonl")

@@ -546,6 +546,240 @@ def btc_trades(n: int = 30) -> dict:
     }
 
 
+def _resolve_mnq_supervisor_dir() -> Path | None:
+    """Find the MNQ live-supervisor output directory.
+
+    Mirrors :func:`_resolve_fleet_dir` but for the MNQ side. Honors
+    ``APEX_MNQ_SUPERVISOR_DIR`` as an operator pin + test isolation.
+    """
+    env_pin = os.environ.get("APEX_MNQ_SUPERVISOR_DIR")
+    if env_pin:
+        pinned = Path(env_pin)
+        return pinned if pinned.exists() else None
+    candidates: list[Path] = [
+        STATE_DIR / "mnq_live",
+        STATE_DIR.parent / "apex_predator" / "docs" / "mnq_live",
+        Path.home() / "apex_predator" / "docs" / "mnq_live",
+    ]
+    try:
+        from apex_predator.scripts.mnq_live_supervisor import DEFAULT_OUT_DIR
+        candidates.append(DEFAULT_OUT_DIR)
+    except Exception:  # noqa: BLE001
+        pass
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+@app.get("/api/mnq/supervisor")
+def mnq_supervisor() -> dict:
+    """Return the MNQ live-supervisor state + recent journal tail.
+
+    Surfaces ``mnq_live_state.json`` (heartbeat + routing counters
+    written by :class:`MnqLiveSupervisor` every tick) and the last
+    handful of journal events so the dashboard card can show:
+    how many bars consumed, orders routed vs blocked, paused state,
+    and what JARVIS actually did on recent ticks.
+    """
+    chosen = _resolve_mnq_supervisor_dir()
+    if chosen is None:
+        try:
+            from apex_predator.scripts.mnq_live_supervisor import DEFAULT_OUT_DIR
+            default = str(DEFAULT_OUT_DIR)
+        except Exception:  # noqa: BLE001
+            default = str(STATE_DIR / "mnq_live")
+        return {
+            "supervisor_dir": default,
+            "state": None,
+            "recent_events": [],
+            "note": "mnq_live dir not found; start the supervisor via "
+                    "python -m apex_predator.scripts.mnq_live_supervisor "
+                    "--bars <file.jsonl>",
+        }
+    state_path = chosen / "mnq_live_state.json"
+    journal_path = chosen / "mnq_live_decisions.jsonl"
+
+    state: dict | None = None
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            state = None
+
+    recent: list[dict] = []
+    if journal_path.exists():
+        try:
+            lines = journal_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            lines = []
+        for raw in reversed(lines[-50:]):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                ev = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            recent.append({
+                "ts": ev.get("ts"),
+                "actor": ev.get("actor"),
+                "intent": ev.get("intent"),
+                "outcome": ev.get("outcome"),
+                "rationale": ev.get("rationale", "")[:200],
+            })
+            if len(recent) >= 20:
+                break
+
+    return {
+        "supervisor_dir": str(chosen),
+        "state": state,
+        "recent_events": recent,
+        "state_path": str(state_path),
+        "journal_path": str(journal_path),
+    }
+
+
+@app.get("/api/systems")
+def all_systems_status() -> dict:
+    """Return a top-level rollup across every major subsystem.
+
+    Each entry is ``{status: GREEN|YELLOW|RED, detail: str}``. GREEN =
+    running + healthy, YELLOW = partial / degraded, RED = down or
+    blocked. Powers the status-page top banner.
+    """
+    out: dict[str, dict] = {}
+
+    # Dashboard itself (always GREEN if we're answering)
+    out["dashboard"] = {
+        "status": "GREEN",
+        "detail": f"state_dir_exists={STATE_DIR.exists()}",
+    }
+
+    # Brokers: try readiness checks, tolerate import errors
+    ibkr_ready = False
+    tasty_ready = False
+    try:
+        from apex_predator.venues.ibkr import ibkr_paper_readiness
+        ibkr_ready = bool(ibkr_paper_readiness().get("ready"))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from apex_predator.venues.tastytrade import tastytrade_paper_readiness
+        tasty_ready = bool(tastytrade_paper_readiness().get("ready"))
+    except Exception:  # noqa: BLE001
+        pass
+    if ibkr_ready and tasty_ready:
+        out["brokers"] = {
+            "status": "GREEN",
+            "detail": "ibkr+tastytrade ready",
+        }
+    elif ibkr_ready or tasty_ready:
+        ready_one = "ibkr" if ibkr_ready else "tastytrade"
+        out["brokers"] = {
+            "status": "YELLOW",
+            "detail": f"only {ready_one} ready",
+        }
+    else:
+        out["brokers"] = {
+            "status": "RED",
+            "detail": "no brokers ready",
+        }
+
+    # BTC fleet: count active lanes
+    fleet_dir = _resolve_fleet_dir()
+    if fleet_dir is None:
+        out["btc_fleet"] = {"status": "RED", "detail": "fleet dir not found"}
+    else:
+        active = 0
+        total = 0
+        for lane_file in fleet_dir.glob("*.lane.json"):
+            total += 1
+            try:
+                state = json.loads(lane_file.read_text(encoding="utf-8"))
+                if state.get("active_order_id"):
+                    active += 1
+            except (OSError, json.JSONDecodeError):
+                continue
+        if total == 0:
+            out["btc_fleet"] = {
+                "status": "YELLOW", "detail": "0 lanes (fleet not started)",
+            }
+        elif active == total:
+            out["btc_fleet"] = {
+                "status": "GREEN", "detail": f"{active}/{total} lanes ACTIVE",
+            }
+        elif active > 0:
+            out["btc_fleet"] = {
+                "status": "YELLOW",
+                "detail": f"{active}/{total} lanes ACTIVE",
+            }
+        else:
+            out["btc_fleet"] = {
+                "status": "YELLOW",
+                "detail": f"{total} lanes idle (no active orders)",
+            }
+
+    # MNQ supervisor: state file existence + paused flag
+    mnq_dir = _resolve_mnq_supervisor_dir()
+    if mnq_dir is None:
+        out["mnq_supervisor"] = {
+            "status": "YELLOW", "detail": "not running",
+        }
+    else:
+        state_path = mnq_dir / "mnq_live_state.json"
+        if not state_path.exists():
+            out["mnq_supervisor"] = {
+                "status": "YELLOW", "detail": "no state file yet",
+            }
+        else:
+            try:
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                state = {}
+            if state.get("paused"):
+                out["mnq_supervisor"] = {
+                    "status": "RED",
+                    "detail": "paused (kill or refused STRATEGY_DEPLOY)",
+                }
+            else:
+                bars = state.get("bars_consumed", 0)
+                out["mnq_supervisor"] = {
+                    "status": "GREEN",
+                    "detail": f"armed, {bars} bars consumed",
+                }
+
+    # JARVIS audit log: any recent activity?
+    audit_path = STATE_DIR / "jarvis_audit.jsonl"
+    if not audit_path.exists():
+        out["jarvis"] = {
+            "status": "YELLOW", "detail": "no audit log yet",
+        }
+    else:
+        try:
+            line_count = sum(1 for _ in audit_path.open("r", encoding="utf-8"))
+        except OSError:
+            line_count = 0
+        out["jarvis"] = {
+            "status": "GREEN" if line_count > 0 else "YELLOW",
+            "detail": f"{line_count} decisions logged",
+        }
+
+    # Compute overall rollup
+    statuses = [v["status"] for v in out.values()]
+    if "RED" in statuses:
+        overall = "RED"
+    elif "YELLOW" in statuses:
+        overall = "YELLOW"
+    else:
+        overall = "GREEN"
+
+    return {
+        "overall": overall,
+        "systems": out,
+    }
+
+
 @app.post("/api/tasks/{task}/fire")
 def fire_task(task: str) -> dict:
     """Manually fire a BackgroundTask. Useful for ad-hoc retrospectives."""

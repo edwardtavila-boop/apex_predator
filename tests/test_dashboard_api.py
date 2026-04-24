@@ -401,3 +401,130 @@ class TestDashboardAPI:
         j = r.json()
         assert j["returned"] == 5
         assert j["total"] == 50
+
+    # ------------------------------------------------------------------ #
+    # MNQ supervisor endpoint
+    # ------------------------------------------------------------------ #
+
+    def test_mnq_supervisor_empty_when_dir_absent(self, app_client):
+        r = app_client.get("/api/mnq/supervisor")
+        assert r.status_code == 200
+        j = r.json()
+        assert j["state"] is None
+        assert j["recent_events"] == []
+        assert "mnq_live dir not found" in j.get("note", "")
+
+    def test_mnq_supervisor_surfaces_state_and_events(
+        self, tmp_path, app_client, monkeypatch,
+    ):
+        mnq_dir = tmp_path / "mnq_live"
+        mnq_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("APEX_MNQ_SUPERVISOR_DIR", str(mnq_dir))
+
+        # Seed state
+        (mnq_dir / "mnq_live_state.json").write_text(json.dumps({
+            "worker": "mnq_live",
+            "heartbeat_count": 42,
+            "bars_consumed": 42,
+            "signals_routed": 3,
+            "signals_blocked": 1,
+            "paused": False,
+            "router_name": "IbkrClientPortalVenue",
+            "symbol": "MNQ",
+            "tradovate_symbol": "MNQH6",
+            "started_at_utc": "2026-04-24T14:00:00+00:00",
+            "last_heartbeat_utc": "2026-04-24T14:42:00+00:00",
+            "last_bar_ts": "2026-04-24T14:42:00+00:00",
+            "last_event": "ok",
+            "jarvis_audit_tail_len": 48,
+        }), encoding="utf-8")
+
+        # Seed a few journal rows (jsonl-ish DecisionJournal format)
+        from datetime import UTC, datetime
+
+        from apex_predator.obs.decision_journal import (
+            Actor,
+            DecisionJournal,
+            Outcome,
+        )
+        journal = DecisionJournal(mnq_dir / "mnq_live_decisions.jsonl")
+        journal.record(
+            actor=Actor.TRADE_ENGINE, intent="mnq_start",
+            rationale="ok", outcome=Outcome.EXECUTED,
+            ts=datetime(2026, 4, 24, 14, 0, tzinfo=UTC),
+        )
+        journal.record(
+            actor=Actor.TRADE_ENGINE, intent="mnq_order_routed",
+            rationale="routed", outcome=Outcome.EXECUTED,
+            ts=datetime(2026, 4, 24, 14, 1, tzinfo=UTC),
+        )
+
+        r = app_client.get("/api/mnq/supervisor")
+        assert r.status_code == 200
+        j = r.json()
+        assert j["state"]["bars_consumed"] == 42
+        assert j["state"]["router_name"] == "IbkrClientPortalVenue"
+        # Newest first
+        events = j["recent_events"]
+        assert len(events) == 2
+        assert events[0]["intent"] == "mnq_order_routed"
+        assert events[1]["intent"] == "mnq_start"
+
+    # ------------------------------------------------------------------ #
+    # /api/systems rollup
+    # ------------------------------------------------------------------ #
+
+    def test_systems_rollup_handles_missing_components(self, app_client):
+        r = app_client.get("/api/systems")
+        assert r.status_code == 200
+        j = r.json()
+        assert "overall" in j
+        assert j["overall"] in {"GREEN", "YELLOW", "RED"}
+        # Every subsystem entry has both status + detail
+        for entry in j["systems"].values():
+            assert entry["status"] in {"GREEN", "YELLOW", "RED"}
+            assert "detail" in entry
+        # Dashboard is always GREEN when this endpoint answers
+        assert j["systems"]["dashboard"]["status"] == "GREEN"
+
+    def test_systems_rollup_red_on_paused_mnq(
+        self, tmp_path, app_client, monkeypatch,
+    ):
+        mnq_dir = tmp_path / "mnq_live"
+        mnq_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("APEX_MNQ_SUPERVISOR_DIR", str(mnq_dir))
+        (mnq_dir / "mnq_live_state.json").write_text(json.dumps({
+            "paused": True, "bars_consumed": 5,
+        }), encoding="utf-8")
+        r = app_client.get("/api/systems")
+        j = r.json()
+        assert j["systems"]["mnq_supervisor"]["status"] == "RED"
+        assert "paused" in j["systems"]["mnq_supervisor"]["detail"].lower()
+        # Overall takes the worst tier
+        assert j["overall"] == "RED"
+
+    def test_systems_rollup_green_on_full_active_fleet(
+        self, tmp_path, app_client, monkeypatch,
+    ):
+        fleet_dir = tmp_path / "state" / "broker_fleet"
+        fleet_dir.mkdir(parents=True, exist_ok=True)
+        # Shadow the pinned env so /api/systems sees this path
+        monkeypatch.setenv("APEX_BTC_FLEET_DIR", str(fleet_dir))
+        for i, (lane, broker) in enumerate([
+            ("directional", "ibkr"), ("directional", "tastytrade"),
+            ("grid", "ibkr"), ("grid", "tastytrade"),
+        ]):
+            (fleet_dir / f"btc-{lane}-{broker}.lane.json").write_text(
+                json.dumps({
+                    "worker_id": f"btc-{lane}-{broker}",
+                    "broker": broker, "lane": lane,
+                    "active_order_id": f"srv-{i:03d}",
+                    "active_order_status": "OPEN",
+                }),
+                encoding="utf-8",
+            )
+        r = app_client.get("/api/systems")
+        j = r.json()
+        fleet = j["systems"]["btc_fleet"]
+        assert fleet["status"] == "GREEN"
+        assert "4/4" in fleet["detail"]

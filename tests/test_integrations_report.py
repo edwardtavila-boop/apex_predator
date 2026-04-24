@@ -110,10 +110,12 @@ def test_canonical_venues_list_is_nontrivial() -> None:
     vs = canonical_venues()
     assert len(vs) >= 6
     names = {v.name for v in vs}
-    # The $1000-funding-gate MUST still be visible as NEEDS_FUNDING.
+    # Tradovate is DORMANT (2026-04-24 operator mandate) until funding
+    # clears. Prior status was NEEDS_FUNDING; DORMANT is the superset
+    # that also captures "operator has paused this venue."
     assert "tradovate" in names
     tradovate = next(v for v in vs if v.name == "tradovate")
-    assert tradovate.status == "NEEDS_FUNDING"
+    assert tradovate.status in {"NEEDS_FUNDING", "DORMANT"}
 
 
 def test_canonical_bots_all_paper_by_default() -> None:

@@ -1,0 +1,38 @@
+# eta-engine:avengers  -- cron schedule for ALFRED / BATMAN / ROBIN
+# Generated from brain.avengers.dispatch.TASK_CADENCE
+# Keep the '# eta-engine:avengers' tag on every line so install_vps.sh
+# can cleanly merge + replace on reinstall.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+APEX_ROOT=__INSTALL_DIR__
+
+# --------- ROBIN (Haiku tier, grunt work) ------------------------------------
+# every minute -- dashboard payload assembly
+* * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DASHBOARD_ASSEMBLE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# every hour at :00 -- log compact
+0 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task LOG_COMPACT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# pre-market + pre-close Mon-Fri -- prompt cache warmup
+25,55 13 * * 1-5 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMPT_WARMUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# daily 06:00 -- audit summarize
+0 6 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task AUDIT_SUMMARIZE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+
+# --------- ALFRED (Sonnet tier, operational maintenance) ---------------------
+# every 5 min -- shadow trade tick (resolve open shadow positions)
+*/5 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task SHADOW_TICK >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# every 15 min -- drift summary (anomaly rollup)
+*/15 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DRIFT_SUMMARY >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# daily 23:00 ET -- Kaizen retrospective + +1 ticket
+0 23 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task KAIZEN_RETRO >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# Sundays 02:00 -- weekly distillation classifier retrain
+0 2 * * 0 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISTILL_TRAIN >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+
+# --------- BATMAN (Opus tier, strategic heavy-brain) -------------------------
+# daily 22:00 -- digital twin verdict rollup
+0 22 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task TWIN_VERDICT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# Mondays 03:00 -- strategy synthesis mining pass
+0 3 * * 1 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task STRATEGY_MINE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# 1st of month 04:00 -- causal inference ATE review
+0 4 1 * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task CAUSAL_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+# Quarterly (1st of Jan/Apr/Jul/Oct @ 05:00) -- doctrine review
+0 5 1 1,4,7,10 * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DOCTRINE_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers

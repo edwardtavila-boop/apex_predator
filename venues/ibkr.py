@@ -198,7 +198,79 @@ class IbkrClientPortalVenue(VenueBase):
         return []
 
     async def get_balance(self) -> dict[str, float]:
-        return {}
+        """Return broker-reported balance fields (net_liquidation, equity, cash).
+
+        When credentials are missing or the HTTP call fails, returns an
+        empty dict -- callers (R1 reconciler, supervisors) treat empty
+        as "no broker data" rather than zero.
+        """
+        if not self.has_credentials():
+            return {}
+        resp = await self._get(
+            f"/portfolio/{self.config.account_id}/summary",
+        )
+        if not isinstance(resp, dict):
+            return {}
+        out: dict[str, float] = {}
+        # Client Portal returns fields like {"netliquidation": {"amount": 50123.45}, ...}
+        for ibkr_key, out_key in (
+            ("netliquidation",       "net_liquidation"),
+            ("equitywithloanvalue",  "equity_with_loan"),
+            ("totalcashvalue",       "total_cash"),
+            ("availablefunds",       "available_funds"),
+        ):
+            field = resp.get(ibkr_key)
+            raw = field.get("amount") if isinstance(field, dict) else field
+            if raw is None:
+                continue
+            try:
+                out[out_key] = float(raw)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    async def get_net_liquidation(self) -> float | None:
+        """Return broker-reported net-liquidation USD, or ``None`` if unavailable.
+
+        R1 closure. Drives ``core.BrokerEquityReconciler`` so the
+        trailing-DD tracker can cross-check its logical equity stream
+        against what IBKR's Client Portal actually reports.
+        """
+        balance = await self.get_balance()
+        raw = balance.get("net_liquidation")
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
+    async def _get(self, path: str) -> dict[str, Any] | None:
+        """GET against IBKR Client Portal; returns parsed JSON or ``None``.
+
+        Uses an httpx AsyncClient with ``verify=False`` because the
+        Client Portal Gateway ships with a self-signed certificate on
+        localhost. Errors, timeouts, and missing httpx all degrade to
+        ``None`` so callers can treat this as an oracle, not a commitment.
+        """
+        try:
+            import httpx  # noqa: PLC0415 -- lazy import keeps httpx optional
+        except ImportError:
+            return None
+        url = f"{self.config.base_url}{path}"
+        try:
+            async with httpx.AsyncClient(
+                timeout=8.0, verify=False,  # noqa: S501 -- localhost self-signed cert
+            ) as client:
+                resp = await client.get(url)
+        except Exception:  # noqa: BLE001
+            return None
+        if resp.status_code >= 400:
+            return None
+        try:
+            return resp.json()
+        except ValueError:
+            return None
 
     async def get_order_status(self, symbol: str, order_id: str) -> OrderResult | None:
         _ = symbol

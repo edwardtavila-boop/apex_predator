@@ -117,6 +117,18 @@ class TrailingDDAuditLog:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # R3 chaos-hardening: the write may succeed while fsync fails
+        # (read-only mount that allowed the open+write, OneDrive reparse
+        # that accepted the buffered write then rejected the sync,
+        # network share that silently no-ops fsync). The write is still
+        # reflected in the OS buffer cache, so the tracker continues;
+        # we just lose the per-append durability guarantee. Counter is
+        # exposed so health probes / preflight-followups can detect a
+        # degraded volume without parsing logs.
+        self.fsync_failure_count: int = 0
+        # Public alias used by tests / health probes: last error message
+        # from the most recent fsync failure (empty string = clean).
+        self.last_fsync_error: str = ""
 
     def _next_seq(self) -> int:
         if not self.path.exists():
@@ -153,8 +165,23 @@ class TrailingDDAuditLog:
             fh.flush()
             try:
                 os.fsync(fh.fileno())
-            except OSError:  # pragma: no cover - platform-dependent
-                log.debug("audit fsync failed (continuing)", exc_info=True)
+            except OSError as exc:
+                # R3 chaos-hardening: upgrade from DEBUG (invisible) to
+                # WARNING + counter. The write has already hit the OS
+                # buffer so the tracker can continue; we just lose the
+                # per-append durability guarantee. The counter lets a
+                # health probe decide whether to pause or alert.
+                self.fsync_failure_count += 1
+                self.last_fsync_error = f"{type(exc).__name__}: {exc}"
+                log.warning(
+                    "audit fsync failed for %s (count=%d, err=%s) -- "
+                    "runtime continues but durability of the most "
+                    "recent %d audit records is not guaranteed",
+                    self.path,
+                    self.fsync_failure_count,
+                    self.last_fsync_error,
+                    self.fsync_failure_count,
+                )
 
     def read_all(self) -> list[dict[str, Any]]:
         """Return every event in order. For forensic inspection / tests."""

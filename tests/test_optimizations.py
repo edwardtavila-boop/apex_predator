@@ -128,3 +128,138 @@ class TestStatusPage:
         # No hardcoded secrets or debug leftovers
         assert "localhost" not in html.lower() or "const API" in html
         assert "console.log" not in html
+
+
+# ---------------------------------------------------------------------------
+# Supercharge tasks (round 2)
+# ---------------------------------------------------------------------------
+
+class TestSuperchargeTasks:
+    """All 6 new supercharge tasks must be registered + have handlers."""
+
+    def test_all_new_tasks_registered(self):
+        from eta_engine.brain.avengers import (
+            TASK_CADENCE,
+            TASK_OWNERS,
+            BackgroundTask,
+        )
+        from deploy.scripts.run_task import HANDLERS
+
+        new_tasks = (
+            BackgroundTask.HEALTH_WATCHDOG,
+            BackgroundTask.SELF_TEST,
+            BackgroundTask.LOG_ROTATE,
+            BackgroundTask.DISK_CLEANUP,
+            BackgroundTask.BACKUP,
+            BackgroundTask.PROMETHEUS_EXPORT,
+        )
+        for task in new_tasks:
+            assert task in TASK_OWNERS, f"{task.value} missing from TASK_OWNERS"
+            assert task in TASK_CADENCE, f"{task.value} missing from TASK_CADENCE"
+            assert task in HANDLERS, f"{task.value} missing from HANDLERS"
+
+    def test_log_rotate_handler_writes_report(self, tmp_path):
+        """LOG_ROTATE should run without error even on empty log dir."""
+        state = tmp_path / "state"
+        state.mkdir()
+        logdir = tmp_path / "logs"
+        logdir.mkdir()
+        # Create a fresh .log file (too new to archive)
+        (logdir / "active.log").write_text("hello\n")
+        from deploy.scripts.run_task import _task_log_rotate
+        out = _task_log_rotate(state, logdir)
+        assert "archived" in out
+        assert (state / "log_rotate.json").exists()
+
+    def test_backup_handler_creates_archive(self, tmp_path, monkeypatch):
+        state = tmp_path / "state"
+        state.mkdir()
+        (state / "foo.json").write_text("{}")
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / ".env").write_text("DUMMY=1")
+        monkeypatch.setenv("APEX_REPO_DIR", str(repo))
+        from deploy.scripts.run_task import _task_backup
+        out = _task_backup(state)
+        assert "archive" in out
+        assert out["size_bytes"] > 0
+        backups = list((state / "backups").glob("apex-backup-*.tar.gz"))
+        assert len(backups) == 1
+
+    def test_prometheus_export_handler_writes_metrics(self, tmp_path):
+        state = tmp_path / "state"
+        state.mkdir()
+        # Seed minimal heartbeat
+        hb = {
+            "ts": "2026-04-24T00:00:00+00:00",
+            "quota_state": "OK", "hourly_pct": 0.05, "daily_pct": 0.12,
+            "cache_hit_rate": 0.88, "distiller_version": 3,
+            "distiller_trained": True,
+        }
+        (state / "avengers_heartbeat.json").write_text(json.dumps(hb))
+        from deploy.scripts.run_task import _task_prometheus_export
+        out = _task_prometheus_export(state)
+        prom_file = state / "prometheus" / "avengers.prom"
+        assert prom_file.exists()
+        text = prom_file.read_text(encoding="utf-8")
+        assert "apex_up 1" in text
+        assert "apex_quota_hourly_pct 0.05" in text
+        assert "apex_cache_hit_rate 0.88" in text
+        assert out["metrics"] > 0
+
+    def test_self_test_report_written(self, tmp_path, monkeypatch):
+        """SELF_TEST writes a structured report even when probes fail."""
+        state = tmp_path / "state"
+        state.mkdir()
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        from deploy.scripts.run_task import _task_self_test
+        out = _task_self_test(state)
+        assert "overall" in out
+        assert (state / "self_test.json").exists()
+
+    def test_health_watchdog_non_windows_skip(self, tmp_path, monkeypatch):
+        """On non-Windows, watchdog reports skipped without error."""
+        state = tmp_path / "state"
+        state.mkdir()
+        monkeypatch.setattr("os.name", "posix", raising=False)
+        from deploy.scripts.run_task import _task_health_watchdog
+        out = _task_health_watchdog(state)
+        assert out.get("skipped") is True
+
+    def test_disk_cleanup_runs_without_error(self, tmp_path, monkeypatch):
+        state = tmp_path / "state"
+        state.mkdir()
+        monkeypatch.setenv("APEX_REPO_DIR", str(tmp_path / "nonexistent"))
+        from deploy.scripts.run_task import _task_disk_cleanup
+        out = _task_disk_cleanup(state)
+        assert "bytes_freed" in out
+        assert "files_deleted" in out
+
+
+class TestPrometheusEndpoint:
+    """Dashboard API should expose /metrics."""
+
+    def test_metrics_endpoint_exists(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+        import importlib
+
+        import deploy.scripts.dashboard_api as mod
+        importlib.reload(mod)
+        from fastapi.testclient import TestClient
+        client = TestClient(mod.app)
+
+        # Empty -- no metrics file yet
+        r = client.get("/metrics")
+        assert r.status_code == 200
+        assert "apex_up" in r.text
+
+        # Seed metrics file
+        prom_dir = tmp_path / "prometheus"
+        prom_dir.mkdir()
+        (prom_dir / "avengers.prom").write_text(
+            "# HELP apex_up daemon alive\n# TYPE apex_up gauge\napex_up 1\n",
+        )
+        r = client.get("/metrics")
+        assert r.status_code == 200
+        assert "apex_up 1" in r.text
+        assert "text/plain" in r.headers["content-type"]

@@ -30,7 +30,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 
 # State/log dirs: Windows defaults; overridable via env
 if os.name == "nt":
@@ -98,6 +98,23 @@ def favicon() -> FileResponse | HTMLResponse:
     if fav.exists():
         return FileResponse(str(fav))
     return HTMLResponse(status_code=204)
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def prometheus_metrics() -> PlainTextResponse:
+    """Prometheus OpenMetrics endpoint. Reads the textfile written by
+    PROMETHEUS_EXPORT task. Scrape with Prometheus / Grafana / UptimeKuma."""
+    prom_file = STATE_DIR / "prometheus" / "avengers.prom"
+    if not prom_file.exists():
+        return PlainTextResponse(
+            "# no metrics file yet -- PROMETHEUS_EXPORT task has not run\n"
+            "apex_up 0\n",
+            media_type="text/plain; version=0.0.4",
+        )
+    return PlainTextResponse(
+        prom_file.read_text(encoding="utf-8"),
+        media_type="text/plain; version=0.0.4",
+    )
 
 
 @app.get("/health")

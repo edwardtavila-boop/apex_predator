@@ -27,7 +27,13 @@ $tasks = @(
     @{ Name="Apex-Batman-StrategyMine";      Task="STRATEGY_MINE";      Trigger="WEEKLY-MON-0300" },
     @{ Name="Apex-Batman-CausalReview";      Task="CAUSAL_REVIEW";      Trigger="DAILY-0400" },
     @{ Name="Apex-Batman-DoctrineReview";    Task="DOCTRINE_REVIEW";    Trigger="DAILY-0500" },
-    @{ Name="Apex-Alfred-MetaUpgrade";        Task="META_UPGRADE";       Trigger="DAILY-0430" }
+    @{ Name="Apex-Alfred-MetaUpgrade";        Task="META_UPGRADE";       Trigger="DAILY-0430" },
+    @{ Name="Apex-Alfred-HealthWatchdog";      Task="HEALTH_WATCHDOG";    Trigger="EVERY-5MIN" },
+    @{ Name="Apex-Alfred-SelfTest";            Task="SELF_TEST";          Trigger="DAILY-0300" },
+    @{ Name="Apex-Robin-LogRotate";            Task="LOG_ROTATE";         Trigger="DAILY-0100" },
+    @{ Name="Apex-Robin-DiskCleanup";          Task="DISK_CLEANUP";       Trigger="WEEKLY-SUN-0200" },
+    @{ Name="Apex-Alfred-Backup";              Task="BACKUP";             Trigger="DAILY-0500" },
+    @{ Name="Apex-Robin-PrometheusExport";     Task="PROMETHEUS_EXPORT";  Trigger="MINUTELY" }
 )
 
 function New-ApexTrigger([string]$Spec) {

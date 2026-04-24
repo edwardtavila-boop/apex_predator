@@ -349,6 +349,13 @@ class BackgroundTask(StrEnum):
     DASHBOARD_ASSEMBLE = "DASHBOARD_ASSEMBLE"  # ROBIN
     AUDIT_SUMMARIZE    = "AUDIT_SUMMARIZE"     # ROBIN
     META_UPGRADE       = "META_UPGRADE"        # ALFRED -- daily self-update
+    CHAOS_DRILL        = "CHAOS_DRILL"         # ALFRED -- monthly resilience drills
+    HEALTH_WATCHDOG    = "HEALTH_WATCHDOG"     # ALFRED -- 5-min service auto-heal
+    SELF_TEST          = "SELF_TEST"           # ALFRED -- daily end-to-end smoke
+    LOG_ROTATE         = "LOG_ROTATE"          # ROBIN  -- daily log archive/prune
+    DISK_CLEANUP       = "DISK_CLEANUP"        # ROBIN  -- weekly temp/cache prune
+    BACKUP             = "BACKUP"              # ALFRED -- daily state+config backup
+    PROMETHEUS_EXPORT  = "PROMETHEUS_EXPORT"   # ROBIN  -- every minute metrics flush
 
 
 # Which persona owns which task. Used by the cron wrapper in scripts/.
@@ -366,6 +373,13 @@ TASK_OWNERS: dict[BackgroundTask, str] = {
     BackgroundTask.DASHBOARD_ASSEMBLE: "ROBIN",
     BackgroundTask.AUDIT_SUMMARIZE:    "ROBIN",
     BackgroundTask.META_UPGRADE:       "ALFRED",
+    BackgroundTask.CHAOS_DRILL:        "ALFRED",
+    BackgroundTask.HEALTH_WATCHDOG:    "ALFRED",
+    BackgroundTask.SELF_TEST:          "ALFRED",
+    BackgroundTask.LOG_ROTATE:         "ROBIN",
+    BackgroundTask.DISK_CLEANUP:       "ROBIN",
+    BackgroundTask.BACKUP:             "ALFRED",
+    BackgroundTask.PROMETHEUS_EXPORT:  "ROBIN",
 }
 
 
@@ -384,4 +398,11 @@ TASK_CADENCE: dict[BackgroundTask, str] = {
     BackgroundTask.DASHBOARD_ASSEMBLE: "* * * * *",       # every minute
     BackgroundTask.AUDIT_SUMMARIZE:    "0 6 * * *",       # daily 06:00
     BackgroundTask.META_UPGRADE:       "30 4 * * *",      # daily 04:30 -- git pull + test + restart
+    BackgroundTask.CHAOS_DRILL:        "0 3 1 * *",       # monthly 1st @ 03:00 -- resilience drills
+    BackgroundTask.HEALTH_WATCHDOG:    "*/5 * * * *",     # every 5 min -- auto-heal services
+    BackgroundTask.SELF_TEST:          "0 3 * * *",       # daily 03:00 -- end-to-end smoke
+    BackgroundTask.LOG_ROTATE:         "0 1 * * *",       # daily 01:00 -- archive + prune logs
+    BackgroundTask.DISK_CLEANUP:       "0 2 * * 0",       # Sundays 02:00 -- temp/cache prune
+    BackgroundTask.BACKUP:             "0 5 * * *",       # daily 05:00 -- state+config snapshot
+    BackgroundTask.PROMETHEUS_EXPORT:  "* * * * *",       # every minute -- OpenMetrics flush
 }

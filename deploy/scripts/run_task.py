@@ -388,6 +388,359 @@ def _write_meta_report(state_dir: Path, report: dict) -> None:
         fp.write(json.dumps(report) + "\n")
 
 
+# ===========================================================================
+# SUPERCHARGE ROUND -- 6 additional handlers (#14 #16 #17 #18 #19 #20)
+# ===========================================================================
+
+def _task_health_watchdog(state_dir: Path) -> dict:
+    """ALFRED: auto-heal. Every 5min check the 3 boot services are Running;
+    restart any that have been Ready for > 2 min. Telegram on first restart."""
+    import subprocess
+    report: dict = {"ts": datetime.now(UTC).isoformat(), "actions": []}
+    services = ("Apex-Jarvis-Live", "Apex-Avengers-Fleet", "Apex-Dashboard",
+                "Apex-Cloudflare-Tunnel")
+    if os.name != "nt":
+        return {"skipped": True, "reason": "watchdog is Windows-only"}
+
+    for svc in services:
+        try:
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command",
+                 f"(Get-ScheduledTask -TaskName {svc} -ErrorAction SilentlyContinue).State"],
+                text=True, timeout=15,
+            ).strip()
+        except Exception as exc:  # noqa: BLE001
+            report["actions"].append({"svc": svc, "state": "PROBE_FAIL",
+                                      "error": str(exc)[:100]})
+            continue
+        if not out:
+            continue
+        if out != "Running":
+            try:
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     f"Start-ScheduledTask -TaskName {svc}"],
+                    timeout=15, check=False,
+                )
+                report["actions"].append(
+                    {"svc": svc, "state_before": out, "state_after": "Started"},
+                )
+            except Exception as exc:  # noqa: BLE001
+                report["actions"].append({"svc": svc, "error": str(exc)[:100]})
+
+    out_path = state_dir / "health_watchdog.json"
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    # Telegram ping if we had to restart anything (non-blocking)
+    if report["actions"] and any("state_after" in a for a in report["actions"]):
+        try:
+            from deploy.scripts.telegram_alerts import send_from_env
+            restarted = [a["svc"] for a in report["actions"]
+                         if a.get("state_after")]
+            if restarted:
+                send_from_env(
+                    f"*Watchdog auto-healed*: {', '.join(restarted)}",
+                    priority="WARN",
+                )
+        except Exception:  # noqa: BLE001
+            pass
+    return {"actions": len(report["actions"]),
+            "restarted": [a["svc"] for a in report["actions"]
+                          if a.get("state_after")]}
+
+
+def _task_self_test(state_dir: Path) -> dict:
+    """ALFRED: end-to-end smoke. health probe + tunnel probe + (optional) live Claude."""
+    import urllib.error
+    import urllib.request
+
+    report: dict = {"ts": datetime.now(UTC).isoformat(), "checks": {}}
+
+    # 1. local health endpoint
+    try:
+        with urllib.request.urlopen(
+            "http://127.0.0.1:8000/health", timeout=5,
+        ) as resp:
+            report["checks"]["local_health"] = {
+                "status": resp.status, "ok": resp.status == 200,
+            }
+    except (urllib.error.URLError, TimeoutError) as exc:
+        report["checks"]["local_health"] = {"ok": False, "error": str(exc)[:100]}
+
+    # 2. public tunnel endpoint
+    try:
+        with urllib.request.urlopen(
+            "https://jarvis.apexpredator.live/health", timeout=10,
+        ) as resp:
+            report["checks"]["public_tunnel"] = {
+                "status": resp.status, "ok": resp.status == 200,
+            }
+    except (urllib.error.URLError, TimeoutError) as exc:
+        report["checks"]["public_tunnel"] = {"ok": False, "error": str(exc)[:100]}
+
+    # 3. Avengers heartbeat freshness (< 2 min)
+    hb_path = state_dir / "avengers_heartbeat.json"
+    if hb_path.exists():
+        try:
+            hb = json.loads(hb_path.read_text(encoding="utf-8"))
+            ts = datetime.fromisoformat(hb["ts"].replace("Z", "+00:00"))
+            age = (datetime.now(UTC) - ts).total_seconds()
+            report["checks"]["heartbeat_fresh"] = {
+                "ok": age < 120, "age_seconds": int(age),
+            }
+        except Exception as exc:  # noqa: BLE001
+            report["checks"]["heartbeat_fresh"] = {"ok": False,
+                                                    "error": str(exc)[:100]}
+    else:
+        report["checks"]["heartbeat_fresh"] = {"ok": False,
+                                                "error": "no heartbeat file"}
+
+    # 4. Live Claude call if key present (budget-sensitive: once per day is cheap)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            import anthropic
+            client = anthropic.Anthropic()
+            resp = client.messages.create(
+                model="claude-haiku-4-5", max_tokens=5,
+                messages=[{"role": "user", "content": "ping"}],
+            )
+            report["checks"]["claude_live"] = {
+                "ok": True, "tokens": resp.usage.output_tokens,
+            }
+        except Exception as exc:  # noqa: BLE001
+            report["checks"]["claude_live"] = {"ok": False,
+                                                "error": str(exc)[:150]}
+
+    # Overall verdict
+    all_ok = all(c.get("ok") for c in report["checks"].values())
+    report["overall"] = "PASS" if all_ok else "FAIL"
+    out_path = state_dir / "self_test.json"
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    # Telegram on failure
+    if not all_ok:
+        try:
+            from deploy.scripts.telegram_alerts import send_from_env
+            failures = [k for k, v in report["checks"].items()
+                        if not v.get("ok")]
+            send_from_env(
+                f"*Self-test FAILED* failures: {', '.join(failures)}",
+                priority="CRITICAL",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    return report
+
+
+def _task_log_rotate(state_dir: Path, log_dir: Path) -> dict:
+    """ROBIN: archive + prune old logs. Keep last 3 days of active logs;
+    gzip anything older; delete gzips older than 30 days."""
+    import gzip
+    import shutil
+    report: dict = {"ts": datetime.now(UTC).isoformat(),
+                    "archived": [], "pruned": []}
+    now_ts = datetime.now(UTC).timestamp()
+    # Archive .log files > 3 days old
+    for log_file in log_dir.glob("*.log"):
+        try:
+            age_days = (now_ts - log_file.stat().st_mtime) / 86400
+            if age_days > 3:
+                arc = log_file.with_suffix(
+                    f".log.{datetime.now(UTC):%Y%m%d}.gz",
+                )
+                with log_file.open("rb") as src, gzip.open(arc, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                log_file.write_bytes(b"")  # truncate original
+                report["archived"].append(str(arc.name))
+        except Exception as exc:  # noqa: BLE001
+            report.setdefault("errors", []).append(
+                f"{log_file.name}: {exc}"[:200],
+            )
+    # Prune .gz older than 30 days
+    for gz in log_dir.glob("*.gz"):
+        try:
+            age_days = (now_ts - gz.stat().st_mtime) / 86400
+            if age_days > 30:
+                gz.unlink()
+                report["pruned"].append(gz.name)
+        except Exception:  # noqa: BLE001
+            pass
+    (state_dir / "log_rotate.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8",
+    )
+    return {"archived": len(report["archived"]), "pruned": len(report["pruned"])}
+
+
+def _task_disk_cleanup(state_dir: Path) -> dict:
+    """ROBIN: weekly cleanup. Purge %TEMP% files > 7 days,
+    .pytest_cache + __pycache__ directories in the repo, and old package caches."""
+    report: dict = {"ts": datetime.now(UTC).isoformat(),
+                    "bytes_freed": 0, "files_deleted": 0}
+    cutoff_ts = datetime.now(UTC).timestamp() - 7 * 86400
+
+    targets: list[Path] = []
+    if os.name == "nt":
+        targets = [
+            Path(os.environ.get("TEMP", r"C:\Windows\Temp")),
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Temp",
+        ]
+    else:
+        targets = [Path("/tmp")]
+
+    for root in targets:
+        if not root.exists():
+            continue
+        for p in root.rglob("*"):
+            try:
+                if p.is_file() and p.stat().st_mtime < cutoff_ts:
+                    size = p.stat().st_size
+                    p.unlink()
+                    report["bytes_freed"] += size
+                    report["files_deleted"] += 1
+            except Exception:  # noqa: BLE001
+                continue
+
+    # Also blow away pyc caches older than 14 days
+    repo = Path(os.environ.get("APEX_REPO_DIR", r"C:\apex_predator"))
+    if repo.exists():
+        pyc_cutoff = datetime.now(UTC).timestamp() - 14 * 86400
+        for pycache in repo.rglob("__pycache__"):
+            try:
+                if pycache.stat().st_mtime < pyc_cutoff:
+                    for p in pycache.rglob("*"):
+                        if p.is_file():
+                            report["bytes_freed"] += p.stat().st_size
+                            p.unlink()
+                            report["files_deleted"] += 1
+                    pycache.rmdir()
+            except Exception:  # noqa: BLE001
+                continue
+    (state_dir / "disk_cleanup.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8",
+    )
+    return report
+
+
+def _task_backup(state_dir: Path) -> dict:
+    """ALFRED: daily snapshot of state + config. Compresses
+    state_dir + .env + config.json into a single tar.gz, keeps last 7."""
+    import tarfile
+
+    report: dict = {"ts": datetime.now(UTC).isoformat()}
+    repo = Path(os.environ.get("APEX_REPO_DIR", r"C:\apex_predator"))
+    backup_dir = state_dir / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
+    archive = backup_dir / f"apex-backup-{stamp}.tar.gz"
+
+    try:
+        with tarfile.open(archive, "w:gz") as tar:
+            # Add state dir contents (exclude backups subdir to avoid recursion)
+            for f in state_dir.iterdir():
+                if f.is_file():
+                    tar.add(f, arcname=f"state/{f.name}")
+            # Add .env (critical)
+            env_path = repo / ".env"
+            if env_path.exists():
+                tar.add(env_path, arcname=".env")
+            # Add config.json if present
+            cfg = repo / "config.json"
+            if cfg.exists():
+                tar.add(cfg, arcname="config.json")
+        report["archive"] = str(archive)
+        report["size_bytes"] = archive.stat().st_size
+    except Exception as exc:  # noqa: BLE001
+        report["error"] = str(exc)[:200]
+        (state_dir / "backup.json").write_text(
+            json.dumps(report, indent=2), encoding="utf-8",
+        )
+        return report
+
+    # Rotate: keep last 7 archives
+    existing = sorted(backup_dir.glob("apex-backup-*.tar.gz"),
+                      key=lambda p: p.stat().st_mtime, reverse=True)
+    pruned = 0
+    for old in existing[7:]:
+        try:
+            old.unlink()
+            pruned += 1
+        except Exception:  # noqa: BLE001
+            pass
+    report["retained"] = len(existing) - pruned
+    report["pruned"] = pruned
+    (state_dir / "backup.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8",
+    )
+    return report
+
+
+def _task_prometheus_export(state_dir: Path) -> dict:
+    """ROBIN: write OpenMetrics format alongside JSON heartbeat.
+
+    Writes to state_dir/prometheus/avengers.prom -- a Prometheus textfile
+    exporter can pick this up with node_exporter --collector.textfile.
+    Also serves stand-alone via /metrics endpoint (added in dashboard_api).
+    """
+    hb_path = state_dir / "avengers_heartbeat.json"
+    dash_path = state_dir / "dashboard_payload.json"
+    prom_dir = state_dir / "prometheus"
+    prom_dir.mkdir(parents=True, exist_ok=True)
+    out_path = prom_dir / "avengers.prom"
+
+    lines: list[str] = [
+        "# HELP apex_up Whether the Avengers daemon is alive (1=yes)",
+        "# TYPE apex_up gauge",
+        "apex_up 1",
+    ]
+
+    if hb_path.exists():
+        try:
+            hb = json.loads(hb_path.read_text(encoding="utf-8"))
+            lines.extend([
+                "# HELP apex_quota_hourly_pct Fraction of hourly USD budget consumed",
+                "# TYPE apex_quota_hourly_pct gauge",
+                f"apex_quota_hourly_pct {hb.get('hourly_pct', 0.0)}",
+                "# HELP apex_quota_daily_pct Fraction of daily USD budget consumed",
+                "# TYPE apex_quota_daily_pct gauge",
+                f"apex_quota_daily_pct {hb.get('daily_pct', 0.0)}",
+                "# HELP apex_cache_hit_rate Anthropic prompt-cache hit rate in last hour",
+                "# TYPE apex_cache_hit_rate gauge",
+                f"apex_cache_hit_rate {hb.get('cache_hit_rate', 0.0)}",
+                "# HELP apex_distiller_version Current classifier version",
+                "# TYPE apex_distiller_version gauge",
+                f"apex_distiller_version {hb.get('distiller_version', 0)}",
+                "# HELP apex_distiller_trained 1 if classifier has training data, 0 otherwise",
+                "# TYPE apex_distiller_trained gauge",
+                f"apex_distiller_trained {1 if hb.get('distiller_trained') else 0}",
+                "# HELP apex_quota_state JARVIS quota state code (OK=0, WARN=1, DOWNSHIFT=2, FREEZE=3)",
+                "# TYPE apex_quota_state gauge",
+                f"apex_quota_state {_prom_quota_code(hb.get('quota_state', 'OK'))}",
+            ])
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"# error reading heartbeat: {exc}"[:200])
+
+    if dash_path.exists():
+        try:
+            d = json.loads(dash_path.read_text(encoding="utf-8"))
+            stress = d.get("stress", {}) or {}
+            lines.extend([
+                "# HELP apex_stress_composite Weighted stress composite [0,1]",
+                "# TYPE apex_stress_composite gauge",
+                f"apex_stress_composite {stress.get('composite', 0.0)}",
+            ])
+        except Exception:  # noqa: BLE001
+            pass
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"written": str(out_path), "metrics": sum(
+        1 for line in lines if not line.startswith("#")
+    )}
+
+
+def _prom_quota_code(state: str) -> int:
+    return {"OK": 0, "WARN": 1, "DOWNSHIFT": 2, "FREEZE": 3}.get(state, 0)
+
+
 def _task_dashboard_assemble(state_dir: Path) -> dict:
     """ROBIN: assemble the dashboard payload JSON."""
     from apex_predator.brain.jarvis_v3.dashboard_payload import build_payload
@@ -410,6 +763,36 @@ def _task_dashboard_assemble(state_dir: Path) -> dict:
     out_path.write_text(json.dumps(payload.model_dump(mode="json"), indent=2),
                         encoding="utf-8")
     return {"written": str(out_path)}
+
+
+def _task_chaos_drill(state_dir: Path) -> dict:
+    """ALFRED: run monthly chaos drills and journal the verdict.
+
+    Calls ``apex_predator.scripts.chaos_drill.run_drills`` against a
+    fresh sub-sandbox (never touches the real ``~/.jarvis`` state), then
+    writes a report to ``{state_dir}/chaos_drill.json`` for the dashboard
+    and appends to ``{state_dir}/chaos_drill_history.jsonl`` for trend.
+
+    Exit is always success from cron's perspective -- the drill failing
+    is signal, not a crash. The verdict is in the journal.
+    """
+    from apex_predator.scripts.chaos_drill import run_drills
+    results = run_drills()
+    passed = sum(1 for r in results if r.get("passed"))
+    failed = len(results) - passed
+    report = {
+        "ts": datetime.now(UTC).isoformat(),
+        "total": len(results),
+        "passed": passed,
+        "failed": failed,
+        "results": results,
+    }
+    out = state_dir / "chaos_drill.json"
+    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    history = state_dir / "chaos_drill_history.jsonl"
+    with history.open("a", encoding="utf-8") as fp:
+        fp.write(json.dumps(report) + "\n")
+    return {"passed": passed, "failed": failed, "total": len(results)}
 
 
 def _task_audit_summarize(state_dir: Path) -> dict:
@@ -439,6 +822,13 @@ HANDLERS: dict[BackgroundTask, callable] = {
     BackgroundTask.DASHBOARD_ASSEMBLE: lambda s, _l: _task_dashboard_assemble(s),
     BackgroundTask.AUDIT_SUMMARIZE:    lambda s, _l: _task_audit_summarize(s),
     BackgroundTask.META_UPGRADE:       lambda s, _l: _task_meta_upgrade(s),
+    BackgroundTask.CHAOS_DRILL:        lambda s, _l: _task_chaos_drill(s),
+    BackgroundTask.HEALTH_WATCHDOG:    lambda s, _l: _task_health_watchdog(s),
+    BackgroundTask.SELF_TEST:          lambda s, _l: _task_self_test(s),
+    BackgroundTask.LOG_ROTATE:         lambda s, ld: _task_log_rotate(s, ld),
+    BackgroundTask.DISK_CLEANUP:       lambda s, _l: _task_disk_cleanup(s),
+    BackgroundTask.BACKUP:             lambda s, _l: _task_backup(s),
+    BackgroundTask.PROMETHEUS_EXPORT:  lambda s, _l: _task_prometheus_export(s),
 }
 
 

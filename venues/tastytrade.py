@@ -252,6 +252,29 @@ class TastytradeVenue(VenueBase):
                     continue
         return out
 
+    async def get_net_liquidation(self) -> float | None:
+        """Return broker-reported net-liquidation USD, or ``None`` if unavailable.
+
+        R1 closure. Drives ``core.BrokerEquityReconciler`` so the
+        trailing-DD tracker can cross-check its logical equity stream
+        against what Tastytrade's server actually reports.
+
+        Returns
+        -------
+        float | None
+            Net-liquidating-value in USD, or ``None`` when credentials
+            are missing, the HTTP call fails, httpx is not installed,
+            or the server response is unparseable.
+        """
+        balance = await self.get_balance()
+        raw = balance.get("net_liquidating_value")
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
     async def get_order_status(self, symbol: str, order_id: str) -> OrderResult | None:
         _ = symbol
         if self.has_credentials():

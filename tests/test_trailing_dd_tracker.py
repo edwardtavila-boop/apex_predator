@@ -745,3 +745,184 @@ class TestTrailingDDAuditLogUnit:
         events = log.read_all()
         # Corrupt line skipped; both good lines remain.
         assert [e["event"] for e in events] == ["init", "freeze"]
+
+
+# ---------------------------------------------------------------------------
+# Chaos drill: audit-log fsync failure behaviour
+# ---------------------------------------------------------------------------
+
+class TestAuditLogFsyncChaos:
+    """Chaos drill: what happens when os.fsync raises during audit append?
+
+    Scenario that motivated this: v0.1.59 added fsync-per-append for R3
+    durability. In production the audit log lives under ``state/`` which
+    may sit on a OneDrive-synced or network-shared volume where fsync
+    is known to fail or no-op under load / reparse-point conditions.
+    The buffered write has already succeeded at the OS level by the
+    time fsync fires, so the append is NOT lost -- but durability is.
+
+    The chaos drill pins down the exact behaviour:
+      * tracker keeps enforcing the floor (runtime continuity)
+      * the audit record is visible to read_all() (write persisted)
+      * fsync_failure_count increments (health-probe signal)
+      * last_fsync_error populated with exception text
+      * a WARNING log is emitted (operator visibility)
+
+    v0.1.59 originally swallowed at DEBUG level. v0.1.60 upgraded to
+    WARNING + counter so a read-only / reparse-point volume doesn't
+    silently degrade durability.
+    """
+
+    def test_fresh_log_has_zero_fsync_failures(self, tmp_path: Path) -> None:
+        log = TrailingDDAuditLog(tmp_path / "audit.jsonl")
+        assert log.fsync_failure_count == 0
+        assert log.last_fsync_error == ""
+
+    def test_fsync_failure_increments_counter_and_records_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        log = TrailingDDAuditLog(tmp_path / "audit.jsonl")
+
+        def _boom(_fd: int) -> None:
+            raise OSError("EROFS: read-only filesystem")
+
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", _boom)
+        log.append("init", {"x": 1})
+
+        assert log.fsync_failure_count == 1
+        assert "OSError" in log.last_fsync_error
+        assert "EROFS" in log.last_fsync_error
+
+    def test_fsync_failure_does_not_lose_the_written_record(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / "audit.jsonl"
+        log = TrailingDDAuditLog(target)
+
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+        log.append("freeze", {"peak": 52_500.0})
+
+        # The buffered write landed on disk even though fsync failed.
+        events = log.read_all()
+        assert len(events) == 1
+        assert events[0]["event"] == "freeze"
+        assert events[0]["state"]["peak"] == 52_500.0
+
+    def test_fsync_failures_accumulate_across_appends(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        log = TrailingDDAuditLog(tmp_path / "audit.jsonl")
+
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+        log.append("init", {"a": 1})
+        log.append("freeze", {"a": 2})
+        log.append("breach", {"a": 3})
+
+        assert log.fsync_failure_count == 3
+        # All three records landed.
+        events = log.read_all()
+        assert [e["event"] for e in events] == ["init", "freeze", "breach"]
+
+    def test_fsync_recovery_does_not_reset_counter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        log = TrailingDDAuditLog(tmp_path / "audit.jsonl")
+
+        import os as _os
+        # First two appends: fsync fails.
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+        log.append("init", {"a": 1})
+        log.append("freeze", {"a": 2})
+        assert log.fsync_failure_count == 2
+
+        # Recovery: fsync starts working again. Counter must persist --
+        # the operator needs to know that durability WAS degraded, even
+        # if the volume is healthy again now.
+        monkeypatch.setattr(_os, "fsync", lambda _fd: None)
+        log.append("breach", {"a": 3})
+        assert log.fsync_failure_count == 2
+        assert "OSError" in log.last_fsync_error  # NOT cleared on recovery
+
+    def test_fsync_failure_emits_warning_log(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        log = TrailingDDAuditLog(tmp_path / "audit.jsonl")
+
+        import logging as _logging
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+        caplog.set_level(_logging.WARNING, logger="apex_predator.core.trailing_dd_tracker")
+
+        log.append("freeze", {"peak": 52_500.0})
+
+        # At least one WARNING record should mention audit fsync.
+        warnings = [r for r in caplog.records if r.levelno >= _logging.WARNING]
+        assert any("audit fsync failed" in r.getMessage() for r in warnings)
+
+    def test_tracker_keeps_enforcing_floor_when_audit_fsync_fails(
+        self, tracker_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The full chaos-drill scenario: during a freeze event, the
+        audit log fsync wedges (e.g. OneDrive reparse-point transient).
+        The tracker must keep enforcing the floor -- the state file
+        write is a separate path and should not be affected by the
+        audit-fsync failure.
+        """
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+
+        tracker = TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        # Push equity above the cap to trigger freeze.
+        tracker.update(current_equity_usd=APEX_50K_FREEZE + 100.0)
+        s = tracker.state()
+        assert s.frozen is True
+        assert s.peak_equity_usd >= APEX_50K_FREEZE
+
+        # Floor now locked. Drive equity below the floor -> breach.
+        tracker.update(current_equity_usd=APEX_50K_START - 50.0)
+        s = tracker.state()
+        assert s.breach_count >= 1
+
+        # Audit log registered every failure -- init + load or init alone
+        # on fresh path + freeze + breach => at least 3 fsync calls,
+        # all failed.
+        assert tracker._audit.fsync_failure_count >= 3
+        # But the file was still written, so forensic review works.
+        events = tracker._audit.read_all()
+        assert any(e["event"] == "freeze" for e in events)
+        assert any(e["event"] == "breach" for e in events)
+
+    def test_tracker_state_file_write_independent_of_audit_fsync(
+        self, tracker_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The tracker's own state file write has its own fsync path
+        (in _atomic_write). Monkeypatching os.fsync fails BOTH the
+        audit-log fsync AND the state-file fsync, so this test
+        verifies the tracker continues even when both paths fail.
+
+        v0.1.59's state-file write also wraps fsync in a try/except
+        (line 347-349). This test pins that combined chaos behaviour.
+        """
+        import os as _os
+        monkeypatch.setattr(_os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("sim")))
+
+        tracker = TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        tracker.update(current_equity_usd=APEX_50K_START + 500.0)
+
+        # State file exists and is parseable despite fsync failures.
+        assert tracker_path.exists()
+        data = json.loads(tracker_path.read_text(encoding="utf-8"))
+        assert data["starting_balance_usd"] == APEX_50K_START
+        assert data["peak_equity_usd"] >= APEX_50K_START + 500.0

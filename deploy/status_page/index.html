@@ -94,6 +94,14 @@
   </header>
 
   <main id="app">
+    <div class="card" id="systems-banner" style="grid-column: 1 / -1; padding: 0.75rem 1rem; margin-bottom: 0.5rem;">
+      <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <span class="mono" style="font-weight: 700;">ALL SYSTEMS:</span>
+        <span id="systems-overall" class="badge blue">loading…</span>
+        <span id="systems-chips" class="mono" style="font-size: 0.8em; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline;"></span>
+      </div>
+    </div>
+
     <div class="card">
       <h3>Health</h3>
       <div class="metric"><span class="metric-label">Status</span><span class="metric-value" id="m-health">—</span></div>
@@ -151,6 +159,17 @@
       <details style="margin-top: 1rem;">
         <summary style="cursor: pointer; opacity: 0.8;">Recent paper trades (ledger tail)</summary>
         <div id="btc-trades" class="mono" style="font-size: 0.8em; max-height: 200px; overflow-y: auto; margin-top: 0.5rem;">Loading…</div>
+      </details>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <h3>MNQ Live Supervisor
+        <span class="mono" id="mnq-supervisor-summary" style="font-size: 0.75em; opacity: 0.7; margin-left: 12px;"></span>
+      </h3>
+      <div id="mnq-supervisor" class="mono" style="font-size: 0.85em;">Loading…</div>
+      <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer; opacity: 0.8;">Recent MNQ journal events</summary>
+        <div id="mnq-events" class="mono" style="font-size: 0.8em; max-height: 200px; overflow-y: auto; margin-top: 0.5rem;">Loading…</div>
       </details>
     </div>
 
@@ -413,6 +432,87 @@
             '(btc fleet endpoints unavailable)';
           document.getElementById('btc-trades').textContent = '';
           document.getElementById('btc-fleet-summary').textContent = '';
+        }
+
+        // MNQ Live Supervisor
+        try {
+          const mnq = await fetchJson('/api/mnq/supervisor');
+          const supEl = document.getElementById('mnq-supervisor');
+          const eventsEl = document.getElementById('mnq-events');
+          const summaryEl = document.getElementById('mnq-supervisor-summary');
+
+          if (!mnq.state) {
+            supEl.textContent = mnq.note || '(supervisor not running)';
+            eventsEl.textContent = '';
+            summaryEl.textContent = '';
+          } else {
+            const s = mnq.state;
+            const paused = s.paused;
+            const badgeColor = paused ? 'red' : (s.router_name === 'log_only' ? 'blue' : 'green');
+            const badgeText = paused ? 'PAUSED' : (s.router_name === 'log_only' ? 'LOG-ONLY' : 'ARMED');
+
+            summaryEl.innerHTML =
+              `<span class="badge ${badgeColor}">${badgeText}</span> · ` +
+              `bars:${s.bars_consumed || 0} · ` +
+              `routed:${s.signals_routed || 0} · ` +
+              `blocked:${s.signals_blocked || 0} · ` +
+              `jarvis_audit:${s.jarvis_audit_tail_len || 0}`;
+
+            supEl.innerHTML = `
+              <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem;">
+                <span style="opacity: 0.6;">symbol</span><span>${s.symbol || '?'} ${s.tradovate_symbol ? `(${s.tradovate_symbol})` : ''}</span>
+                <span style="opacity: 0.6;">router</span><span>${s.router_name || '?'}</span>
+                <span style="opacity: 0.6;">started</span><span>${s.started_at_utc ? new Date(s.started_at_utc).toLocaleString() : '-'}</span>
+                <span style="opacity: 0.6;">last heartbeat</span><span>${s.last_heartbeat_utc ? new Date(s.last_heartbeat_utc).toLocaleString() : '-'}</span>
+                <span style="opacity: 0.6;">last bar ts</span><span>${s.last_bar_ts || '-'}</span>
+                <span style="opacity: 0.6;">last event</span><span>${s.last_event || '-'}</span>
+              </div>`;
+
+            const outcomeColor = {
+              EXECUTED: 'green', BLOCKED: 'red', FAILED: 'red', NOTED: 'blue',
+            };
+            if (!mnq.recent_events || mnq.recent_events.length === 0) {
+              eventsEl.textContent = '(no journal events yet)';
+            } else {
+              eventsEl.innerHTML = mnq.recent_events.map(ev => {
+                const ts = ev.ts ? new Date(ev.ts).toLocaleTimeString() : '?';
+                const col = outcomeColor[ev.outcome] || 'blue';
+                return `
+                  <div style="padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.5rem;">
+                    <span style="opacity: 0.6; width: 5rem;">${ts}</span>
+                    <span class="badge ${col}" style="min-width: 5rem; text-align: center;">${ev.outcome || '?'}</span>
+                    <span style="min-width: 11rem; opacity: 0.85;">${ev.intent || '?'}</span>
+                    <span style="color: var(--muted); flex: 1;">${ev.rationale || ''}</span>
+                  </div>`;
+              }).join('');
+            }
+          }
+        } catch (_e) {
+          document.getElementById('mnq-supervisor').textContent =
+            '(mnq supervisor endpoint unavailable)';
+          document.getElementById('mnq-events').textContent = '';
+          document.getElementById('mnq-supervisor-summary').textContent = '';
+        }
+
+        // Top banner: all-systems rollup
+        try {
+          const sys = await fetchJson('/api/systems');
+          const overallColor = {
+            GREEN: 'green', YELLOW: 'purple', RED: 'red',
+          }[sys.overall] || 'blue';
+          setBadge(
+            document.getElementById('systems-overall'), sys.overall, overallColor,
+          );
+          const chipColor = {
+            GREEN: 'green', YELLOW: 'purple', RED: 'red',
+          };
+          document.getElementById('systems-chips').innerHTML =
+            Object.entries(sys.systems || {}).map(([name, info]) => {
+              const col = chipColor[info.status] || 'blue';
+              return `<span><span class="badge ${col}">${name}</span> <span style="opacity: 0.7;">${info.detail || ''}</span></span>`;
+            }).join(' · ');
+        } catch (_e) {
+          document.getElementById('systems-chips').textContent = '(systems endpoint unavailable)';
         }
 
         document.getElementById('error-card').hidden = true;

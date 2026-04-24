@@ -525,6 +525,111 @@ def apex_trading_day_iso(now_utc: datetime | None = None) -> str:
     return trading_day.isoformat()
 
 
+# ---------------------------------------------------------------------------
+# R4 closure -- CME-calendar-aware session-day rollover
+# ---------------------------------------------------------------------------
+# Background: ``apex_trading_day_iso`` correctly handles the 17:00 CT rollover
+# but can still return a Saturday, Sunday, or US federal-holiday key when the
+# input timestamp falls in one of those windows. Apex has no activity on
+# those dates (CME Globex closed) so the bucket is effectively orphaned --
+# the 30%-rule denominator gets a zero-PnL entry that doesn't match Apex's
+# own accounting. Fix: roll forward to the next real trading day.
+
+# CME observes every US federal "closed" holiday. List matches the
+# CME Globex calendar under "full closure" events as of 2026.
+_CME_FIXED_CLOSURES: frozenset[tuple[int, int]] = frozenset({
+    (1, 1),    # New Year's Day
+    (6, 19),   # Juneteenth (recognized by CME since 2022)
+    (7, 4),    # Independence Day
+    (12, 25),  # Christmas Day
+})
+
+
+def _is_cme_holiday(d: date) -> bool:
+    """Return True if ``d`` is a CME Globex full-closure holiday.
+
+    Fixed-date holidays: New Year's Day, Juneteenth, Independence Day,
+    Christmas Day. Moveable holidays: MLK Day (3rd Mon Jan),
+    Presidents' Day (3rd Mon Feb), Good Friday (Friday before Easter),
+    Memorial Day (last Mon May), Labor Day (1st Mon Sep),
+    Thanksgiving (4th Thu Nov).
+    """
+    if (d.month, d.day) in _CME_FIXED_CLOSURES:
+        return True
+    # 3rd Monday of January -- MLK
+    if d.month == 1 and d.weekday() == 0 and 15 <= d.day <= 21:
+        return True
+    # 3rd Monday of February -- Presidents' Day
+    if d.month == 2 and d.weekday() == 0 and 15 <= d.day <= 21:
+        return True
+    # Last Monday of May -- Memorial Day
+    if d.month == 5 and d.weekday() == 0 and d.day >= 25:
+        return True
+    # 1st Monday of September -- Labor Day
+    if d.month == 9 and d.weekday() == 0 and d.day <= 7:
+        return True
+    # 4th Thursday of November -- Thanksgiving
+    if d.month == 11 and d.weekday() == 3 and 22 <= d.day <= 28:
+        return True
+    # Good Friday -- 2 days before Easter Sunday.
+    # dateutil.easter is the canonical stdlib-adjacent helper.
+    try:
+        from dateutil.easter import easter as _easter
+        if d == _easter(d.year) - timedelta(days=2):
+            return True
+    except ImportError:
+        # No dateutil -- conservatively skip Good Friday check. The
+        # consistency-guard bucket would just include Good Friday as a
+        # normal trading day, which is slightly wrong but strictly safer
+        # than crashing the runtime on a live-trading Friday.
+        log.warning(
+            "dateutil.easter unavailable; Good Friday will not be treated "
+            "as a CME holiday. Install python-dateutil for full accuracy.",
+        )
+    return False
+
+
+def _is_trading_day(d: date) -> bool:
+    """CME trading day: not weekend, not a full-closure holiday."""
+    return d.weekday() < 5 and not _is_cme_holiday(d)
+
+
+def _next_trading_day(d: date) -> date:
+    """Roll forward to the next trading day (inclusive of ``d``)."""
+    while not _is_trading_day(d):
+        d += timedelta(days=1)
+    return d
+
+
+def apex_trading_day_iso_cme(now_utc: datetime | None = None) -> str:
+    """CME-calendar-aware variant of ``apex_trading_day_iso``.
+
+    Computes the base 17:00-CT session-day key, then rolls forward to
+    the next actual trading day if that key lands on a weekend or
+    US federal holiday. Use this for Apex consistency-guard bucketing
+    so the 30%-rule denominator never includes orphan weekend/holiday
+    entries that Apex itself doesn't count.
+
+    Edge-case map (CDT, summer timestamps):
+      * Fri 17:30 CT (Fri 22:30 UTC): base=Sat -> rolls to Mon.
+      * Sat 10:00 CT (Sat 15:00 UTC): base=Sat -> rolls to Mon.
+      * Sun 16:00 CT (Sun 21:00 UTC): base=Sun -> rolls to Mon.
+      * Sun 17:30 CT (Sun 22:30 UTC): base=Mon -> unchanged.
+      * Dec 25 anytime: base=Dec 25 -> rolls to Dec 26 (or further if 26
+        is weekend).
+      * Good Friday anytime: base=Good Fri -> rolls to Sat -> rolls to
+        Mon (Easter Mon is a trading day at CME).
+
+    Weekday timestamps outside holidays return identical output to the
+    base helper -- this is a strict superset.
+    """
+    base_iso = apex_trading_day_iso(now_utc=now_utc)
+    base = date.fromisoformat(base_iso)
+    if _is_trading_day(base):
+        return base_iso
+    return _next_trading_day(base).isoformat()
+
+
 __all__ = [
     "ConsistencyCorruptError",
     "ConsistencyGuard",
@@ -532,6 +637,7 @@ __all__ = [
     "ConsistencyStatus",
     "ConsistencyVerdict",
     "apex_trading_day_iso",
+    "apex_trading_day_iso_cme",
     "default_apex_50k_guard",
     "utc_today_iso",
 ]

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-24T19:51:57.686604+00:00",
+  "last_updated": "2026-04-24T21:03:53.536098+00:00",
   "overall_progress_pct": 100,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -9,7 +9,7 @@
     "mnq_test_suite_passing": 749,
     "mnq_test_suite_failing": 0,
     "apex_predator_python_files": 107,
-    "apex_predator_tests_passing": 3735,
+    "apex_predator_tests_passing": 3827,
     "apex_predator_tests_failing": 0,
     "apex_predator_verify_all": "17/17 PASS",
     "apex_predator_staking_wired": {
@@ -3749,6 +3749,78 @@
       "ruff_green_new_code": true,
       "pre_existing_lint_debt": "ANN401/ANN002/ANN003 in run_apex_live.py pre-date v0.1.57; F841/E741/ANN204/TC003 in test files pre-date v0.1.57. Nothing new added by this bump. Two SIM108 warnings introduced by the new apex_trading_day_iso implementation were auto-simplified to ternaries during the same review loop.",
       "post_bump_cleanup_note": "After the initial bump to 3704, the two flaky/order-dependent failures (test_avengers_daemon::test_persona_tick_dispatches_due_tasks and test_basis_stress_breaker::test_basis_zscore_above_threshold_flatten_both) passed on re-run. Additional tests were also discovered by collector (3709 -> 3738 collected). Final clean baseline: 3735 passed, 3 skipped, 0 failed."
+    },
+    "apex_predator_v0_1_59_residual_risk_closure": {
+      "timestamp_utc": "2026-04-24T21:03:53.536098+00:00",
+      "version": "v0.1.59",
+      "bundle_name": "APEX EVAL RESIDUAL-RISK CLOSURE -- re-litigation of the four HIGH residual findings (R1..R4) from the v0.1.58 D-series Red Team. Three closed in code + tests (R2/R3/R4); one scaffolded with enforcement deferred to v0.2.x (R1).",
+      "theme": "v0.1.58 shipped eval-ready on the BLOCKERs but the four HIGH residuals were tagged 'v0.2.x'. Leaving real defense-in-depth gaps behind an eval-ready banner is the same silent-failure risk the D-series review was designed to prevent. v0.1.59 closes three and scaffolds the fourth.",
+      "operator_directive_quote": "do all.",
+      "modules_added": [
+        "apex_predator/core/events_calendar.py (R4: CME Globex session calendar, Good Friday via dateutil.easter + fixed-date US market closures)",
+        "apex_predator/core/broker_equity_reconciler.py (R1: scaffold -- BrokerEquityReconciler compares logical vs broker equity with USD/pct tolerances; enforcement deferred to v0.2.x pending broker-adapter wiring)"
+      ],
+      "modules_modified": [
+        "apex_predator/core/consistency_guard.py (R4: apex_trading_day_iso now routes through events_calendar to roll Saturday/Sunday/holiday timestamps forward to the next regular trading day)",
+        "apex_predator/core/trailing_dd_tracker.py (R3: TrailingDDAuditLog append-only JSONL with fsync per append; init/load/freeze/breach/reset events; reset() now requires operator + acknowledge_destruction or raises ResetNotAcknowledgedError; audit log survives state file deletion)",
+        "apex_predator/core/kill_switch_runtime.py (R2: validate_apex_tick_cadence pure-function validator enforcing tick * max_move * safety <= cushion; raises ApexTickCadenceError in live mode on violation)",
+        "apex_predator/scripts/run_apex_live.py (R2: tick_interval_s default 5.0 -> 1.0; CLI default updated; load_runtime_config calls validator with cushion from kill_switch.tier_a.apex_eval_preemptive)"
+      ],
+      "docs_updated": [
+        "apex_predator/docs/red_team_d2_d3_review.md (Residual risks section rewritten with v0.1.59 closure state for R1..R4; coverage delta extended; header Outcome line updated)"
+      ],
+      "tests_added": [
+        "apex_predator/tests/test_core_events_calendar.py (NEW, R4)",
+        "apex_predator/tests/test_consistency_guard.py (R4 extensions for calendar rollover)",
+        "apex_predator/tests/test_trailing_dd_tracker.py (R3: 6 new classes -- TestAuditLogInitAndLoad, TestAuditLogFreezeAndBreach, TestAuditLogSequenceMonotonicity, TestResetAcknowledgment, TestAuditLogSurvivesStateDeletion, TestTrailingDDAuditLogUnit)",
+        "apex_predator/tests/test_kill_switch_runtime.py (R2: TestValidateApexTickCadence, 12 tests)",
+        "apex_predator/tests/test_run_apex_live.py (R2: TestLoadRuntimeConfigTickCadence, 4 tests)",
+        "apex_predator/tests/test_broker_equity_reconciler.py (NEW, R1, 21 tests across 8 classes)"
+      ],
+      "residuals_disposition": {
+        "R1_logical_vs_broker_mtm": {
+          "severity": "HIGH",
+          "status": "SCAFFOLDED (enforcement deferred to v0.2.x)",
+          "finding": "Tracker consumes sum(bot.state.equity) -- logical equity from the bot's own PnL book. Apex accounts for MTM at broker level (unrealized + realized + funding + fees). Prolonged disconnect silently over-states the cushion.",
+          "closure": "BrokerEquityReconciler compares logical vs broker equity on every reconcile tick; classifies drift against configurable USD/pct tolerances; emits WARNING on broker_below_logical (dangerous), INFO on broker_above_logical. Does NOT pause/flatten/synthesize a KillVerdict. Source exceptions swallowed and treated as no_broker_data.",
+          "deferred_to_v0_2_x": "Wiring each broker adapter's get_balance() / account-value endpoint to broker_equity_source. IBKR returns empty dict today; Tastytrade/Tradovate wiring is venue-specific. Once wired, the runtime can optionally swap logical equity for broker_equity - sum(open_pnl) as the tracker input.",
+          "tests": "test_broker_equity_reconciler.py -- 21 tests: no-data path, within-tolerance, broker_below_logical, broker_above_logical, USD/pct tolerance boundaries, zero logical equity, source-raising treated as no_data, stats counters, result-shape contract."
+        },
+        "R2_tick_interval_latency": {
+          "severity": "HIGH",
+          "status": "CLOSED",
+          "finding": "Runtime polled on a 5-second tick. A fast retrace during that window could cross the floor before the next update. Apex enforcement is likely sub-second.",
+          "closure": "validate_apex_tick_cadence enforces tick_interval_s * max_usd_move_per_sec * safety_factor <= cushion_usd (defaults $300/sec x 2.0). RuntimeConfig.tick_interval_s default reduced 5.0 -> 1.0. Validator runs in load_runtime_config and raises ApexTickCadenceError in live mode on violation.",
+          "tests": "TestValidateApexTickCadence (12 tests) + TestLoadRuntimeConfigTickCadence (4 tests)."
+        },
+        "R3_freeze_rule_reentrancy": {
+          "severity": "HIGH",
+          "status": "CLOSED",
+          "finding": "Tracker freezes at peak >= start + cap. If the state file is accidentally deleted or the operator re-inits with a larger cap, the freeze is lost and the floor resumes trailing.",
+          "closure": "TrailingDDAuditLog append-only JSONL with fsync per append. Lifecycle events (init/load/freeze/breach/reset) recorded immutably. reset() now requires operator + acknowledge_destruction or raises ResetNotAcknowledgedError. Audit log survives state file deletion -- forensic review can always detect a silent re-init.",
+          "tests": "6 new classes in test_trailing_dd_tracker.py: TestAuditLogInitAndLoad, TestAuditLogFreezeAndBreach, TestAuditLogSequenceMonotonicity, TestResetAcknowledgment, TestAuditLogSurvivesStateDeletion, TestTrailingDDAuditLogUnit."
+        },
+        "R4_session_day_weekends_holidays": {
+          "severity": "HIGH",
+          "status": "CLOSED",
+          "finding": "apex_trading_day_iso keyed Saturday-morning timestamps to 'Saturday' which Apex ignores, creating phantom zero-PnL buckets in the 30%-rule denominator.",
+          "closure": "core/events_calendar.py -- CME Globex session calendar with dateutil.easter-driven Good Friday + fixed-date closures. apex_trading_day_iso now routes through is_trading_day / next_trading_day to roll weekend/holiday timestamps forward to the next regular trading day.",
+          "tests": "test_core_events_calendar.py (full CME calendar) + test_consistency_guard.py extensions for each closure type."
+        }
+      },
+      "design_choices": {
+        "r1_observation_not_enforcement": "R1 reconciler is pure observation -- it logs drift but does NOT pause/flatten/synthesize KillVerdict. Rationale: until the broker adapter is wired, every tick would classify as no_broker_data; flipping that to an actionable signal requires a venue integration decision that is v0.2.x scope. Shipping the observation layer now means v0.2.x is a wiring diff, not a wiring + policy diff.",
+        "r2_live_only_validator": "validate_apex_tick_cadence is a no-op in paper/dry-run. Rationale: the whole point of the inequality is real-dollar risk per tick; paper mode has no real dollars, and dry-run is a test harness. A validator that blocks dev iteration would cause devs to disable it.",
+        "r2_default_bound_300usd_per_sec": "max_usd_move_per_sec default is $300 -- bounds a ~6-handle move on 2 MNQ contracts ($5/handle/contract = $10 per handle per contract = $60 for 6 handles per contract, ~$120 on 2 contracts) with headroom for flash-spike behaviour. Safety factor 2.0 bounds worst-case miss-by-one-tick. For tick=1.0s, cushion must be >= $600 in live mode.",
+        "r3_audit_log_colocation": "Audit log defaults to <state_path>.audit.jsonl -- same directory so operators find it naturally. Tradeoff: an attacker who can delete state can also delete the audit log. Mitigation: the audit log path is constructor-configurable, so production can point it at a write-once or replicated volume.",
+        "r3_reset_ack_not_prompt": "reset() requires a programmatic acknowledge_destruction=True, not an interactive prompt. Rationale: the tracker is called from runtime code and scripts, both headless. An interactive prompt would crash non-tty contexts. The operator triggers reset via a CLI wrapper that collects the ack at the CLI layer.",
+        "r4_calendar_uses_dateutil": "Good Friday is Easter-adjacent; Easter date requires Computus (Gauss / Meeus algorithm). dateutil.easter is vendored-quality and already a project dependency. Hand-rolling Computus is not worth it."
+      },
+      "tests_passing_before": 3735,
+      "tests_passing_after": 3827,
+      "tests_new": 92,
+      "ruff_green_new_code": true,
+      "pre_existing_lint_debt": "TC003 (Path) and UP042 (StrEnum x2) in core/kill_switch_runtime.py pre-date v0.1.59 -- verified via git stash against the baseline. Same ANN401/ANN002/ANN003 / F841/E741/ANN204/TC003 debt from v0.1.58 remains in run_apex_live.py and test files. Nothing new added by this bump."
     }
   },
   "phases": [
@@ -4749,7 +4821,7 @@
     "amplitude": "needs_auth",
     "coupler": "needs_auth"
   },
-  "last_updated_utc": "2026-04-24T19:51:57.686604+00:00",
+  "last_updated_utc": "2026-04-24T21:03:53.536098+00:00",
   "milestones": [
     {
       "version": "v0.1.31",
@@ -4932,6 +5004,13 @@
       "title": "Red Team closure on v0.1.57 D-series wiring. B1 session-day bucketing, B2 live-mode tracker gate, B3 VIOLATION-to-PAUSE enforcement -- all three BLOCKERs closed in code + tests + docs. D-series is now live-ready with respect to the adversarial review; residual risks R1..R4 documented and tracked.",
       "tests_delta": 236,
       "tests_passing": 3735
+    },
+    {
+      "version": "v0.1.59",
+      "timestamp_utc": "2026-04-24T21:03:53.536098+00:00",
+      "title": "Residual-risk closure on v0.1.58 D-series. R2 tick-cadence validator + 1s default, R3 immutable audit log + reset acknowledgment, R4 CME-calendar-aware session-day. R1 BrokerEquityReconciler scaffolded with enforcement deferred to v0.2.x (broker-adapter wiring). D-series is now defense-in-depth hardened with respect to all four HIGH residuals from the original Red Team.",
+      "tests_delta": 92,
+      "tests_passing": 3827
     }
   ]
 }

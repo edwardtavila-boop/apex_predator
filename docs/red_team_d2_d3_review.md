@@ -1,10 +1,12 @@
 # Red Team Review — D-series Apex Eval Hardening
 
-**Date:** 2026-04-24
+**Date:** 2026-04-24 (v0.1.58) · updated 2026-04-24 (v0.1.59 residual-risk closure)
 **Scope:** D2 (`TrailingDDTracker`) and D3 (`ConsistencyGuard`) modules and
 their wiring into `scripts/run_apex_live.py`.
 **Reviewer:** `risk-advocate` agent (Opus 4.7, adversarial posture).
-**Outcome:** 3 BLOCKERs identified, all closed in v0.1.58.
+**Outcome (v0.1.58):** 3 BLOCKERs identified, all closed.
+**Outcome (v0.1.59):** 4 HIGH residual risks re-litigated — 3 closed
+(R2/R3/R4), 1 scaffolded with enforcement deferred to v0.2.x (R1).
 
 This document captures the adversarial teardown of the D-series work, the
 fixes shipped in response, and the residual risks that remain (documented
@@ -122,50 +124,116 @@ pre-seeded WARNING does NOT fire PAUSE.
 
 ---
 
-## Residual risks (accepted, documented)
+## Residual risks (v0.1.58 state → v0.1.59 closure)
 
-The following HIGH findings from the Red Team are accepted as known
-residual risks and tracked for future work. None of them is a BLOCKER
-because the D-series closure brings the runtime to a safer baseline than
-v0.1.56 across every regime tested.
+The four HIGH findings below were flagged during the D-series Red Team
+but originally deferred as "accepted residual risks" for v0.2.x. In
+v0.1.59 we re-litigated that call — three of the four were within reach
+and the fourth had a clean scaffold-now-wire-later shape. All four are
+tracked below with their current closure state.
 
-### R1 — Logical equity vs broker MTM
+### R1 — Logical equity vs broker MTM  |  SCAFFOLDED (enforcement deferred)
 
-The tracker consumes `sum(bot.state.equity)` — a logical figure maintained
-by the bot's own PnL book. Apex accounts for MTM at broker level
-(unrealized + realized + funding + fees). A prolonged disconnect between
-these two could drift the floor calculation from what Apex sees. Fix:
-wire a broker-side equity reader (venue-specific; IBKR account value,
-Tastytrade balance) as the canonical source when creds are present.
-Tracked for v0.2.x.
+**Original finding.** The tracker consumes `sum(bot.state.equity)` — a
+logical figure maintained by the bot's own PnL book. Apex accounts for
+MTM at broker level (unrealized + realized + funding + fees). A
+prolonged disconnect between these two could drift the floor calculation
+from what Apex sees.
 
-### R2 — Tick-interval latency
+**v0.1.59 closure (partial).** Added
+`apex_predator/core/broker_equity_reconciler.py` —
+`BrokerEquityReconciler` accepts a caller-supplied
+`broker_equity_source: Callable[[], float | None]`, compares logical
+equity to broker equity on every reconcile tick, and classifies drift
+against configurable USD/pct tolerances. The dangerous case
+(`broker_below_logical` = cushion over-stated) emits a WARNING log; the
+inverse (`broker_above_logical` = cushion under-stated, merely early
+flatten) emits INFO. Source exceptions are swallowed and classified as
+`no_broker_data` (in-tolerance by convention — we can't assert drift we
+can't see). The module **does not** pause, flatten, or synthesize a
+KillVerdict — this is pure observation.
 
-The runtime polls on a 5-second tick by default. A fast retrace during
-that window could cross the floor before the next update. Apex's own
-tick enforcement is unknown; likely sub-second. The tracker can latch on
-the *next* tick after the breach, not during. Mitigation: tighter tick
-in live mode (1s), plus a stop-buffer so the local floor fires before
-Apex's does. Tracked for v0.2.x.
+**Still deferred to v0.2.x:** wiring each broker adapter's
+`get_balance()` / account-value endpoint to the reconciler, and
+deciding whether the runtime should **replace** logical equity with
+`broker_equity - sum(open_pnl)` as the tracker input. Today IBKR's
+`get_balance()` returns an empty dict and Tastytrade/Tradovate wiring is
+venue-specific; both are v0.2.x scope.
 
-### R3 — Freeze-rule re-entrancy
+**Tests.** `tests/test_broker_equity_reconciler.py` — 21 tests across
+8 classes: no-broker-data path, within-tolerance, broker-below-logical
+(dangerous), broker-above-logical, USD/pct tolerance boundaries, zero
+logical equity, source-raising treated as no_data, running stats
+counters, result-shape contract.
 
-The tracker freezes when `peak >= start + cap`. If equity subsequently
-dips and then climbs *through* that peak again, the frozen floor stays.
-This is correct per Apex rules. The risk is that if the tracker's state
-file is ever accidentally deleted or the operator re-inits with a larger
-`trailing_dd_cap_usd`, the freeze is lost and the floor resumes
-trailing. Mitigation: immutable audit log on tracker state changes, and
-a reset-confirmation path that requires operator acknowledgement.
-Tracked.
+### R2 — Tick-interval latency  |  CLOSED
 
-### R4 — Session-day math vs weekends / holidays
+**Original finding.** The runtime polls on a 5-second tick by default.
+A fast retrace during that window could cross the floor before the next
+update.
 
-The 30% rule buckets by Apex trading day. Weekends and US holidays
-don't exist in the calendar; the `apex_trading_day_iso` helper keys
-a Saturday-morning timestamp to "Saturday" which Apex probably ignores.
-Not wrong, but not perfectly aligned. Mitigation: a CME-calendar-aware
-version that rounds to the next trading day. Tracked as nice-to-have.
+**v0.1.59 closure.** Added
+`validate_apex_tick_cadence(...)` in
+`apex_predator/core/kill_switch_runtime.py` — a pure-function validator
+enforcing the invariant
+`tick_interval_s * max_usd_move_per_sec * safety_factor <= cushion_usd`.
+Default `max_usd_move_per_sec=300.0` and `safety_factor=2.0` bound the
+worst-case single-tick retrace. Default `RuntimeConfig.tick_interval_s`
+reduced **5.0 → 1.0**. In live mode (`live=True`) the validator raises
+`ApexTickCadenceError` if the inequality fails; paper/dry-run no-ops.
+`load_runtime_config()` calls the validator with the cushion read from
+`kill_switch.tier_a.apex_eval_preemptive.cushion_usd`, so a mis-sized
+config fails loudly at startup before a single tick runs.
+
+**Tests.** `TestValidateApexTickCadence` (12 tests,
+`test_kill_switch_runtime.py`) + `TestLoadRuntimeConfigTickCadence`
+(4 tests, `test_run_apex_live.py`). Covers: invariant satisfied, fails
+in live, no-op in paper, non-positive inputs rejected, default is 1.0s.
+
+### R3 — Freeze-rule re-entrancy  |  CLOSED
+
+**Original finding.** The tracker freezes when `peak >= start + cap`.
+The risk is that if the tracker's state file is ever accidentally
+deleted or the operator re-inits with a larger `trailing_dd_cap_usd`,
+the freeze is lost and the floor resumes trailing.
+
+**v0.1.59 closure.** Added `TrailingDDAuditLog` — an append-only JSONL
+audit log co-located with the state file (default
+`<state_path>.audit.jsonl`). `TrailingDDTracker` now emits immutable
+events on every lifecycle transition: `init` (fresh create), `load`
+(existing state), `freeze` (exactly once at the transition), `breach`
+(each tick at/below floor), `reset` (with full `prior_state` snapshot,
+operator name, reason). `append()` writes JSONL + fsyncs per append.
+`reset()` now requires
+`operator: str` (non-empty) and `acknowledge_destruction: bool=True` —
+without the explicit ack the tracker raises
+`ResetNotAcknowledgedError`. **Deleting the state file does not delete
+the audit log**, so a forensic review can always detect a silent
+re-init.
+
+**Tests.** 6 new test classes in `test_trailing_dd_tracker.py`:
+`TestAuditLogInitAndLoad`, `TestAuditLogFreezeAndBreach`,
+`TestAuditLogSequenceMonotonicity`, `TestResetAcknowledgment`,
+`TestAuditLogSurvivesStateDeletion`, `TestTrailingDDAuditLogUnit`.
+
+### R4 — Session-day math vs weekends / holidays  |  CLOSED
+
+**Original finding.** The 30% rule buckets by Apex trading day.
+Weekends and US holidays don't exist in the calendar; the
+`apex_trading_day_iso` helper keys a Saturday-morning timestamp to
+"Saturday" which Apex probably ignores.
+
+**v0.1.59 closure.** Added `apex_predator/core/events_calendar.py` —
+CME Globex session calendar with `dateutil.easter`-driven Good Friday +
+fixed-date closures (New Year, MLK, Presidents', Memorial, Juneteenth,
+Independence, Labor, Thanksgiving, Christmas). `consistency_guard.py`
+now routes `apex_trading_day_iso()` through the calendar so
+Saturday/Sunday/holiday timestamps roll forward to the next regular
+trading day instead of creating phantom buckets.
+
+**Tests.** `test_core_events_calendar.py` covers the full CME calendar;
+`test_consistency_guard.py` extended with rollover cases around each
+closure type.
 
 ---
 
@@ -182,8 +250,18 @@ After v0.1.58:
 - `tests/test_run_apex_live.py` — **66 tests** (+4 `TestLiveModeTrackerGate`,
   +2 `TestConsistencyViolationPauses`).
 
-All 133 D-series tests pass on Python 3.14.4 / Windows / apex_predator
-as of 2026-04-24.
+After v0.1.59 (residual-risk closure):
+- `tests/test_core_events_calendar.py` — **NEW** (R4: CME calendar).
+- `tests/test_consistency_guard.py` — extended with calendar rollover cases.
+- `tests/test_trailing_dd_tracker.py` — extended with 6 new audit-log
+  classes (R3: init/load, freeze/breach, sequence monotonicity, reset
+  acknowledgment, state-deletion survival, append-only unit).
+- `tests/test_kill_switch_runtime.py` — +12 tests `TestValidateApexTickCadence` (R2).
+- `tests/test_run_apex_live.py` — +4 tests `TestLoadRuntimeConfigTickCadence` (R2).
+- `tests/test_broker_equity_reconciler.py` — **NEW**, 21 tests (R1).
+
+Full regression: **3827 passed, 3 skipped** (Python 3.14.4 / Windows /
+apex_predator) as of 2026-04-24. No regressions from v0.1.58 baseline.
 
 ---
 

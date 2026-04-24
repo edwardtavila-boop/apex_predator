@@ -479,6 +479,74 @@ def test_load_runtime_config_reads_all_yamls(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
+# R2 closure: tick-cadence validation in live mode
+# --------------------------------------------------------------------------- #
+class TestLoadRuntimeConfigTickCadence:
+
+    def _write_yamls(self, cfg_dir: Path, cushion_usd: float = 500.0) -> None:
+        cfg_dir.mkdir(exist_ok=True)
+        (cfg_dir / "tradovate.yaml").write_text(
+            "apex_eval:\n  trailing_drawdown_usd: 2500.0\n", encoding="utf-8",
+        )
+        (cfg_dir / "bybit.yaml").write_text("{}\n", encoding="utf-8")
+        (cfg_dir / "alerts.yaml").write_text("channels: {}\n", encoding="utf-8")
+        (cfg_dir / "kill_switch.yaml").write_text(
+            "global: {}\n"
+            "tier_a:\n"
+            f"  apex_eval_preemptive:\n    cushion_usd: {cushion_usd}\n",
+            encoding="utf-8",
+        )
+
+    def test_live_mode_fast_tick_passes(self, tmp_path: Path):
+        cfg_dir = tmp_path / "configs"
+        self._write_yamls(cfg_dir, cushion_usd=1000.0)
+        state = tmp_path / "state.json"
+        state.write_text("{}")
+        cfg = mod.load_runtime_config(
+            config_dir=cfg_dir, state_path=state,
+            live=True, dry_run=False, bot_filter=None,
+            max_bars=1, tick_interval_s=1.0,
+            log_path=tmp_path / "x.jsonl",
+        )
+        assert cfg.live is True
+        assert cfg.tick_interval_s == 1.0
+
+    def test_live_mode_slow_tick_raises(self, tmp_path: Path):
+        cfg_dir = tmp_path / "configs"
+        self._write_yamls(cfg_dir, cushion_usd=500.0)
+        state = tmp_path / "state.json"
+        state.write_text("{}")
+        # 5s tick + 500 cushion + default 300 usd/sec * 2 safety = 3000 > 500
+        from apex_predator.core.kill_switch_runtime import ApexTickCadenceError
+        with pytest.raises(ApexTickCadenceError, match="tick cadence"):
+            mod.load_runtime_config(
+                config_dir=cfg_dir, state_path=state,
+                live=True, dry_run=False, bot_filter=None,
+                max_bars=1, tick_interval_s=5.0,
+                log_path=tmp_path / "x.jsonl",
+            )
+
+    def test_paper_mode_slow_tick_allowed(self, tmp_path: Path):
+        cfg_dir = tmp_path / "configs"
+        self._write_yamls(cfg_dir, cushion_usd=500.0)
+        state = tmp_path / "state.json"
+        state.write_text("{}")
+        # live=False => validator no-ops even with clearly-unsafe cadence
+        cfg = mod.load_runtime_config(
+            config_dir=cfg_dir, state_path=state,
+            live=False, dry_run=True, bot_filter=None,
+            max_bars=1, tick_interval_s=60.0,
+            log_path=tmp_path / "x.jsonl",
+        )
+        assert cfg.live is False
+
+    def test_default_tick_interval_is_one_second(self):
+        """R2: the class-level default moved from 5.0 -> 1.0 post-R2."""
+        cfg = mod.RuntimeConfig()
+        assert cfg.tick_interval_s == 1.0
+
+
+# --------------------------------------------------------------------------- #
 # Router selection: real vs mock
 # --------------------------------------------------------------------------- #
 def test_tradovate_creds_absent_by_default(monkeypatch):

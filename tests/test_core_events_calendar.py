@@ -3,20 +3,21 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from apex_predator.core.events_calendar import (
     DEFAULT_POST_WINDOW_MIN,
     DEFAULT_PRE_WINDOW_MIN,
-    BigDataMcp,
     CalendarEvent,
     EventsCalendar,
     load_from_json,
     load_from_mcp,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _now() -> datetime:

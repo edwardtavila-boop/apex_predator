@@ -24,6 +24,8 @@ import pytest
 
 from apex_predator.core.kill_switch_runtime import ApexEvalSnapshot
 from apex_predator.core.trailing_dd_tracker import (
+    ResetNotAcknowledgedError,
+    TrailingDDAuditLog,
     TrailingDDCorruptError,
     TrailingDDState,
     TrailingDDTracker,
@@ -362,7 +364,12 @@ class TestReset:
         assert fresh_tracker.state().frozen is True
         assert fresh_tracker.state().peak_equity_usd == 52_800.0
 
-        fresh_tracker.reset(starting_balance_usd=APEX_50K_START)
+        fresh_tracker.reset(
+            starting_balance_usd=APEX_50K_START,
+            operator="test",
+            acknowledge_destruction=True,
+            reason="test fixture reset",
+        )
         s = fresh_tracker.state()
         assert s.peak_equity_usd == APEX_50K_START
         assert s.frozen is False
@@ -373,13 +380,21 @@ class TestReset:
         self, fresh_tracker: TrailingDDTracker,
     ) -> None:
         with pytest.raises(ValueError, match="starting_balance_usd"):
-            fresh_tracker.reset(starting_balance_usd=0.0)
+            fresh_tracker.reset(
+                starting_balance_usd=0.0,
+                operator="test",
+                acknowledge_destruction=True,
+            )
 
     def test_reset_persists(
         self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
     ) -> None:
         fresh_tracker.update(current_equity_usd=52_800.0)
-        fresh_tracker.reset(starting_balance_usd=APEX_50K_START)
+        fresh_tracker.reset(
+            starting_balance_usd=APEX_50K_START,
+            operator="test",
+            acknowledge_destruction=True,
+        )
 
         t2 = TrailingDDTracker.load_or_init(
             path=tracker_path,
@@ -413,3 +428,320 @@ class TestKillSwitchCompatibility:
     ) -> None:
         state = fresh_tracker.state()
         assert isinstance(state, TrailingDDState)
+
+
+# ---------------------------------------------------------------------------
+# R3 closure: audit log + reset acknowledgment
+# ---------------------------------------------------------------------------
+# These tests cover the red-team R3 finding: tracker state changes were
+# silent, so a rogue reset or a process re-init could erase the frozen
+# floor invariant with no forensic trail. Audit log is append-only; reset
+# requires explicit operator attribution + destruction acknowledgment.
+
+
+class TestAuditLogInitAndLoad:
+
+    def test_fresh_init_writes_init_event(
+        self, tracker_path: Path,
+    ) -> None:
+        t = TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        events = audit.read_all()
+        assert len(events) == 1
+        assert events[0]["event"] == "init"
+        assert events[0]["seq"] == 1
+        assert events[0]["state"]["starting_balance_usd"] == APEX_50K_START
+        # state file and audit log co-exist
+        assert t.path.exists()
+
+    def test_existing_file_emits_load_event(
+        self, tracker_path: Path,
+    ) -> None:
+        # First init -> init event
+        TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        # Second load from same file -> load event
+        TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        events = audit.read_all()
+        assert [e["event"] for e in events] == ["init", "load"]
+        assert [e["seq"] for e in events] == [1, 2]
+
+    def test_audit_file_colocated_with_state_by_default(
+        self, tracker_path: Path,
+    ) -> None:
+        TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        expected = tracker_path.parent / (tracker_path.name + ".audit.jsonl")
+        assert expected.exists()
+        # Contains a parseable JSON line per event.
+        first_line = expected.read_text(encoding="utf-8").splitlines()[0]
+        assert json.loads(first_line)["event"] == "init"
+
+    def test_explicit_audit_log_path(
+        self, tmp_path: Path, tracker_path: Path,
+    ) -> None:
+        custom = tmp_path / "custom_dir" / "apex_audit.jsonl"
+        TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+            audit_log_path=custom,
+        )
+        assert custom.exists()
+        rec = json.loads(custom.read_text().splitlines()[0])
+        assert rec["event"] == "init"
+
+
+class TestAuditLogFreezeAndBreach:
+
+    def test_freeze_event_emitted_once_at_transition(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        fresh_tracker.update(current_equity_usd=52_600.0)  # crosses freeze
+        fresh_tracker.update(current_equity_usd=55_000.0)  # already frozen
+        fresh_tracker.update(current_equity_usd=54_500.0)  # already frozen
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        freeze_events = [
+            e for e in audit.read_all() if e["event"] == "freeze"
+        ]
+        assert len(freeze_events) == 1
+        assert freeze_events[0]["state"]["frozen"] is True
+        assert freeze_events[0]["locked_floor_usd"] == APEX_50K_START
+        assert freeze_events[0]["freeze_threshold_usd"] == APEX_50K_FREEZE
+
+    def test_breach_event_emitted_per_tick_below_floor(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        # peak starts at 50_000 -> floor = 47_500
+        fresh_tracker.update(current_equity_usd=47_000.0)
+        fresh_tracker.update(current_equity_usd=46_000.0)
+        fresh_tracker.update(current_equity_usd=47_200.0)  # still below 47_500
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        breach_events = [
+            e for e in audit.read_all() if e["event"] == "breach"
+        ]
+        assert len(breach_events) == 3
+        # Each event records the equity at the time of breach
+        assert breach_events[0]["equity_usd"] == 47_000.0
+        assert breach_events[1]["equity_usd"] == 46_000.0
+        assert breach_events[2]["equity_usd"] == 47_200.0
+        # Floor is unchanged (peak didn't advance)
+        for e in breach_events:
+            assert e["floor_usd"] == pytest.approx(47_500.0)
+
+    def test_no_breach_event_above_floor(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        fresh_tracker.update(current_equity_usd=51_500.0)
+        fresh_tracker.update(current_equity_usd=49_500.0)
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        assert not any(e["event"] == "breach" for e in audit.read_all())
+
+
+class TestAuditLogSequenceMonotonicity:
+
+    def test_sequence_monotonically_increases_across_events(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        fresh_tracker.update(current_equity_usd=51_000.0)      # no audit event
+        fresh_tracker.update(current_equity_usd=52_700.0)      # freeze
+        fresh_tracker.update(current_equity_usd=47_000.0)      # breach
+        fresh_tracker.update(current_equity_usd=46_500.0)      # breach
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        events = audit.read_all()
+        seqs = [e["seq"] for e in events]
+        assert seqs == sorted(seqs)
+        assert seqs == list(range(1, len(events) + 1))
+        # Events: init, freeze, breach, breach
+        assert [e["event"] for e in events] == [
+            "init", "freeze", "breach", "breach",
+        ]
+
+
+class TestResetAcknowledgment:
+
+    def test_reset_without_ack_raises(
+        self, fresh_tracker: TrailingDDTracker,
+    ) -> None:
+        with pytest.raises(ResetNotAcknowledgedError, match="destructive"):
+            fresh_tracker.reset(
+                starting_balance_usd=APEX_50K_START,
+                operator="rogue_script",
+                # acknowledge_destruction defaults to False
+            )
+
+    def test_reset_ack_false_explicit_raises(
+        self, fresh_tracker: TrailingDDTracker,
+    ) -> None:
+        with pytest.raises(ResetNotAcknowledgedError):
+            fresh_tracker.reset(
+                starting_balance_usd=APEX_50K_START,
+                operator="rogue_script",
+                acknowledge_destruction=False,
+            )
+
+    def test_reset_without_operator_raises(
+        self, fresh_tracker: TrailingDDTracker,
+    ) -> None:
+        with pytest.raises(ValueError, match="operator"):
+            fresh_tracker.reset(
+                starting_balance_usd=APEX_50K_START,
+                operator="",
+                acknowledge_destruction=True,
+            )
+
+    def test_reset_with_whitespace_operator_raises(
+        self, fresh_tracker: TrailingDDTracker,
+    ) -> None:
+        with pytest.raises(ValueError, match="operator"):
+            fresh_tracker.reset(
+                starting_balance_usd=APEX_50K_START,
+                operator="   ",
+                acknowledge_destruction=True,
+            )
+
+    def test_reset_emits_audit_event_with_operator_and_reason(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        fresh_tracker.update(current_equity_usd=52_700.0)  # causes freeze
+        fresh_tracker.reset(
+            starting_balance_usd=APEX_50K_START,
+            operator="edward",
+            acknowledge_destruction=True,
+            reason="fresh 50K eval after prior bust",
+        )
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        reset_events = [e for e in audit.read_all() if e["event"] == "reset"]
+        assert len(reset_events) == 1
+        ev = reset_events[0]
+        assert ev["operator"] == "edward"
+        assert ev["reason"] == "fresh 50K eval after prior bust"
+        # prior_state captured for forensics
+        assert ev["prior_state"]["frozen"] is True
+        assert ev["prior_state"]["peak_equity_usd"] == 52_700.0
+        # new state is fresh
+        assert ev["state"]["frozen"] is False
+        assert ev["state"]["peak_equity_usd"] == APEX_50K_START
+
+    def test_reset_does_not_clear_audit_log(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        fresh_tracker.update(current_equity_usd=52_700.0)
+        fresh_tracker.reset(
+            starting_balance_usd=APEX_50K_START,
+            operator="edward",
+            acknowledge_destruction=True,
+        )
+        audit = TrailingDDAuditLog(
+            path=tracker_path.parent / (tracker_path.name + ".audit.jsonl"),
+        )
+        events = audit.read_all()
+        # init + freeze + reset -> 3 events
+        assert [e["event"] for e in events] == ["init", "freeze", "reset"]
+
+
+class TestAuditLogSurvivesStateDeletion:
+
+    def test_audit_log_preserved_if_state_file_deleted(
+        self, fresh_tracker: TrailingDDTracker, tracker_path: Path,
+    ) -> None:
+        """R3 scenario: an attacker (or a well-meaning 'cleanup' script)
+        deletes the state file to erase the frozen floor. The audit log
+        still shows the freeze + breach trail, so a forensic reviewer
+        can detect the tampering."""
+        fresh_tracker.update(current_equity_usd=52_800.0)  # freeze
+        audit_path = tracker_path.parent / (tracker_path.name + ".audit.jsonl")
+        pre_events = TrailingDDAuditLog(audit_path).read_all()
+
+        # Delete only the state file
+        tracker_path.unlink()
+        assert not tracker_path.exists()
+        assert audit_path.exists()
+
+        # Re-init -> this creates a fresh state but ALSO logs a new init
+        # event, so the audit log shows state_file_vanished_then_reinit.
+        TrailingDDTracker.load_or_init(
+            path=tracker_path,
+            starting_balance_usd=APEX_50K_START,
+            trailing_dd_cap_usd=APEX_50K_CAP,
+        )
+        post_events = TrailingDDAuditLog(audit_path).read_all()
+        assert len(post_events) == len(pre_events) + 1
+        # The prior freeze is still visible in the audit log.
+        assert any(e["event"] == "freeze" for e in post_events)
+        # The post-deletion re-init is recorded as a new init.
+        assert post_events[-1]["event"] == "init"
+
+
+class TestTrailingDDAuditLogUnit:
+    """Direct unit tests on the TrailingDDAuditLog class."""
+
+    def test_read_all_returns_empty_list_when_file_missing(
+        self, tmp_path: Path,
+    ) -> None:
+        log = TrailingDDAuditLog(tmp_path / "nonexistent.jsonl")
+        assert log.read_all() == []
+
+    def test_append_creates_parent_dir(self, tmp_path: Path) -> None:
+        target = tmp_path / "deep" / "nested" / "audit.jsonl"
+        log = TrailingDDAuditLog(target)
+        log.append("init", {"starting_balance_usd": 50_000.0})
+        assert target.exists()
+        lines = target.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        rec = json.loads(lines[0])
+        assert rec["event"] == "init"
+        assert rec["seq"] == 1
+
+    def test_append_preserves_prior_events(self, tmp_path: Path) -> None:
+        target = tmp_path / "audit.jsonl"
+        log = TrailingDDAuditLog(target)
+        log.append("init", {"a": 1})
+        log.append("freeze", {"a": 2})
+        log.append("breach", {"a": 3})
+        events = log.read_all()
+        assert [e["event"] for e in events] == ["init", "freeze", "breach"]
+        assert [e["seq"] for e in events] == [1, 2, 3]
+
+    def test_append_skips_corrupt_lines_on_read(
+        self, tmp_path: Path,
+    ) -> None:
+        target = tmp_path / "audit.jsonl"
+        log = TrailingDDAuditLog(target)
+        log.append("init", {"a": 1})
+        # Inject a corrupt line between good ones
+        with target.open("a", encoding="utf-8") as fh:
+            fh.write("this is not json\n")
+        log.append("freeze", {"a": 2})
+        events = log.read_all()
+        # Corrupt line skipped; both good lines remain.
+        assert [e["event"] for e in events] == ["init", "freeze"]

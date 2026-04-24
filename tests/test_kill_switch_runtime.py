@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 import yaml
 
 from apex_predator.core.kill_switch_runtime import (
     ApexEvalSnapshot,
+    ApexTickCadenceError,
     BotSnapshot,
     CorrelationSnapshot,
     FundingSnapshot,
@@ -13,6 +15,7 @@ from apex_predator.core.kill_switch_runtime import (
     KillSeverity,
     KillSwitch,
     PortfolioSnapshot,
+    validate_apex_tick_cadence,
 )
 
 
@@ -240,3 +243,131 @@ def test_from_yaml_tolerates_empty_file(tmp_path):
     # No rules → everything passes.
     v = ks.evaluate(bots=[], portfolio=_portfolio())
     assert v and v[0].action is KillAction.CONTINUE
+
+
+# --------------------------------------------------------------------------- #
+# R2 closure: validate_apex_tick_cadence
+# --------------------------------------------------------------------------- #
+# Enforces tick_interval_s * max_usd_move_per_sec * safety_factor <= cushion_usd
+# in live mode. Non-live runs are exempt.
+
+class TestValidateApexTickCadence:
+
+    def test_noop_when_not_live(self):
+        # Clearly-unsafe cadence but live=False -> silent pass.
+        validate_apex_tick_cadence(
+            tick_interval_s=60.0,
+            cushion_usd=100.0,
+            max_usd_move_per_sec=300.0,
+            live=False,
+        )
+
+    def test_safe_cadence_live_passes(self):
+        # tick=1s * move=300 * safety=2 = 600, cushion=1000 -> OK
+        validate_apex_tick_cadence(
+            tick_interval_s=1.0,
+            cushion_usd=1000.0,
+            max_usd_move_per_sec=300.0,
+            safety_factor=2.0,
+            live=True,
+        )
+
+    def test_unsafe_cadence_live_raises(self):
+        # tick=5s * move=300 * safety=2 = 3000, cushion=500 -> FAIL
+        with pytest.raises(ApexTickCadenceError, match="tick cadence too slow"):
+            validate_apex_tick_cadence(
+                tick_interval_s=5.0,
+                cushion_usd=500.0,
+                max_usd_move_per_sec=300.0,
+                safety_factor=2.0,
+                live=True,
+            )
+
+    def test_error_message_mentions_remediation(self):
+        with pytest.raises(ApexTickCadenceError) as exc_info:
+            validate_apex_tick_cadence(
+                tick_interval_s=5.0,
+                cushion_usd=500.0,
+                live=True,
+            )
+        msg = str(exc_info.value)
+        assert "tick_interval_s" in msg
+        assert "cushion_usd" in msg
+        # operator needs actionable guidance in the traceback
+        assert "configs/kill_switch.yaml" in msg
+
+    def test_exact_boundary_passes(self):
+        # tick=1s * move=250 * safety=2 = 500 == cushion -> pass (<=)
+        validate_apex_tick_cadence(
+            tick_interval_s=1.0,
+            cushion_usd=500.0,
+            max_usd_move_per_sec=250.0,
+            safety_factor=2.0,
+            live=True,
+        )
+
+    def test_exact_boundary_plus_one_fails(self):
+        # tick=1s * move=250.01 * safety=2 = 500.02 > cushion=500 -> fail
+        with pytest.raises(ApexTickCadenceError):
+            validate_apex_tick_cadence(
+                tick_interval_s=1.0,
+                cushion_usd=500.0,
+                max_usd_move_per_sec=250.01,
+                safety_factor=2.0,
+                live=True,
+            )
+
+    def test_zero_tick_interval_raises_value_error(self):
+        with pytest.raises(ValueError, match="tick_interval_s"):
+            validate_apex_tick_cadence(
+                tick_interval_s=0.0,
+                cushion_usd=500.0,
+                live=True,
+            )
+
+    def test_negative_cushion_raises_value_error(self):
+        with pytest.raises(ValueError, match="cushion_usd"):
+            validate_apex_tick_cadence(
+                tick_interval_s=1.0,
+                cushion_usd=-1.0,
+                live=True,
+            )
+
+    def test_zero_max_move_raises_value_error(self):
+        with pytest.raises(ValueError, match="max_usd_move_per_sec"):
+            validate_apex_tick_cadence(
+                tick_interval_s=1.0,
+                cushion_usd=500.0,
+                max_usd_move_per_sec=0.0,
+                live=True,
+            )
+
+    def test_negative_safety_factor_raises_value_error(self):
+        with pytest.raises(ValueError, match="safety_factor"):
+            validate_apex_tick_cadence(
+                tick_interval_s=1.0,
+                cushion_usd=500.0,
+                safety_factor=-1.0,
+                live=True,
+            )
+
+    def test_default_cushion_matches_typical_apex_config(self):
+        """sanity: our canonical kill_switch.yaml cushion=$500 should be safe
+        at the new default tick_interval_s=1.0 with worst-case 250/sec.
+        If this ever fails, the canonical config needs a re-tune."""
+        validate_apex_tick_cadence(
+            tick_interval_s=1.0,
+            cushion_usd=500.0,
+            max_usd_move_per_sec=250.0,  # slightly conservative vs the 300 default
+            safety_factor=1.0,
+            live=True,
+        )
+
+    def test_preemptive_cushion_zero_in_paper_still_safe(self):
+        """_cfg_factory test fixture uses cushion_usd=0 with live=False.
+        That should not raise because the validator no-ops when live=False."""
+        validate_apex_tick_cadence(
+            tick_interval_s=0.0001,
+            cushion_usd=0.0001,
+            live=False,
+        )

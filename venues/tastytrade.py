@@ -7,11 +7,10 @@ default, secret-file aware, and no password collection in Apex.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eta_engine.venues.base import (
     ConnectionStatus,
@@ -23,6 +22,10 @@ from eta_engine.venues.base import (
     VenueBase,
     VenueConnectionReport,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 
 TASTY_CERT_BASE_URL = "https://api.cert.tastyworks.com"
 

@@ -144,7 +144,10 @@
   </footer>
 
   <script>
-    const API = 'https://jarvis.apexpredator.live';
+    // Same-origin when served from /status, cross-origin for preview
+    const API = location.host.endsWith('apexpredator.live')
+      ? ''                                     // same-origin
+      : 'https://jarvis.apexpredator.live';    // local preview
 
     function setBadge(el, text, color) {
       el.className = `badge ${color}`;

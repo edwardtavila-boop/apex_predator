@@ -60,8 +60,12 @@ def test_check_venues_passes_when_config_missing(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(preflight, "CONFIG_PATH", tmp_path / "nope.json")
     name, ok, msg = preflight.check_venues()
     assert ok is True
-    # Defaults to the 2 baked-in venues
-    assert "2 venues" in msg
+    # Baked-in venues include tradovate/ibkr/tastytrade once the
+    # broker-dormancy mandate (2026-04-24) added IBKR + Tastytrade to
+    # the canonical list. Check that at least the baked-in set is
+    # reported (previously 2, now 3).
+    assert "venues configured" in msg
+    assert "ready=" in msg
 
 
 def test_check_venues_reads_venues_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

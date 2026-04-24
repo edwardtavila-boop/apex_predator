@@ -19,6 +19,7 @@ from eta_engine.bots.base_bot import (
     Tier,
 )
 from eta_engine.bots.mnq.bot import MnqBot
+from eta_engine.brain.jarvis_admin import SubsystemId
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,10 @@ class NqBot(MnqBot):
     # $20 per NQ point — drives _size_from_signal via MnqBot._size_from_signal.
     POINT_VALUE_USD: float = POINT_VALUE
 
+    # NQ has its own Jarvis audit identity so the log distinguishes
+    # NQ from MNQ (both share MnqBot code but not capital envelopes).
+    SUBSYSTEM: SubsystemId = SubsystemId.BOT_NQ
+
     def __init__(
         self,
         config: BotConfig | None = None,
@@ -64,8 +69,14 @@ class NqBot(MnqBot):
     # ── NQ-specific lifecycle logging ──
 
     async def start(self) -> None:
+        # Delegate to MnqBot.start so JARVIS STRATEGY_DEPLOY gating,
+        # journal writes, and auto-wiring all run consistently. The
+        # extra NQ-flavored log line complements the parent's log.
+        await super().start()
+        if self.state.is_paused:
+            return
         logger.info(
-            "NQ bot starting | capital=$%.2f symbol=%s levels=%d router=%s",
+            "NQ bot armed | capital=$%.2f symbol=%s levels=%d router=%s",
             self.config.starting_capital_usd,
             self._tradovate_symbol,
             len(self._liquidity_levels),
@@ -74,7 +85,9 @@ class NqBot(MnqBot):
 
     async def stop(self) -> None:
         logger.info("NQ bot stopping | equity=$%.2f pnl=$%.2f", self.state.equity, self.state.todays_pnl)
-        self._trailing_peak.clear()
+        # Delegate cleanup to MnqBot.stop so the journal event, trailing
+        # peak clear, and active-entry drop all run consistently.
+        await super().stop()
 
     # ── NQ-specific sizing helper (pre-existing public surface) ──
 

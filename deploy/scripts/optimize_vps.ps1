@@ -11,7 +11,7 @@
 # Defender API; may need Admin for pagefile + NTFS flags).
 # ============================================================================
 [CmdletBinding()]
-param([switch]$Verbose)
+param()
 
 function Log  { param($m) Write-Host "[optimize] $m" -ForegroundColor Cyan }
 function OK   { param($m) Write-Host "[ OK ] $m" -ForegroundColor Green }

@@ -3,7 +3,8 @@
 **Date:** 2026-04-24 (v0.1.58) · updated 2026-04-24 (v0.1.59 residual-risk
 closure) · updated 2026-04-24 (v0.1.63 R1 end-to-end wiring) · updated
 2026-04-24 (v0.1.64 router-aware adapter) · updated 2026-04-25 (v0.1.65
-broker-equity wiring hardening).
+broker-equity wiring hardening) · updated 2026-04-25 (v0.1.66 H3 hysteresis
++ sustained-drift re-alert).
 **Scope:** D2 (`TrailingDDTracker`) and D3 (`ConsistencyGuard`) modules and
 their wiring into `scripts/run_apex_live.py`.
 **Reviewer:** `risk-advocate` agent (Opus 4.7, adversarial posture).
@@ -56,7 +57,7 @@ Residuals from the v0.1.64 review (carry to v0.1.65 / v0.2.x):
 | B3 | BLOCKER  | tier-A aggregate equity invariant undocumented (sum-of-bot-state.equity vs single broker net-liq comparison may be apples-to-oranges) | v0.1.65 — needs design call on per-account vs per-fleet equity aggregation |
 | H1 | HIGH     | No tolerance calibration harness — collected drift logs unread | v0.2.x — `scripts/calibrate_broker_drift_tolerance.py` |
 | H2 | HIGH     | Asymmetric tolerances not modeled (below-bias different from above-bias) | v0.1.65 — split `tolerance_below_*` / `tolerance_above_*` |
-| H3 | HIGH     | Transition-only alerting drops sustained-drift signal + threshold-jitter latch reset can spam | v0.1.65 — re-fire interval + hysteresis on latch clear |
+| H3 | HIGH     | Transition-only alerting drops sustained-drift signal + threshold-jitter latch reset can spam | **CLOSED v0.1.66** — hysteresis clear-band (default 70% of trigger) + sustained-drift re-alert (default 1800s interval) + recovered alert kind |
 | H4 | HIGH     | TTL is on our poll cycle, not broker server-side timestamp | v0.1.65 — parse server timestamps where available; identical-bytes detection where not |
 | H5 | HIGH     | `ta_equity == 0` produces inf in JSON tick log (RFC 8259 violation) | **CLOSED v0.1.65** — `min_logical_usd` floor + `as_dict` sanitizer |
 | H6 | HIGH     | NullBrokerEquityAdapter in live mode is invisible to operator | **CLOSED v0.1.65** — refuse-to-boot in live mode unless `APEX_ALLOW_LIVE_NO_DRIFT=1` |

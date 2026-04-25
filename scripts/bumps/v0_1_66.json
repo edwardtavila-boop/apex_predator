@@ -1,0 +1,23 @@
+{
+  "version": "v0.1.66",
+  "slug": "h3_hysteresis_and_sustained_alert",
+  "bundle_name": "H3 closure -- hysteresis clear-band + sustained-drift re-alert",
+  "theme": "Closes H3 from the v0.1.64 Red Team review of v0.1.63 R1. Two prongs: (a) hysteresis clear-band on the broker_below_logical drift latch in BrokerEquityReconciler -- once latched, the state only clears when drift falls below clear_tolerance_below_usd / _pct (defaults to 70% of the trigger band) so threshold-jitter near the trigger does not flap the latch and spam alerts; (b) sustained-drift re-fire in run_apex_live -- the runtime now fires three kinds of broker_equity_drift alerts (transition / sustained / recovered) so a multi-hour drift event does not silently fall off the operator's radar after the initial entry alert. ReconcileResult gains is_in_drift_state + transition fields; ReconcileStats gains drift_state_entries + drift_state_exits counters; ApexRuntime gains _last_broker_drift_alert_ts + broker_drift_realert_interval_s (default 1800s).",
+  "operator_directive_quote": "continue and do all",
+  "modules_edited": [
+    "core/broker_equity_reconciler.py: ReconcileResult + ReconcileStats extended with is_in_drift_state, transition, drift_state_entries, drift_state_exits; constructor adds clear_tolerance_below_usd / clear_tolerance_below_pct kwargs (default = 70% of trigger band) with bounds validation; reconcile() implements the latched drift-state machine (ARMED -> DRIFTING on broker_below_logical entry; DRIFTING -> ARMED on drift falling inside the clear band OR crossing into broker_above_logical); no_broker_data ticks preserve the latched state so transient adapter blinks do not clear genuine drift",
+    "scripts/run_apex_live.py: ApexRuntime gains _last_broker_drift_alert_ts (monotonic-clock seconds) + broker_drift_realert_interval_s (default 1800s); _tick alert dispatch upgraded to fire three distinct kinds (transition on entered_drift, recovered on exited_drift, sustained when is_in_drift_state and now - last_ts >= interval); payload now carries kind + is_in_drift_state + transition alongside the legacy reason / drift_usd / drift_pct fields",
+    "tests/test_broker_equity_reconciler.py: TestHysteresisClearBand (11 tests) covering default / custom / wider-than-trigger-rejection / negative-rejection / entry / steady / exit / jitter-zone / no-data-preserves-state / above-logical-clears / sub-floor-noop paths",
+    "tests/test_run_apex_live.py: TestSustainedDriftReAlert (3 tests: re-alert after interval, silent within interval, recovered alert resets ts) + updated test_drift_transition_resets_and_refires to expect 3 alerts (entry + recovered + re-entry) and pin the new kind taxonomy"
+  ],
+  "tests_passing_after": null,
+  "deferred_followups": [
+    "B3 BLOCKER -- tier-A aggregate equity invariant (needs design call on per-account vs per-fleet equity aggregation)",
+    "H1 -- tolerance calibration harness (gated on collected drift histogram from live-paper)",
+    "H4 -- server-side broker payload timestamps",
+    "M1-M4 -- per-bot drift, KillVerdict synthesis, runtime_log rotation, broker-payload fixture tests",
+    "L1-L2 -- adapter name uniqueness, ReconcileStats.max_drift_usd_abs windowing",
+    "Process gap 2 -- exit criteria for 'deferred to v0.2.x' claims"
+  ],
+  "milestone_title": "H3 closure: hysteresis clear-band on the drift latch + sustained-drift re-alert (kind=transition/sustained/recovered). The drift state survives noisy ticks; multi-hour drift events stay visible to the operator instead of falling silent after the initial entry alert."
+}

@@ -1425,9 +1425,16 @@ class TestBrokerEquityReconcilerIntegration:
             payload for (event, payload) in disp.sent
             if event == "broker_equity_drift"
         ]
-        # One for the first entry into drift (tick 1), one for the
-        # re-entry (tick 3). Recovery at tick 2 clears the latch.
-        assert len(drift_events) == 2
+        # H3 closure (v0.1.66): three alerts now fire across this
+        # sequence -- the original two transition entries (tick 1, tick
+        # 3) plus the new "recovered" alert (tick 2). The transition
+        # count itself is unchanged; H3 just adds an explicit recovery
+        # signal so the operator knows the drift cleared rather than
+        # silently disappearing.
+        kinds = [p.get("kind") for p in drift_events]
+        assert kinds.count("transition") == 2
+        assert kinds.count("recovered") == 1
+        assert len(drift_events) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -1552,3 +1559,156 @@ class TestBuildBrokerEquityAdapterLiveModeGate:
         adapter = _build_broker_equity_adapter(live=True, dry_run=False)
         # Tasty wins on the fallback path.
         assert "tastytrade" in adapter.name
+
+
+# ---------------------------------------------------------------------------
+# v0.1.66 H3 -- sustained-drift re-fire interval in the runtime
+# ---------------------------------------------------------------------------
+
+
+class TestSustainedDriftReAlert:
+    """v0.1.66 H3 -- re-fire after broker_drift_realert_interval_s."""
+
+    @pytest.mark.asyncio
+    async def test_sustained_drift_re_alerts_after_interval(self, tmp_path):
+        """Tick 0 enters drift; tick 1 stays in drift past the interval
+        and fires a sustained alert; tick 2 stays in drift but inside
+        the interval and stays silent."""
+        from eta_engine.core.broker_equity_reconciler import (
+            BrokerEquityReconciler,
+        )
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 4_000.0,
+            tolerance_usd=50.0,
+            tolerance_pct=0.001,
+        )
+        disp = _StubDispatcher()
+        cfg = _cfg_factory(
+            tmp_path, go_state={"tier_a_mnq_live": True}, max_bars=3,
+        )
+        runtime = mod.ApexRuntime(
+            cfg, bindings=_fake_bindings(),
+            broker_equity_reconciler=rec,
+            dispatcher=disp,
+        )
+        # Drop the re-alert interval so we can test sustained behaviour
+        # without sleeping. Default is 1800s (30 min).
+        runtime.broker_drift_realert_interval_s = 0.001
+
+        bots_inst = runtime._instantiate_active_bots()
+        for _b, bot in bots_inst:
+            await bot.start()
+        # tick 0: enter drift -> "transition" alert
+        await runtime._tick(bots_inst, 0)
+        # Advance time so the re-alert interval has elapsed.
+        import time as _time
+        _time.sleep(0.005)
+        # tick 1: still drifting + interval elapsed -> "sustained" alert
+        await runtime._tick(bots_inst, 1)
+        # Re-arm the interval to a huge value so tick 2 cannot fire
+        # another sustained alert (we are pinning the "did sustain
+        # actually fire once" semantic, not "did tick 2 fire too").
+        runtime.broker_drift_realert_interval_s = 1_000_000.0
+        await runtime._tick(bots_inst, 2)
+        for _, bot in bots_inst:
+            await bot.stop()
+
+        drift_events = [
+            payload for (event, payload) in disp.sent
+            if event == "broker_equity_drift"
+        ]
+        kinds = [p.get("kind") for p in drift_events]
+        assert kinds.count("transition") == 1
+        assert kinds.count("sustained") == 1
+        # Two alerts total: transition (tick 0) + sustained (tick 1).
+        # Tick 2 is suppressed because the interval was bumped back up.
+        assert len(drift_events) == 2
+
+    @pytest.mark.asyncio
+    async def test_sustained_drift_silent_within_interval(self, tmp_path):
+        """No re-alert when drift persists but the interval has not elapsed."""
+        from eta_engine.core.broker_equity_reconciler import (
+            BrokerEquityReconciler,
+        )
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 4_000.0,
+            tolerance_usd=50.0,
+        )
+        disp = _StubDispatcher()
+        cfg = _cfg_factory(
+            tmp_path, go_state={"tier_a_mnq_live": True}, max_bars=3,
+        )
+        runtime = mod.ApexRuntime(
+            cfg, bindings=_fake_bindings(),
+            broker_equity_reconciler=rec,
+            dispatcher=disp,
+        )
+        # Set the interval to something huge so no re-alert can fire.
+        runtime.broker_drift_realert_interval_s = 1_000_000.0
+
+        bots_inst = runtime._instantiate_active_bots()
+        for _b, bot in bots_inst:
+            await bot.start()
+        for i in range(3):
+            await runtime._tick(bots_inst, i)
+        for _, bot in bots_inst:
+            await bot.stop()
+
+        drift_events = [
+            (event, payload) for (event, payload) in disp.sent
+            if event == "broker_equity_drift"
+        ]
+        # Only the transition alert; no sustained alert because the
+        # interval is effectively infinite.
+        assert len(drift_events) == 1
+        assert drift_events[0][1]["kind"] == "transition"
+
+    @pytest.mark.asyncio
+    async def test_recovery_emits_recovered_kind(self, tmp_path):
+        """Drift -> recovery emits a 'recovered' alert that resets the
+        sustained-alert ts so a future drift fires a fresh transition."""
+        from eta_engine.core.broker_equity_reconciler import (
+            BrokerEquityReconciler,
+        )
+
+        broker = [4_000.0]  # tick 0: drifting
+
+        def _src():
+            return broker[0]
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=_src,
+            tolerance_usd=50.0,
+        )
+        disp = _StubDispatcher()
+        cfg = _cfg_factory(
+            tmp_path, go_state={"tier_a_mnq_live": True}, max_bars=2,
+        )
+        runtime = mod.ApexRuntime(
+            cfg, bindings=_fake_bindings(),
+            broker_equity_reconciler=rec,
+            dispatcher=disp,
+        )
+
+        bots_inst = runtime._instantiate_active_bots()
+        for _b, bot in bots_inst:
+            await bot.start()
+        # tick 0: drifting -> transition alert
+        await runtime._tick(bots_inst, 0)
+        broker[0] = 5_000.0  # recover
+        # tick 1: clean recovery -> recovered alert
+        await runtime._tick(bots_inst, 1)
+        for _, bot in bots_inst:
+            await bot.stop()
+
+        drift_events = [
+            payload for (event, payload) in disp.sent
+            if event == "broker_equity_drift"
+        ]
+        kinds = [p.get("kind") for p in drift_events]
+        assert kinds == ["transition", "recovered"]
+        # After recovery the ts is reset to None so a fresh entry
+        # fires immediately as a new transition.
+        assert runtime._last_broker_drift_alert_ts is None  # noqa: SLF001

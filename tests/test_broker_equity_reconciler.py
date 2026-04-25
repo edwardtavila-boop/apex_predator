@@ -253,11 +253,19 @@ class TestReconcileResultShape:
             reason="broker_below_logical",
         )
         d = result.as_dict()
-        assert set(d.keys()) == {
+        # The schema includes the original 7 fields plus the H3
+        # closure fields (is_in_drift_state + transition) that v0.1.66
+        # adds to track the latched drift state across ticks.
+        assert set(d.keys()) >= {
             "ts", "logical_equity_usd", "broker_equity_usd",
             "drift_usd", "drift_pct_of_logical", "in_tolerance", "reason",
         }
         assert d["reason"] == "broker_below_logical"
+        # Spot-check the H3 fields exist with their default values
+        # (manually-constructed ReconcileResult uses the dataclass
+        # defaults: is_in_drift_state=False, transition="stable").
+        assert d.get("is_in_drift_state") is False
+        assert d.get("transition") == "stable"
 
 
 class TestStats:
@@ -295,3 +303,296 @@ class TestStats:
         assert s.checks_out_of_tolerance == 0
         assert s.max_drift_usd_abs == 0.0
         assert s.last_result is None
+
+
+class TestAsymmetricTolerances:
+    """H2 closure (Red Team v0.1.64 review): per-direction tolerances.
+
+    The Red Team finding was: ``broker_below_logical`` (cushion
+    over-stated, eval-bust risk) and ``broker_above_logical`` (cushion
+    under-stated, MTM-lag / rebate, harmless) used the SAME absolute
+    thresholds. To keep below tight at $20, you also had to keep above
+    tight at $20, which made benign IBKR-MTM-overshoot moves trip
+    drift events. Asymmetric thresholds let the operator set
+    ``tolerance_below_*`` strict (eval-protective) and
+    ``tolerance_above_*`` loose (anti-spam).
+    """
+
+    def test_below_tighter_than_above_drift_below_threshold_trips(self):
+        # Below threshold $20, above threshold $200. Drift = +$50
+        # (broker BELOW logical). Should trip via the tight below.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 49_950.0,  # broker below
+            tolerance_below_usd=20.0,
+            tolerance_below_pct=10.0,  # disable pct check for this case
+            tolerance_above_usd=200.0,
+            tolerance_above_pct=10.0,
+        )
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "broker_below_logical"
+        assert result.in_tolerance is False
+        assert result.drift_usd == pytest.approx(50.0)
+
+    def test_below_tighter_than_above_drift_above_threshold_passes(self):
+        # Below $20, above $200. Drift = -$50 (broker ABOVE logical).
+        # Above's threshold is $200, so $50 is within tolerance. The
+        # SAME drift magnitude that tripped below would NOT trip above.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 50_050.0,  # broker above
+            tolerance_below_usd=20.0,
+            tolerance_below_pct=10.0,
+            tolerance_above_usd=200.0,
+            tolerance_above_pct=10.0,
+        )
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "within_tolerance"
+        assert result.in_tolerance is True
+        assert result.drift_usd == pytest.approx(-50.0)
+
+    def test_above_threshold_only_trip_does_not_affect_below_classification(self):
+        # Below $20, above $200. Drift = -$300 (broker WAY above
+        # logical). Above $200 threshold trips; classification is
+        # broker_above_logical, NOT broker_below_logical.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 50_300.0,
+            tolerance_below_usd=20.0,
+            tolerance_below_pct=10.0,
+            tolerance_above_usd=200.0,
+            tolerance_above_pct=10.0,
+        )
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "broker_above_logical"
+        assert result.in_tolerance is False
+        assert result.drift_usd == pytest.approx(-300.0)
+
+    def test_only_below_overridden_above_falls_back_to_symmetric(self):
+        # Caller sets tolerance_below_usd=20 and leaves
+        # tolerance_above_usd=None -- above MUST fall back to
+        # tolerance_usd=100 (the symmetric default), NOT to 0 or
+        # to tolerance_below_usd.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 50_050.0,  # broker above by 50
+            tolerance_usd=100.0,
+            tolerance_pct=10.0,
+            tolerance_below_usd=20.0,
+            # tolerance_above_usd intentionally omitted
+        )
+        # Drift = -50, tol_above falls back to tolerance_usd=100, in tol
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.in_tolerance is True
+        assert rec.tolerance_above_usd == pytest.approx(100.0)
+        assert rec.tolerance_below_usd == pytest.approx(20.0)
+
+    def test_symmetric_tolerance_usd_still_works_unchanged(self):
+        # Backwards-compat pin: a caller using ONLY tolerance_usd
+        # (the v0.1.65 API) gets identical behaviour. Both directions
+        # use the symmetric value.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 49_950.0,
+            tolerance_usd=100.0,
+            tolerance_pct=10.0,
+        )
+        # Drift = +50, tol below = symmetric 100, in tol
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.in_tolerance is True
+        assert rec.tolerance_below_usd == pytest.approx(100.0)
+        assert rec.tolerance_above_usd == pytest.approx(100.0)
+
+    def test_pct_threshold_split_per_direction(self):
+        # Below pct = 0.0001 (0.01%), above pct = 0.01 (1%). Drift =
+        # +$50 = 0.1% of $50K. Below pct $50/$50K = 0.001 > 0.0001 trips.
+        # Same magnitude on the above side: 0.001 < 0.01 passes.
+        # Use very-large USD thresholds so only the pct fires.
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 49_950.0,
+            tolerance_below_usd=1_000_000.0,
+            tolerance_below_pct=0.0001,
+            tolerance_above_usd=1_000_000.0,
+            tolerance_above_pct=0.01,
+        )
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "broker_below_logical"
+        assert result.in_tolerance is False
+
+        rec2 = BrokerEquityReconciler(
+            broker_equity_source=lambda: 50_050.0,
+            tolerance_below_usd=1_000_000.0,
+            tolerance_below_pct=0.0001,
+            tolerance_above_usd=1_000_000.0,
+            tolerance_above_pct=0.01,
+        )
+        result2 = rec2.reconcile(logical_equity_usd=50_000.0)
+        assert result2.reason == "within_tolerance"
+        assert result2.in_tolerance is True
+
+    def test_negative_per_direction_tolerance_rejected(self):
+        with pytest.raises(ValueError, match="tolerance_below_usd"):
+            BrokerEquityReconciler(
+                broker_equity_source=lambda: None,
+                tolerance_below_usd=-1.0,
+            )
+        with pytest.raises(ValueError, match="tolerance_above_pct"):
+            BrokerEquityReconciler(
+                broker_equity_source=lambda: None,
+                tolerance_above_pct=-0.001,
+            )
+
+
+# ---------------------------------------------------------------------------
+# v0.1.66 H3 -- hysteresis clear-band + drift-state machine
+# ---------------------------------------------------------------------------
+
+
+class TestHysteresisClearBand:
+    """v0.1.66 H3 -- the latched drift state with a tighter clear band."""
+
+    def test_default_clear_band_is_70pct_of_trigger(self):
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: None,
+            tolerance_usd=100.0,
+            tolerance_pct=0.01,
+        )
+        assert rec.clear_tolerance_below_usd == pytest.approx(70.0)
+        assert rec.clear_tolerance_below_pct == pytest.approx(0.007)
+
+    def test_custom_clear_band_overrides_default(self):
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: None,
+            tolerance_usd=100.0,
+            tolerance_pct=0.01,
+            clear_tolerance_below_usd=25.0,
+            clear_tolerance_below_pct=0.001,
+        )
+        assert rec.clear_tolerance_below_usd == pytest.approx(25.0)
+        assert rec.clear_tolerance_below_pct == pytest.approx(0.001)
+
+    def test_clear_band_wider_than_trigger_rejected(self):
+        with pytest.raises(ValueError, match="clear_tolerance_below_usd"):
+            BrokerEquityReconciler(
+                broker_equity_source=lambda: None,
+                tolerance_usd=50.0,
+                clear_tolerance_below_usd=100.0,  # > trigger -- invalid
+            )
+
+    def test_negative_clear_band_rejected(self):
+        with pytest.raises(ValueError, match="clear_tolerance_below_pct"):
+            BrokerEquityReconciler(
+                broker_equity_source=lambda: None,
+                clear_tolerance_below_pct=-0.001,
+            )
+
+    def test_entry_into_drift_flips_state_and_emits_transition(self):
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 49_900.0,  # drift=$100
+            tolerance_usd=50.0,
+            tolerance_pct=0.01,
+        )
+        assert rec._in_drift_state is False  # noqa: SLF001
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "broker_below_logical"
+        assert result.is_in_drift_state is True
+        assert result.transition == "entered_drift"
+        assert rec.stats.drift_state_entries == 1
+
+    def test_steady_drift_after_entry_is_stable_transition(self):
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 49_900.0,
+            tolerance_usd=50.0,
+        )
+        first = rec.reconcile(logical_equity_usd=50_000.0)
+        assert first.transition == "entered_drift"
+        second = rec.reconcile(logical_equity_usd=50_000.0)
+        assert second.transition == "stable"
+        assert second.is_in_drift_state is True
+
+    def test_drift_inside_clear_band_exits_state(self):
+        # Default clear_tolerance_below_usd = 50 * 0.7 = 35.
+        # Use a value where drift = 30 (inside clear band) to verify exit.
+        broker = [49_900.0]  # drift=$100 (out of trigger)
+
+        def _src():
+            return broker[0]
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=_src,
+            tolerance_usd=50.0,
+            tolerance_pct=10.0,  # huge so only USD path matters
+        )
+        rec.reconcile(logical_equity_usd=50_000.0)  # entered_drift
+        broker[0] = 49_970.0  # drift=$30 -- inside clear band ($35)
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.transition == "exited_drift"
+        assert result.is_in_drift_state is False
+        assert rec.stats.drift_state_exits == 1
+
+    def test_drift_in_jitter_zone_stays_latched(self):
+        # Trigger=$50, clear=$35. Drift bouncing at $40 stays latched.
+        broker = [49_900.0]  # drift=$100
+
+        def _src():
+            return broker[0]
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=_src,
+            tolerance_usd=50.0,
+            tolerance_pct=10.0,
+        )
+        rec.reconcile(logical_equity_usd=50_000.0)  # entered_drift
+        # Drift drops to $40 -- still > clear band $35.
+        broker[0] = 49_960.0
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        # In tolerance per the trigger ($40 < $50) but still latched
+        # because it has not crossed the (tighter) clear band.
+        assert result.in_tolerance is True
+        assert result.is_in_drift_state is True
+        assert result.transition == "stable"
+
+    def test_no_broker_data_preserves_drift_state(self):
+        """A no_broker_data tick must not clear the latched drift state."""
+        broker: list[float | None] = [49_900.0]
+
+        def _src():
+            return broker[0]
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=_src,
+            tolerance_usd=50.0,
+        )
+        rec.reconcile(logical_equity_usd=50_000.0)  # entered_drift
+        broker[0] = None
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        assert result.reason == "no_broker_data"
+        # Drift state survives the blink.
+        assert result.is_in_drift_state is True
+        assert result.transition == "stable"
+
+    def test_broker_above_logical_clears_drift_latch(self):
+        """If broker overshoots logical, we are no longer in cushion-overstated."""
+        broker = [49_900.0]  # drift=$100 (broker_below_logical)
+
+        def _src():
+            return broker[0]
+
+        rec = BrokerEquityReconciler(
+            broker_equity_source=_src,
+            tolerance_usd=50.0,
+        )
+        rec.reconcile(logical_equity_usd=50_000.0)  # entered_drift
+        broker[0] = 50_500.0  # drift=-$500 (broker_above_logical)
+        result = rec.reconcile(logical_equity_usd=50_000.0)
+        # Crossed past logical. Latch clears -- the dangerous direction
+        # is no longer active.
+        assert result.transition == "exited_drift"
+        assert result.is_in_drift_state is False
+
+    def test_below_logical_at_min_logical_floor_does_not_crash(self):
+        """No-broker-data path on a sub-floor logical preserves state."""
+        rec = BrokerEquityReconciler(
+            broker_equity_source=lambda: 0.5,
+            tolerance_usd=50.0,
+            min_logical_usd=1.0,
+        )
+        result = rec.reconcile(logical_equity_usd=0.5)
+        assert result.reason == "no_broker_data"
+        assert result.is_in_drift_state is False
+        assert result.transition == "stable"

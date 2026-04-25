@@ -566,6 +566,14 @@ class ApexRuntime:
         # transition into broker_below_logical, not every tick while
         # the drift persists. Mirrors the consistency-guard pattern.
         self._last_broker_drift_reason: str | None = None
+        # H3 closure (v0.1.66): sustained-drift re-alert tracking.
+        # When the reconciler stays in is_in_drift_state for longer
+        # than ``broker_drift_realert_interval_s`` the runtime fires
+        # a follow-up alert (kind="sustained") so the operator does
+        # not silently lose visibility on a multi-hour drift event.
+        # Reset to None on a clean exit transition.
+        self._last_broker_drift_alert_ts: float | None = None
+        self.broker_drift_realert_interval_s: float = 1800.0
 
         # LIVE-MODE GATE (blocker #2, risk-advocate D3 review).
         # The legacy build_apex_eval_snapshot() fallback does NOT implement
@@ -775,19 +783,42 @@ class ApexRuntime:
                 rec_drift_usd = rec_result.drift_usd
                 rec_drift_pct = rec_result.drift_pct_of_logical
                 rec_in_tol = rec_result.in_tolerance
-                prior_reason = self._last_broker_drift_reason
                 self._last_broker_drift_reason = rec_reason
-                # Only alert on transition INTO broker_below_logical.
-                # Re-entering tolerance clears the latch so a second
-                # breach later will re-alert.
-                if (
-                    rec_reason == "broker_below_logical"
-                    and prior_reason != "broker_below_logical"
-                ):
+                # H3 closure (v0.1.66): the reconciler now exposes a
+                # latched drift state with hysteresis. The runtime fires
+                # three kinds of broker_equity_drift alerts:
+                #
+                #   transition  -- ReconcileResult.transition == "entered_drift"
+                #   sustained   -- still in drift, last alert was
+                #                  >= broker_drift_realert_interval_s ago
+                #   recovered   -- ReconcileResult.transition == "exited_drift"
+                #
+                # within_tolerance / no_broker_data / broker_above_logical
+                # ticks are silent on the alert channel (still logged).
+                now_mono = time.monotonic()
+                drift_kind: str | None = None
+                if rec_result.transition == "entered_drift":
+                    drift_kind = "transition"
+                    self._last_broker_drift_alert_ts = now_mono
+                elif rec_result.transition == "exited_drift":
+                    drift_kind = "recovered"
+                    self._last_broker_drift_alert_ts = None
+                elif rec_result.is_in_drift_state:
+                    last_ts = self._last_broker_drift_alert_ts
+                    if last_ts is not None and (
+                        now_mono - last_ts
+                        >= self.broker_drift_realert_interval_s
+                    ):
+                        drift_kind = "sustained"
+                        self._last_broker_drift_alert_ts = now_mono
+                if drift_kind is not None:
                     self.dispatcher.send(
                         "broker_equity_drift",
                         {
+                            "kind": drift_kind,
                             "reason": rec_reason,
+                            "is_in_drift_state": rec_result.is_in_drift_state,
+                            "transition": rec_result.transition,
                             "logical_equity_usd": ta_equity,
                             "broker_equity_usd": rec_result.broker_equity_usd,
                             "drift_usd": rec_drift_usd,
@@ -1190,8 +1221,20 @@ async def _amain(argv: list[str] | None = None) -> int:
         print(f"BOOT REFUSED: {exc}")
         return 78  # EX_CONFIG -- operator config error
     broker_poller = make_poller_for(broker_adapter, refresh_s=5.0)
+    # H2 closure (Red Team v0.1.64 review, shipped v0.1.66):
+    # asymmetric tolerances. broker_below_logical is the dangerous
+    # direction (cushion over-stated, eval-bust risk) so we use a
+    # tight threshold there. broker_above_logical is benign (MTM lag
+    # / dividend / rebate) and using a tight threshold here would
+    # generate alert spam on every fast-market IBKR snapshot delay.
+    # Defaults chosen for the Apex 50K eval; operator can tune via
+    # configs/kill_switch.yaml in v0.1.67+.
     broker_reconciler = BrokerEquityReconciler(
         broker_equity_source=broker_poller.current,
+        tolerance_below_usd=20.0,    # tight: $20 ~ 1 MNQ tick of cushion
+        tolerance_below_pct=0.0005,  # tight: 0.05% of $50K = $25
+        tolerance_above_usd=200.0,   # loose: 4x below, anti-spam
+        tolerance_above_pct=0.005,   # loose: 0.5% of $50K = $250
     )
 
     # R3 + D2 closure (v0.1.65 wave 2): wire ConsistencyGuard and
@@ -1254,8 +1297,10 @@ async def _amain(argv: list[str] | None = None) -> int:
     print(f"bot_filter    : {cfg.bot_filter or '(all)'}")
     print(
         f"broker_equity : {broker_adapter.name} "
-        f"(tol_usd={broker_reconciler.tolerance_usd} "
-        f"tol_pct={broker_reconciler.tolerance_pct} "
+        f"(below tol=${broker_reconciler.tolerance_below_usd:.0f}/"
+        f"{broker_reconciler.tolerance_below_pct:.4%}, "
+        f"above tol=${broker_reconciler.tolerance_above_usd:.0f}/"
+        f"{broker_reconciler.tolerance_above_pct:.3%}, "
         f"refresh_s=5.0)",
     )
     print(

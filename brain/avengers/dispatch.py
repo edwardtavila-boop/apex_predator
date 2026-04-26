@@ -52,6 +52,9 @@ from apex_predator.brain.jarvis_v3.claude_layer.prompts import (
     parse_verdict,
 )
 from apex_predator.brain.jarvis_v3.claude_layer.stakes import StakesInputs  # noqa: TC001
+from apex_predator.brain.jarvis_v3.claude_layer.verdict_cache import (
+    VerdictCache,  # noqa: TC001  (runtime constructor param)
+)
 from apex_predator.brain.jarvis_v3.next_level.debate import (
     DebateVerdict,
 )
@@ -66,11 +69,12 @@ if TYPE_CHECKING:
 
 class DispatchRoute(StrEnum):
     """Which path the dispatcher took for this decision."""
-    JARVIS_ONLY    = "JARVIS_ONLY"        # gate said no-escalate
-    JARVIS_DISTILL = "JARVIS_DISTILL"     # distiller said classifier is confident
-    JARVIS_FREEZE  = "JARVIS_FREEZE"      # quota freeze
-    BATMAN_DEBATE  = "BATMAN_DEBATE"      # Claude-backed debate via BATMAN
-    BATMAN_REVIEW  = "BATMAN_REVIEW"      # heavy strategic review (single-shot)
+    JARVIS_ONLY          = "JARVIS_ONLY"           # gate said no-escalate
+    JARVIS_DISTILL       = "JARVIS_DISTILL"        # distiller said classifier is confident
+    JARVIS_FREEZE        = "JARVIS_FREEZE"         # quota freeze
+    JARVIS_VERDICT_CACHE = "JARVIS_VERDICT_CACHE"  # cascade L2 -- cached prior verdict
+    BATMAN_DEBATE        = "BATMAN_DEBATE"         # Claude-backed debate via BATMAN
+    BATMAN_REVIEW        = "BATMAN_REVIEW"         # heavy strategic review (single-shot)
 
 
 class DispatchResult(BaseModel):
@@ -102,9 +106,19 @@ class AvengersDispatch:
     the governor / fleet / usage_tracker / distiller.
     """
 
-    def __init__(self, governor: CostGovernor, fleet: Fleet) -> None:
+    def __init__(
+        self,
+        governor: CostGovernor,
+        fleet: Fleet,
+        verdict_cache: VerdictCache | None = None,
+    ) -> None:
         self.governor = governor
         self.fleet = fleet
+        # Cascade L2: optional verdict cache. When provided, decide() consults
+        # it after the governor approves Claude invocation. Cache hit = skip
+        # the persona debate entirely. Cache write happens after a successful
+        # Claude debate so subsequent calls within TTL hit warm.
+        self.verdict_cache = verdict_cache
 
     # ---------------------------------------------------------------
     # Hot-path entry
@@ -152,13 +166,49 @@ class AvengersDispatch:
                 note=plan.reason,
             )
 
-        # 4. Claude-backed: BATMAN orchestrates the debate.
+        # 4. Cascade L2: verdict cache check. If a prior debate produced
+        #    a verdict for an essentially-identical feature shape within
+        #    TTL, return that and skip Claude entirely.
+        features = _features_from(context)
+        if self.verdict_cache is not None:
+            cached = self.verdict_cache.get(features, now=now)
+            if cached is not None:
+                return DispatchResult(
+                    ts=now,
+                    route=DispatchRoute.JARVIS_VERDICT_CACHE,
+                    plan=plan,
+                    deterministic=det,
+                    claude_debate=None,
+                    final_vote=cached.final_vote,
+                    note=(
+                        f"verdict-cache hit (cached "
+                        f"{cached.cached_at.isoformat()}, "
+                        f"route={cached.route})"
+                    ),
+                )
+
+        # 5. Claude-backed: BATMAN orchestrates the debate.
         claude_results = self._run_claude_debate(
             plan=plan, context=context, baseline=det,
         )
-        # 5. Reconcile: Claude votes trump deterministic if they agree
+        # 6. Reconcile: Claude votes trump deterministic if they agree
         #    internally; otherwise fall back to deterministic verdict.
         final = self._reconcile(claude_results, det)
+        # 7. Cache the final verdict so the next similar context skips
+        #    the Claude call. TTL is regime-aware inside the cache.
+        if self.verdict_cache is not None:
+            self.verdict_cache.put(
+                features,
+                final_vote=final,
+                route=DispatchRoute.BATMAN_DEBATE.value,
+                stakes=(
+                    plan.stakes.stakes.value if plan.stakes else ""
+                ),
+                note=(
+                    f"BATMAN debate, {len(claude_results)} personas"
+                ),
+                now=now,
+            )
         return DispatchResult(
             ts=now,
             route=DispatchRoute.BATMAN_DEBATE,

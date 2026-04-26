@@ -34,6 +34,9 @@ from apex_predator.brain.jarvis_v3.claude_layer.distillation import Distiller
 from apex_predator.brain.jarvis_v3.claude_layer.usage_tracker import (
     UsageTracker,
 )
+from apex_predator.brain.jarvis_v3.claude_layer.verdict_cache import (
+    VerdictCache,
+)
 
 logger = logging.getLogger("avengers_daemon")
 
@@ -70,9 +73,39 @@ class AvengersDaemon:
         # dispatch hits the real API, with prompt caching + usage tracking.
         executor = self._build_fleet_executor()
         self.fleet = Fleet(executor=executor)
-        self.dispatch = AvengersDispatch(
-            governor=self.governor, fleet=self.fleet,
+
+        # Cascade L2: in-memory verdict cache. Restored from disk if a
+        # snapshot exists, else fresh. Persisted on graceful shutdown.
+        self.verdict_cache = self._load_verdict_cache(
+            state_dir / "verdict_cache.json",
         )
+
+        self.dispatch = AvengersDispatch(
+            governor=self.governor,
+            fleet=self.fleet,
+            verdict_cache=self.verdict_cache,
+        )
+
+    @staticmethod
+    def _load_verdict_cache(path: Path) -> VerdictCache:
+        """Restore from snapshot when present; fresh cache otherwise."""
+        cache = VerdictCache()
+        if not path.exists():
+            return cache
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            cache.restore(data)
+            logger.info(
+                "verdict cache restored: %d entries (hits=%d misses=%d)",
+                len(data.get("entries", [])),
+                int(data.get("hits", 0)),
+                int(data.get("misses", 0)),
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            logger.warning(
+                "verdict cache restore failed (%s) -- starting fresh", exc,
+            )
+        return cache
 
     def _build_fleet_executor(self) -> object:
         """Choose Fleet executor based on APEX_AVENGERS_LIVE feature flag.
@@ -156,6 +189,13 @@ class AvengersDaemon:
         """Save all stateful components to disk."""
         self.usage.save(self.state_dir / "usage_tracker.json")
         self.distiller.save(self.state_dir / "distiller.json")
+        try:
+            (self.state_dir / "verdict_cache.json").write_text(
+                json.dumps(self.verdict_cache.snapshot(), indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            logger.warning("verdict cache persist failed: %s", exc)
         logger.info("state persisted to %s", self.state_dir)
 
     def heartbeat(self) -> dict:
@@ -168,6 +208,7 @@ class AvengersDaemon:
             "cache_hit_rate": q.cache_hit_rate,
             "distiller_version": self.distiller.model.version,
             "distiller_trained": self.distiller.model.train_n > 0,
+            "verdict_cache": self.verdict_cache.stats(),
         }
 
     def stop(self, signum: int, _frame: object) -> None:

@@ -58,6 +58,7 @@ def test_check_secrets_caps_missing_list_at_five_for_display(monkeypatch: pytest
 
 def test_check_venues_passes_when_config_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(preflight, "CONFIG_PATH", tmp_path / "nope.json")
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "broker_connections")
     name, ok, msg = preflight.check_venues()
     assert ok is True
     # Baked-in venues include tradovate/ibkr/tastytrade once the
@@ -72,6 +73,7 @@ def test_check_venues_reads_venues_from_config(monkeypatch: pytest.MonkeyPatch, 
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps({"venues": ["tradovate", "bybit", "okx", "binance"]}))
     monkeypatch.setattr(preflight, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "broker_connections")
     name, ok, msg = preflight.check_venues()
     assert ok is True
     assert "4 venues" in msg
@@ -81,6 +83,7 @@ def test_check_venues_fails_on_unreadable_config(monkeypatch: pytest.MonkeyPatch
     cfg = tmp_path / "config.json"
     cfg.write_text("{this is not valid json")
     monkeypatch.setattr(preflight, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "broker_connections")
     name, ok, msg = preflight.check_venues()
     assert ok is False
     assert "unreadable" in msg

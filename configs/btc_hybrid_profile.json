@@ -1,0 +1,46 @@
+{
+  "_doc": "Default BTC-hybrid bot profile. Per-key multipliers are clamped to [0.5, 1.5] by CryptoSeedBot._profile_bias. Floors are absolute thresholds.",
+  "session_phase_size_bias": {
+    "OPEN_DRIVE": 1.20,
+    "MID_DAY":    1.00,
+    "CLOSE":      0.90,
+    "OVERNIGHT":  0.80,
+    "UNKNOWN":    1.00
+  },
+  "timeframe_size_bias": {
+    "M1":  1.10,
+    "M5":  1.05,
+    "M15": 1.00,
+    "H1":  0.95,
+    "UNKNOWN": 1.00
+  },
+  "session_timeframe_size_bias": {
+    "OPEN_DRIVE::M1":  1.20,
+    "OPEN_DRIVE::M5":  1.15,
+    "MID_DAY::M5":     1.05,
+    "CLOSE::M1":       0.90
+  },
+  "spread_regime_size_bias": {
+    "TIGHT":   1.10,
+    "NORMAL":  1.00,
+    "WIDE":    0.85,
+    "UNKNOWN": 1.00
+  },
+  "order_book_quality_size_bias": {
+    "Q0_4":  0.80,
+    "Q4_6":  0.95,
+    "Q6_8":  1.05,
+    "Q8_10": 1.15
+  },
+  "order_book_quality_edge_bias": {
+    "Q0_4":  0.85,
+    "Q4_6":  0.95,
+    "Q6_8":  1.05,
+    "Q8_10": 1.10
+  },
+  "session_timeframe_edge_bias": {
+    "OPEN_DRIVE::M1": 1.10,
+    "MID_DAY::M5":    1.05
+  },
+  "order_book_quality_floor": 4.25
+}

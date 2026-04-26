@@ -48,6 +48,17 @@ def main() -> None:
     print(f"REGISTERED-BUT-UNUSED (dead config): {len(unused)}")
     for e in sorted(unused):
         print(f"  - {e}")
+    print()
+    if missing:
+        print(
+            f"FAIL -- {len(missing)} event(s) dispatched but not "
+            f"registered in alerts.yaml; AlertDispatcher will silently "
+            f"drop them.",
+        )
+    else:
+        print(
+            "OK -- every dispatched event is registered in alerts.yaml.",
+        )
 
 
 if __name__ == "__main__":

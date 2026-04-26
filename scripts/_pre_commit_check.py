@@ -154,27 +154,90 @@ def main(argv: list[str] | None = None) -> int:
     if rc != 0:
         return 1
 
+    skip_pytest = args.quick or args.no_pytest
     if args.quick:
         print(
             "[pre-commit] --quick -> skipping pytest (ruff passed)",
             file=sys.stderr,
         )
-        return 0
-    if args.no_pytest:
+    elif args.no_pytest:
         print(
             "[pre-commit] --no-pytest -> WARNING: skipping pytest, "
             "you are committing untested code",
             file=sys.stderr,
         )
-        return 0
+    else:
+        print("[pre-commit] running pytest...", file=sys.stderr)
+        rc = _pytest_check(root=ROOT)
+        if rc != 0:
+            return 2
 
-    print("[pre-commit] running pytest...", file=sys.stderr)
-    rc = _pytest_check(root=ROOT)
-    if rc != 0:
-        return 2
+    # Advisory audits (do NOT gate the commit -- if a future bare
+    # deferral or unknown alert event surfaces, the operator sees the
+    # message inline at commit time but the commit still proceeds).
+    # Promoting any of these to gating is a follow-up decision; today
+    # they're advisory because the cost of a false positive blocking a
+    # routine commit is higher than the risk of a real positive going
+    # unnoticed (the audits also run on demand via
+    # ``python scripts/_audit_*.py``).
+    #
+    # Audits run even in --quick / --no-pytest mode because they're
+    # cheap (sub-second) and catch the kind of drift that doesn't
+    # surface in the unit-test suite.
+    _ = skip_pytest  # used only as documentation for the comment above
+    _advisory_audits(root=ROOT)
 
     print("[pre-commit] OK -- commit may proceed", file=sys.stderr)
     return 0
+
+
+def _advisory_audits(*, root: Path) -> None:
+    """Run the three audit scripts in advisory mode and surface results.
+
+    Failures here do NOT block the commit. They print to stderr so the
+    operator sees them inline; that's the only intervention. To
+    promote any audit to a hard gate, change the call site to inspect
+    the return code and ``return 4`` (or similar) on non-zero.
+    """
+    audits = [
+        ("alert-events", "scripts/_audit_alert_events.py", []),
+        ("roadmap-vs-code", "scripts/_audit_roadmap_vs_code.py", []),
+        ("deferral-criteria", "scripts/_audit_deferral_criteria.py", []),
+    ]
+    for label, script, extra_args in audits:
+        path = root / script
+        if not path.exists():
+            print(
+                f"[pre-commit] advisory: {label} -- {script} missing, skipping",
+                file=sys.stderr,
+            )
+            continue
+        print(f"[pre-commit] advisory: {label}...", file=sys.stderr)
+        result = subprocess.run(
+            ["python", str(path), *extra_args],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+        # Print the audit's stdout summary so the operator sees the
+        # report without having to run the script separately.
+        if result.returncode != 0:
+            # Audit reports an issue. Surface stdout (the summary)
+            # but DO NOT propagate the non-zero exit -- advisory mode.
+            tail = result.stdout.rstrip().splitlines()[-15:]
+            print(
+                f"[pre-commit] advisory: {label} reports issues "
+                f"(rc={result.returncode}, NOT blocking):",
+                file=sys.stderr,
+            )
+            for line in tail:
+                print(f"[pre-commit]   {line}", file=sys.stderr)
+        else:
+            # Show the last summary line so silent passes still confirm.
+            lines = [
+                ln for ln in result.stdout.rstrip().splitlines()
+                if ln.strip()
+            ]
+            if lines:
+                print(f"[pre-commit]   {lines[-1]}", file=sys.stderr)
 
 
 if __name__ == "__main__":

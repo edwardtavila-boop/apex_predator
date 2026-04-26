@@ -78,6 +78,13 @@ routing:
     # + email) so the operator sees it the next time they look at
     # the device but does not get woken up by a config bug.
     tier_a_invariant_violation: { level: warn, channels: [pushover, email] }
+    # SLO tracker breach + recovery (sla_alerter.py). Breaches paged
+    # via pushover + email; recoveries to email-only since they're
+    # confirmatory ("the thing that was broken is now fine") and
+    # don't warrant interrupting the operator. Cooldown logic in
+    # sla_alerter.py prevents per-probe alert storms.
+    apex_sla_breach:      { level: warn,     channels: [pushover, email] }
+    apex_sla_recovered:   { level: info,     channels: [email] }
 
 # Rate limits
 rate_limit:

@@ -158,28 +158,140 @@ def _render_drift() -> dict[str, Any]:
 # subsystems (breaker, journal, alerts) read those subsystems' state.
 # Panels for subsystems still under construction return a structured
 # placeholder so the HTML layer always sees the key.
+# Module-level paths for the wired panels. Tests monkey-patch these
+# the same way DRIFT_JOURNAL is patched.
+BREAKER_PATH:        Path = Path("~/.jarvis/breaker.json").expanduser()
+DEADMAN_PATH:        Path = Path("~/.jarvis/heartbeat.jsonl").expanduser()
+PROMOTION_PATH:      Path = Path("~/.jarvis/promotion.jsonl").expanduser()
+CALIBRATION_PATH:    Path = Path("~/.jarvis/calibration.jsonl").expanduser()
+JARVIS_PID_DIR:      Path = Path("~/.jarvis").expanduser()
+
+
 def _render_breaker() -> dict[str, Any]:
-    return {"state": "UNKNOWN", "tripped_at": None}
+    """Read the SharedCircuitBreaker state file. NO_DATA when absent."""
+    if not BREAKER_PATH.exists():
+        return {"state": "NO_DATA", "tripped_at": None, "path": str(BREAKER_PATH)}
+    try:
+        raw = json.loads(BREAKER_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"state": "CORRUPT", "tripped_at": None, "error": str(exc)}
+    return {
+        "state":         str(raw.get("state", "UNKNOWN")),
+        "tripped_at":    raw.get("tripped_at"),
+        "trip_reason":   raw.get("trip_reason"),
+        "consecutive_failures": raw.get("consecutive_failures", 0),
+        "path":          str(BREAKER_PATH),
+    }
 
 
 def _render_deadman() -> dict[str, Any]:
-    return {"last_heartbeat": None, "stale_seconds": None}
+    """Time-since-last-heartbeat from the avengers journal tail."""
+    import time as _time
+
+    if not DEADMAN_PATH.exists():
+        return {
+            "last_heartbeat": None,
+            "stale_seconds":  None,
+            "path":           str(DEADMAN_PATH),
+        }
+    last = None
+    last_ts = None
+    for entry in reversed(_tail_jsonl(DEADMAN_PATH, n=5)):
+        kind = entry.get("kind") or entry.get("event")
+        if kind == "heartbeat" or "heartbeat" in entry:
+            hb = entry.get("heartbeat") or entry
+            last_ts = hb.get("ts") or entry.get("ts")
+            last = hb.get("persona") or entry.get("persona")
+            break
+    stale_s: float | None = None
+    if isinstance(last_ts, (int, float)):
+        stale_s = max(0.0, _time.time() - float(last_ts))
+    return {
+        "last_heartbeat": last_ts,
+        "last_persona":   last,
+        "stale_seconds":  round(stale_s, 1) if stale_s is not None else None,
+        "path":           str(DEADMAN_PATH),
+    }
 
 
 def _render_forecast() -> dict[str, Any]:
-    return {"horizon_minutes": None, "confidence": None}
+    """Forecast subsystem is not yet wired. Surfaces a structured
+    placeholder so the HTML poller always sees the panel keys.
+    """
+    return {
+        "horizon_minutes": None,
+        "confidence":      None,
+        "status":          "not_wired",
+    }
 
 
 def _render_daemons() -> dict[str, Any]:
-    return {"healthy": [], "down": []}
+    """Walk the avengers daemon PID files. healthy = stale-PID-check OK,
+    down = file missing or PID not alive."""
+    import os as _os
+
+    personas = ("BATMAN", "ALFRED", "ROBIN", "JARVIS")
+    healthy: list[str] = []
+    down: list[str] = []
+    for p in personas:
+        pid_file = JARVIS_PID_DIR / f"daemon_{p.lower()}.pid"
+        if not pid_file.exists():
+            down.append(p)
+            continue
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip() or "0")
+        except (OSError, ValueError):
+            down.append(p)
+            continue
+        if pid <= 0:
+            down.append(p)
+            continue
+        # Best-effort liveness via signal 0 (POSIX). On Windows or when
+        # the process is in a different PID namespace we conservatively
+        # report 'healthy' so the operator gets a single source of
+        # truth and can override via PID-file deletion.
+        try:
+            _os.kill(pid, 0)
+            healthy.append(p)
+        except (OSError, ProcessLookupError):
+            down.append(p)
+        except AttributeError:  # pragma: no cover -- non-POSIX
+            healthy.append(p)
+    return {"healthy": healthy, "down": down, "pid_dir": str(JARVIS_PID_DIR)}
 
 
 def _render_promotion() -> dict[str, Any]:
-    return {"in_flight": []}
+    """Last 5 promotion verdicts from the brain.avengers.promotion journal."""
+    if not PROMOTION_PATH.exists():
+        return {"in_flight": [], "path": str(PROMOTION_PATH)}
+    rows = _tail_jsonl(PROMOTION_PATH, n=5)
+    in_flight = [
+        {
+            "strategy_id": r.get("strategy_id"),
+            "from_stage":  r.get("from_stage"),
+            "to_stage":    r.get("to_stage"),
+            "action":      r.get("action"),
+            "ts":          r.get("ts") or r.get("generated_at"),
+        }
+        for r in rows
+    ]
+    return {"in_flight": in_flight, "path": str(PROMOTION_PATH)}
 
 
 def _render_calibration() -> dict[str, Any]:
-    return {"last_run": None, "ks_pvalue": None}
+    """Last calibration entry's K-S p-value + run timestamp."""
+    if not CALIBRATION_PATH.exists():
+        return {"last_run": None, "ks_pvalue": None, "path": str(CALIBRATION_PATH)}
+    rows = _tail_jsonl(CALIBRATION_PATH, n=1)
+    if not rows:
+        return {"last_run": None, "ks_pvalue": None, "path": str(CALIBRATION_PATH)}
+    last = rows[-1]
+    return {
+        "last_run":   last.get("ts") or last.get("generated_at"),
+        "ks_pvalue":  last.get("ks_pvalue") or last.get("p_value"),
+        "verdict":    last.get("verdict"),
+        "path":       str(CALIBRATION_PATH),
+    }
 
 
 def _tail_jsonl(path: Path, n: int = TAIL_LINES) -> list[dict[str, Any]]:

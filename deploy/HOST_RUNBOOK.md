@@ -134,23 +134,62 @@ sudo timedatectl set-timezone UTC    # all logs + schedules run on UTC
 sudo timedatectl set-ntp true
 ```
 
-### 2.7 Optional — Cloudflare Tunnel for the dashboard
+### 2.7 Cloudflare Tunnel for the Master Command Center
 
-Skip if you only ever ssh in. If you want `https://apex.yourdomain.com`
-to reach the Streamlit dashboard:
+The **Master Command Center** (`scripts/jarvis_dashboard.py`) is the canonical
+operator console. It's exposed remotely via a Cloudflare Named Tunnel so the
+VPS keeps no public ports open and you reach it from any phone or laptop at
+`https://cmd.<your-domain>`. Auth is handled at the edge by **Cloudflare
+Access** (no app-side credentials).
 
 ```bash
-# See deploy/scripts/cloudflare_setup_named.ps1 for the Windows-side
-# equivalent. On Linux:
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cf.deb
-sudo dpkg -i cf.deb
-cloudflared tunnel login
-cloudflared tunnel create apex-live
-# route: `apex.yourdomain.com -> http://localhost:8501`
-sudo cloudflared service install <tunnel-token>
+# One command -- idempotent, safe to re-run.
+MCC_DOMAIN=<your-domain> ./deploy/scripts/cloudflare_tunnel_setup.sh
 ```
 
-UFW stays closed to 8501 — the tunnel speaks loopback only.
+The script will:
+
+1. Install `cloudflared` from Cloudflare's signed apt repo (auto-updates).
+2. Run `cloudflared tunnel login` interactively the first time (browser auth,
+   pick your zone). Skipped on re-runs.
+3. Create the `jarvis-mcc` tunnel if it doesn't exist.
+4. Route DNS for `cmd.<your-domain>` to the tunnel.
+5. Write `~/.cloudflared/config.yml` with ingress pointed at
+   `http://localhost:8765` (the MCC).
+6. Validate the config, install the system-level `cloudflared` service,
+   enable + start it.
+7. Print the next-step checklist for Cloudflare Access.
+
+**Last manual step — Cloudflare Access** (gate the URL behind your email).
+The script prints this at the end; for reference:
+
+> **one.dash.cloudflare.com → Zero Trust → Access → Applications → Add → Self-hosted**
+> - Application domain: `cmd.<your-domain>`
+> - Identity providers: enable Google or One-time PIN
+> - Policy: **Allow → Emails ending in `@<your-email-domain>`** (or specific operator emails)
+> - Save
+
+Until that's done, `cmd.<your-domain>` returns `403`, which is the safe default.
+The MCC binds `127.0.0.1` only — the only path in is via this tunnel + Access.
+
+**Verify any time:**
+
+```bash
+MCC_HOSTNAME=cmd.<your-domain> ./deploy/scripts/cloudflare_tunnel_status.sh
+```
+
+Reports cloudflared service state, tunnel registration, connector count, local
+upstream reachability (MCC on `127.0.0.1:8765`), and edge response. Flags 200
+at the edge as a **failure** (means Access isn't configured — security gap).
+
+**Install on your phone:** open `https://cmd.<your-domain>` in Safari/Chrome,
+sign in via Cloudflare Access, then browser menu → **Add to Home Screen** /
+**Install app**. The MCC's manifest, theme, and offline shell are served by
+the MCC itself (`/manifest.webmanifest`, `/sw.js`, `/icon.svg`).
+
+UFW stays closed to 8765 — the tunnel speaks loopback only.
+
+Windows / mac equivalents: `deploy/scripts/cloudflare_setup_named.ps1`.
 
 ---
 
@@ -291,6 +330,7 @@ First print should show `MODE=LIVE`.
 |---|---|---|
 | daily | `journalctl --user -u jarvis-live --since "24 hours ago" \| tail -200` | startup + breaker trips |
 | daily | `.venv/bin/python -m apex_predator.scripts.deadman_check` | pulse log |
+| daily | `MCC_HOSTNAME=cmd.<your-domain> ./deploy/scripts/cloudflare_tunnel_status.sh` | MCC tunnel + Access health |
 | weekly | `.venv/bin/python -m apex_predator.brain.jarvis_cost_attribution` | OPUS burn budget |
 | weekly | `.venv/bin/python -m apex_predator.scripts._chaos_drill_matrix --fail-under 0` | regression in drill coverage |
 | monthly | provider dashboard | snapshot restored / paid |

@@ -5,6 +5,16 @@ Reference for Claude Code sessions. Read this first; ROADMAP.md is the long-form
 ## What this is
 4-bot profit-recycling trading organism: MNQ/NQ micro futures + crypto seed grid + ETH/SOL/XRP perps + staking funnel. Runs gated by "The Firm" — a 6-agent board (Quant, Red Team, Risk, Macro, Micro, PM) that votes on every phase transition. Phase 0 scaffold; bots are wired but boot **paused**.
 
+## Master Command Center (MCC)
+**`scripts/jarvis_dashboard.py`** is the canonical operator console — the *Master Command Center*. It is the single source of truth for live JARVIS state (drift, breaker, deadman, daemons, promotion queue, calibration, journals, alerts) and the primary tool for commanding the framework. It is a stdlib HTTP server (no FastAPI), installable as a PWA on phone/desktop home screens, and exposed remotely via Cloudflare Tunnel + Cloudflare Access. systemd unit: `deploy/systemd/jarvis-command-center.service`. Default bind: `127.0.0.1:8765`. Run locally:
+
+```bash
+PYTHONPATH=/tmp/_pkg_root:$PWD .venv/bin/python -m apex_predator.scripts.jarvis_dashboard
+# then open http://127.0.0.1:8765
+```
+
+Routes: `/` (HTML shell), `/api/state`, `/healthz`, `/manifest.webmanifest`, `/sw.js`, `/icon.svg`. Any new operator-facing surface area should be wired through the MCC — do not fork another dashboard.
+
 ## Repo layout (important)
 The package directory IS the repo root. `from apex_predator.foo import bar` resolves to `./foo/bar.py`. To make imports work locally, symlink the repo into a parent dir named `apex_predator`:
 

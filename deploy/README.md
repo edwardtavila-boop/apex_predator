@@ -34,7 +34,8 @@ journalctl --user -u jarvis-live -f            # tail JARVIS
 | Env secrets | `~/apex_predator/.env` (chmod 600) | read-only |
 | JARVIS live daemon | `systemd --user jarvis-live.service` | always |
 | Avengers dispatcher | `systemd --user avengers-fleet.service` | always |
-| Dashboard backend | `systemd --user apex-dashboard.service` | always |
+| **Master Command Center** | `systemd --user jarvis-command-center.service` (port 8765) | **always** |
+| Dashboard backend (FastAPI API) | `systemd --user apex-dashboard.service` (port 8000) | always |
 | Background tasks | crontab (12 entries tagged `apex-predator:avengers`) | per task cadence |
 | State | `~/.local/state/apex_predator/` | writable by services |
 | Logs | `~/.local/log/apex_predator/` | append-only |
@@ -123,11 +124,26 @@ The Avengers dispatcher daemon. Holds the Fleet + CostGovernor in memory.
 - Writes: `avengers_heartbeat.json`, `usage_tracker.json`, `distiller.json`
 - Restart: `always`
 
+### `jarvis-command-center.service`
+The **Master Command Center** — JARVIS operator console (PWA).
+- Depends on `jarvis-live.service`
+- `ExecStart`: `python -m apex_predator.scripts.jarvis_dashboard`
+- Listens: `127.0.0.1:8765`
+- Routes: `/`, `/api/state`, `/healthz`, `/manifest.webmanifest`, `/sw.js`, `/icon.svg`
+- Remote access: Cloudflare Tunnel (loopback-only; no public ports)
+
 ### `apex-dashboard.service`
 The FastAPI backend for the React trading dashboard.
 - Depends on `jarvis-live.service`
 - Listens: `127.0.0.1:8000`
 - Reverse-proxy with Caddy/nginx if exposing externally
+
+### `cloudflared` (system-level, optional)
+Cloudflare Named Tunnel that exposes the Master Command Center at
+`https://cmd.<your-domain>`, gated by Cloudflare Access. Set up via
+`./deploy/scripts/cloudflare_tunnel_setup.sh`; verify with
+`./deploy/scripts/cloudflare_tunnel_status.sh`. See
+`deploy/HOST_RUNBOOK.md` §2.7.
 
 ---
 
@@ -216,18 +232,22 @@ you probably need a reverse proxy (Caddy/nginx) if accessing externally.
 ```
 deploy/
 ├── README.md                       # this file
+├── HOST_RUNBOOK.md                 # VPS provisioning runbook
 ├── install_vps.sh                  # idempotent installer
 ├── uninstall_vps.sh                # safe rollback
 ├── systemd/
 │   ├── jarvis-live.service
 │   ├── avengers-fleet.service
+│   ├── jarvis-command-center.service   # Master Command Center (port 8765)
 │   └── apex-dashboard.service
 ├── cron/
 │   └── avengers.crontab            # 12 scheduled tasks, tagged
 ├── config/
 │   └── (reserved for future YAML configs)
 └── scripts/
-    ├── run_task.py                 # single-task cron entry point
-    ├── avengers_daemon.py          # systemd long-running daemon
-    └── smoke_check.py              # pre-flight verification
+    ├── run_task.py                       # single-task cron entry point
+    ├── avengers_daemon.py                # systemd long-running daemon
+    ├── smoke_check.py                    # pre-flight verification
+    ├── cloudflare_tunnel_setup.sh        # MCC tunnel installer (Linux)
+    └── cloudflare_tunnel_status.sh       # MCC tunnel health check
 ```

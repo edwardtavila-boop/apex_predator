@@ -131,6 +131,67 @@ def _send_email(
         return False
 
 
+def _send_resend(
+    api_key: str,
+    from_addr: str,
+    to_addr: str,
+    subject: str,
+    body: str,
+) -> bool:
+    """POST to https://api.resend.com/emails. Sync, stdlib-only.
+
+    The operator's website (evolutionarytradingalgo.live) already has a verified
+    Resend domain — this reuses that infra so kill-switch alerts go
+    through the same DKIM/SPF/DMARC-aligned channel as the website's
+    transactional email, and we don't depend on Gmail SMTP App Passwords
+    that rotate or break.
+    """
+    url = "https://api.resend.com/emails"
+    payload = {
+        "from": from_addr,
+        "to": [to_addr],
+        "subject": subject[:250],
+        "text": body[:8192],
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST", headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        # Resend sits behind Cloudflare; the default `Python-urllib/x.y` UA
+        # gets blocked at the edge with a 1010 bot-fingerprint refusal.
+        # Identify ourselves as a real client.
+        "User-Agent": "eta-engine-alerts/1.0",
+        "Accept": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT_S) as resp:  # noqa: S310
+            # Resend returns 200 with {"id": "..."} on success; non-2xx = fail.
+            if resp.status not in (200, 201):
+                logger.warning("resend status=%s", resp.status)
+                return False
+            body_bytes = resp.read()
+            try:
+                resp_json = json.loads(body_bytes.decode("utf-8"))
+                # Success shape includes an "id" field; presence is the signal.
+                return bool(resp_json.get("id"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # 2xx without parseable body — count as success since the
+                # network round-trip succeeded.
+                return True
+    except urllib.error.HTTPError as exc:
+        # Read the error body for diagnostics (Resend returns useful
+        # messages like "API key not found" or "domain not verified").
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")[:300]
+        except Exception:  # noqa: BLE001
+            err_body = ""
+        logger.warning("resend HTTP %s: %s", exc.code, err_body)
+        return False
+    except (urllib.error.URLError, OSError) as exc:
+        logger.warning("resend send failed: %s", exc)
+        return False
+
+
 def _send_sms(
     sid: str, token: str, from_number: str, to_number: str, body: str,
 ) -> bool:
@@ -237,6 +298,13 @@ class AlertDispatcher:
         return bool(self._channel_cfg(name).get("enabled", False))
 
     def _creds_present(self, name: str) -> bool:
+        # Special case for the email channel: Resend is a viable
+        # alternative to the SMTP env_keys. If RESEND_API_KEY is set,
+        # the channel has working creds even when SMTP_* are blank
+        # (which is the new default — Resend is preferred, SMTP is the
+        # fallback). The actual transport choice happens in _deliver.
+        if name == "email" and os.environ.get("RESEND_API_KEY", "").strip():
+            return True
         ch = self._channel_cfg(name)
         keys = (ch.get("env_keys", {}) or {}).values()
         if not keys:
@@ -271,6 +339,28 @@ class AlertDispatcher:
 
         if channel == "email":
             ch = self._channel_cfg("email")
+            to_addr = str(ch.get("to") or "")
+            if not to_addr:
+                logger.warning("email channel has no recipient configured")
+                return False
+
+            # Prefer Resend when RESEND_API_KEY is set. Falls back to SMTP
+            # only if Resend isn't configured. Reasoning: the operator's
+            # website (evolutionarytradingalgo.live) has a verified Resend domain
+            # already, so kill-switch alerts use the same DKIM/SPF/DMARC-
+            # aligned path. Gmail SMTP App Passwords rotate and break
+            # (this happened in production 2026-04-26); Resend's API key
+            # is more stable and the deliverability is better.
+            resend_key = os.environ.get("RESEND_API_KEY", "").strip()
+            if resend_key:
+                resend_from = (
+                    str(ch.get("from_resend") or "")
+                    or os.environ.get("FROM_EMAIL", "").strip()
+                    or "Apex Alerts <alerts@evolutionarytradingalgo.live>"
+                )
+                return _send_resend(resend_key, resend_from, to_addr, title, body)
+
+            # SMTP fallback path.
             smtp_host = self._env("email", "smtp_host")
             smtp_port_str = self._env("email", "smtp_port")
             smtp_user = self._env("email", "smtp_user")
@@ -280,10 +370,6 @@ class AlertDispatcher:
             except ValueError:
                 smtp_port = 587
             from_addr = str(ch.get("from") or smtp_user)
-            to_addr = str(ch.get("to") or "")
-            if not to_addr:
-                logger.warning("email channel has no recipient configured")
-                return False
             return _send_email(
                 smtp_host, smtp_port, smtp_user, smtp_pass,
                 from_addr, to_addr, title, body,

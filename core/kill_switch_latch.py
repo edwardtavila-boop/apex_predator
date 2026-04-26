@@ -28,9 +28,12 @@ The latch closes that hole. It is a small JSON file on disk:
 
 Contract
 --------
-  * ``boot_allowed()`` -- returns ``(ok, reason)``. On a TRIPPED latch it
-    returns ``(False, reason)``. Call this once at runtime startup before
-    connecting to the venue.
+  * ``read()`` -- returns the current :class:`LatchRecord`. Missing
+    file = ARMED. Corrupt JSON = **fail-closed TRIPPED** so a trader
+    cannot defeat the latch by deleting / mangling the file.
+  * ``boot_allowed()`` -- returns ``(ok, reason)``. On a TRIPPED latch
+    it returns ``(False, reason)``. Call this once at runtime startup
+    before connecting to the venue.
   * ``record_verdict(v)`` -- idempotent. Called with every ``KillVerdict``.
     If the verdict's action is in ``_LATCHING_ACTIONS`` the latch is set
     TRIPPED (already-tripped stays tripped -- the first trip is
@@ -38,10 +41,11 @@ Contract
     False when the latch was already tripped or the verdict was not
     latch-eligible.
   * ``clear(cleared_by, reason=None)`` -- operator-only reset. Writes
-    the latch back to ARMED and stamps ``cleared_at_utc`` /
-    ``cleared_by``. Intended to be called from a CLI
-    (``python -m eta_engine.scripts.clear_kill_switch``) after the
-    operator reviews and confirms.
+    the latch back to ARMED but **preserves the prior trip's audit
+    trail** (action / reason / tripped_at_utc / evidence) for post-
+    mortem. Stamps ``cleared_at_utc`` / ``cleared_by``. Intended to
+    be called from a CLI (``python -m eta_engine.scripts.clear_kill_switch``)
+    after the operator reviews and confirms.
 
 Why a JSON file, not a DB?
   * The latch MUST survive process crash, not just graceful shutdown.
@@ -72,6 +76,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -89,15 +94,25 @@ _LATCHING_ACTIONS: frozenset[str] = frozenset({
     "FLATTEN_TIER_B",
 })
 
-STATE_ARMED = "ARMED"
-STATE_TRIPPED = "TRIPPED"
+
+class LatchState(StrEnum):
+    """Discrete latch states. ARMED = trading allowed, TRIPPED = boot refused."""
+
+    ARMED = "ARMED"
+    TRIPPED = "TRIPPED"
 
 
 @dataclass(frozen=True)
-class LatchSnapshot:
-    """In-memory view of the on-disk latch."""
+class LatchRecord:
+    """In-memory view of the on-disk latch.
 
-    state: str
+    The record carries both the current state AND the audit trail of
+    the prior trip (when present). This is what makes ``clear()``
+    forensically useful: after an operator clears, the record still
+    knows what action was taken, when, with what evidence.
+    """
+
+    state: LatchState
     tripped_at_utc: str | None
     reason: str | None
     scope: str | None
@@ -108,11 +123,11 @@ class LatchSnapshot:
     cleared_by: str | None
 
     def is_tripped(self) -> bool:
-        return self.state == STATE_TRIPPED
+        return self.state is LatchState.TRIPPED
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "state": self.state,
+            "state": self.state.value,
             "tripped_at_utc": self.tripped_at_utc,
             "reason": self.reason,
             "scope": self.scope,
@@ -124,9 +139,9 @@ class LatchSnapshot:
         }
 
     @classmethod
-    def armed(cls) -> LatchSnapshot:
+    def armed(cls) -> LatchRecord:
         return cls(
-            state=STATE_ARMED,
+            state=LatchState.ARMED,
             tripped_at_utc=None,
             reason=None,
             scope=None,
@@ -138,9 +153,35 @@ class LatchSnapshot:
         )
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> LatchSnapshot:
+    def fail_closed_tripped(cls, reason: str) -> LatchRecord:
+        """Return a synthetic TRIPPED record for a corrupt/unreadable file.
+
+        Used by ``read()`` to fail-closed when the JSON cannot be
+        parsed -- a trader cannot defeat the latch by mangling the
+        file; the runtime refuses to boot until the operator either
+        repairs the file or runs ``clear()`` to overwrite it cleanly.
+        """
         return cls(
-            state=str(raw.get("state", STATE_ARMED)),
+            state=LatchState.TRIPPED,
+            tripped_at_utc=datetime.now(UTC).isoformat(),
+            reason=reason,
+            scope="global",
+            action="CORRUPT_LATCH",
+            severity="CRITICAL",
+            evidence={},
+            cleared_at_utc=None,
+            cleared_by=None,
+        )
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> LatchRecord:
+        state_str = str(raw.get("state", LatchState.ARMED.value))
+        try:
+            state = LatchState(state_str)
+        except ValueError:
+            state = LatchState.ARMED
+        return cls(
+            state=state,
             tripped_at_utc=raw.get("tripped_at_utc"),
             reason=raw.get("reason"),
             scope=raw.get("scope"),
@@ -159,37 +200,49 @@ class KillSwitchLatch:
     ----------
     path:
         File-system path of the latch JSON. Parent directory is
-        created if absent. Defaults to ``state/kill_switch_latch.json``
-        when callers don't pin a location.
+        created at construction time (mkdir -p).
     """
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
+        # Eagerly create the parent dir so callers can rely on the
+        # path being writable without a separate setup step.
+        self.path.parent.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
     # Read
     # ------------------------------------------------------------------ #
 
-    def snapshot(self) -> LatchSnapshot:
-        """Return the current latch state. Missing / unreadable file = ARMED."""
+    def read(self) -> LatchRecord:
+        """Return the current latch record.
+
+        Missing file = ARMED (first boot on a clean disk).
+        Corrupt JSON or non-object root = **fail-closed TRIPPED**
+        with a reason the operator can act on.
+        """
         if not self.path.exists():
-            return LatchSnapshot.armed()
+            return LatchRecord.armed()
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            log.warning(
-                "kill_switch_latch: unreadable file %s (%s); treating as ARMED",
+            log.error(
+                "kill_switch_latch: corrupt latch file %s (%s) "
+                "-- failing closed (TRIPPED)",
                 self.path, exc,
             )
-            return LatchSnapshot.armed()
+            return LatchRecord.fail_closed_tripped(
+                f"corrupt latch file at {self.path}: {exc}",
+            )
         if not isinstance(raw, dict):
-            log.warning(
+            log.error(
                 "kill_switch_latch: malformed root in %s "
-                "(expected object, got %s); treating as ARMED",
+                "(expected object, got %s) -- failing closed",
                 self.path, type(raw).__name__,
             )
-            return LatchSnapshot.armed()
-        return LatchSnapshot.from_dict(raw)
+            return LatchRecord.fail_closed_tripped(
+                f"corrupt latch root in {self.path}: not an object",
+            )
+        return LatchRecord.from_dict(raw)
 
     def boot_allowed(self) -> tuple[bool, str]:
         """Boot-time gate. Refuse to start when latch is TRIPPED.
@@ -199,22 +252,29 @@ class KillSwitchLatch:
         ok:
             True iff the runtime may proceed.
         reason:
-            Human-readable reason. Empty string when ``ok`` is True.
+            ``"armed"`` on success. On TRIPPED, a multi-line message
+            quoting the prior trip's reason + telling the operator
+            how to clear via the CLI.
         """
-        snap = self.snapshot()
-        if snap.is_tripped():
-            tripped_at = snap.tripped_at_utc or "unknown"
-            scope = snap.scope or "unknown"
-            action = snap.action or "unknown"
-            reason = snap.reason or "no reason recorded"
+        rec = self.read()
+        if rec.is_tripped():
+            tripped_at = rec.tripped_at_utc or "unknown"
+            scope = rec.scope or "unknown"
+            action = rec.action or "unknown"
+            reason = rec.reason or "no reason recorded"
+            corrupt_hint = (
+                "corrupt"
+                if action == "CORRUPT_LATCH"
+                else "TRIPPED"
+            )
             msg = (
-                f"kill-switch latch TRIPPED at {tripped_at} "
+                f"kill-switch latch {corrupt_hint} at {tripped_at} "
                 f"(scope={scope}, action={action}): {reason}. "
                 f"Clear with: python -m eta_engine.scripts.clear_kill_switch "
                 f"--confirm --operator <your_name>"
             )
             return False, msg
-        return True, ""
+        return True, "armed"
 
     # ------------------------------------------------------------------ #
     # Write
@@ -230,12 +290,12 @@ class KillSwitchLatch:
         action = getattr(verdict.action, "value", str(verdict.action))
         if action not in _LATCHING_ACTIONS:
             return False
-        existing = self.snapshot()
+        existing = self.read()
         if existing.is_tripped():
             return False
         severity = getattr(verdict.severity, "value", str(verdict.severity))
-        snap = LatchSnapshot(
-            state=STATE_TRIPPED,
+        rec = LatchRecord(
+            state=LatchState.TRIPPED,
             tripped_at_utc=datetime.now(UTC).isoformat(),
             reason=str(verdict.reason),
             scope=str(verdict.scope),
@@ -245,50 +305,78 @@ class KillSwitchLatch:
             cleared_at_utc=None,
             cleared_by=None,
         )
-        self._write_atomic(snap.to_dict())
+        self._write_atomic(rec.to_dict())
         log.critical(
             "kill_switch_latch: TRIPPED action=%s scope=%s reason=%s",
             action, verdict.scope, verdict.reason,
         )
         return True
 
-    def clear(self, cleared_by: str, reason: str | None = None) -> LatchSnapshot:
-        """Operator reset. Writes the latch back to ARMED.
+    def clear(self, cleared_by: str, reason: str | None = None) -> LatchRecord:
+        """Operator reset. Writes the latch back to ARMED while
+        **preserving the prior trip's audit trail** (action, reason,
+        tripped_at_utc, evidence) for post-mortem.
 
         Parameters
         ----------
         cleared_by:
             Operator identifier. Required, non-empty.
         reason:
-            Optional clearance reason; preserved alongside the
-            cleared-at timestamp for audit.
+            Optional clearance reason. Currently unused in the
+            persisted record (the audit trail focuses on the trip
+            metadata) but accepted for forward-compat.
 
         Returns
         -------
-        LatchSnapshot
-            The post-clear ARMED snapshot.
+        LatchRecord
+            The post-clear ARMED record. The prior trip's
+            ``action`` / ``reason`` / ``tripped_at_utc`` /
+            ``evidence`` survive; ``cleared_at_utc`` /
+            ``cleared_by`` are stamped.
         """
+        _ = reason  # forward-compat; not yet persisted
         if not cleared_by or not cleared_by.strip():
             msg = "cleared_by must be a non-empty operator identifier"
             raise ValueError(msg)
+
+        # Read the prior trip metadata (if any) so we can preserve it.
+        prior = self.read()
         cleared_at = datetime.now(UTC).isoformat()
-        snap = LatchSnapshot(
-            state=STATE_ARMED,
-            tripped_at_utc=None,
-            reason=reason,
-            scope=None,
-            action=None,
-            severity=None,
-            evidence={},
+        rec = LatchRecord(
+            state=LatchState.ARMED,
+            # Preserve trip audit trail across the clear, EXCEPT for
+            # the synthetic CORRUPT_LATCH record (those carry no real
+            # audit data; clearing a corrupt file should not leave a
+            # fake "CORRUPT_LATCH" trip in the post-clear record).
+            tripped_at_utc=(
+                prior.tripped_at_utc if prior.action != "CORRUPT_LATCH" else None
+            ),
+            reason=(
+                prior.reason if prior.action != "CORRUPT_LATCH" else None
+            ),
+            scope=(
+                prior.scope if prior.action != "CORRUPT_LATCH" else None
+            ),
+            action=(
+                prior.action if prior.action != "CORRUPT_LATCH" else None
+            ),
+            severity=(
+                prior.severity if prior.action != "CORRUPT_LATCH" else None
+            ),
+            evidence=(
+                dict(prior.evidence)
+                if prior.action != "CORRUPT_LATCH"
+                else {}
+            ),
             cleared_at_utc=cleared_at,
             cleared_by=cleared_by.strip(),
         )
-        self._write_atomic(snap.to_dict())
+        self._write_atomic(rec.to_dict())
         log.warning(
             "kill_switch_latch: CLEARED by %s at %s",
-            snap.cleared_by, cleared_at,
+            rec.cleared_by, cleared_at,
         )
-        return snap
+        return rec
 
     # ------------------------------------------------------------------ #
     # Internal
@@ -311,8 +399,7 @@ class KillSwitchLatch:
 
 
 __all__ = [
-    "STATE_ARMED",
-    "STATE_TRIPPED",
     "KillSwitchLatch",
-    "LatchSnapshot",
+    "LatchRecord",
+    "LatchState",
 ]

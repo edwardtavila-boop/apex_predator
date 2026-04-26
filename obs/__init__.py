@@ -18,6 +18,7 @@ from apex_predator.obs.alerts import (
 )
 from apex_predator.obs.heartbeat import HeartbeatMonitor
 from apex_predator.obs.logger import StructuredLogger
+from apex_predator.obs import probes
 from apex_predator.obs.metrics import (
     REGISTRY,
     Metric,
@@ -39,4 +40,5 @@ __all__ = [
     "SlackAlerter",
     "StructuredLogger",
     "TelegramAlerter",
+    "probes",
 ]

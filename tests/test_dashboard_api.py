@@ -7,7 +7,11 @@ from __future__ import annotations
 import json
 
 import pytest
-from fastapi.testclient import TestClient
+
+# fastapi is an optional dep -- the dashboard runtime ships it but a
+# minimal-deps CI lane may not. Skip the whole module gracefully.
+pytest.importorskip("fastapi")
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture

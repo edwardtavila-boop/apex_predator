@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -73,8 +73,30 @@ class DispatchRoute(StrEnum):
     JARVIS_DISTILL       = "JARVIS_DISTILL"        # distiller said classifier is confident
     JARVIS_FREEZE        = "JARVIS_FREEZE"         # quota freeze
     JARVIS_VERDICT_CACHE = "JARVIS_VERDICT_CACHE"  # cascade L2 -- cached prior verdict
+    JARVIS_SPECULATOR    = "JARVIS_SPECULATOR"     # cascade L3/L4 -- cheap-tier ratified
     BATMAN_DEBATE        = "BATMAN_DEBATE"         # Claude-backed debate via BATMAN
     BATMAN_REVIEW        = "BATMAN_REVIEW"         # heavy strategic review (single-shot)
+
+
+# Cascade speculator config (P2b/P2c). Tunable via env vars.
+SPECULATOR_FLAG_ENV   = "APEX_CASCADE_SPECULATE"
+SPECULATOR_THRESHOLD  = 0.85   # min confidence to accept a speculator verdict
+SPECULATOR_TIERS      = ("haiku", "sonnet")  # try cheapest first
+
+
+_SPECULATOR_SYSTEM_PROMPT = (
+    "You are a verdict speculator for APEX PREDATOR's JARVIS gate.\n"
+    "Read the structured context, then output your vote in the EXACT "
+    "schema below. Be conservative: if the situation is genuinely "
+    "ambiguous, set CONFIDENCE low (< 0.7) so a heavier model can "
+    "adjudicate.\n\n"
+    "Output schema (strict, no preamble, no markdown):\n"
+    "VOTE: APPROVE | CONDITIONAL | DENY | DEFER\n"
+    "CONFIDENCE: 0.00..1.00\n"
+    "REASONS:\n"
+    "- short reason 1\n"
+    "- short reason 2 (optional)\n"
+)
 
 
 class DispatchResult(BaseModel):
@@ -187,6 +209,44 @@ class AvengersDispatch:
                     ),
                 )
 
+        # 4b. Cascade L3/L4: speculator -- try cheaper tiers (Haiku then
+        #     Sonnet) before the planned tier. If a cheap-tier verdict is
+        #     confident AND aligns with deterministic baseline, take it
+        #     and skip the full debate. Gated by APEX_CASCADE_SPECULATE.
+        if _speculator_enabled() and _stakes_warrant_speculation(plan):
+            spec_pair = self._cascade_speculate(
+                plan=plan, context=context, baseline=det,
+            )
+            if spec_pair is not None:
+                spec_verdict, spec_tier = spec_pair
+                tier_label = spec_tier.value
+                if self.verdict_cache is not None:
+                    self.verdict_cache.put(
+                        features,
+                        final_vote=spec_verdict.vote,
+                        route=DispatchRoute.JARVIS_SPECULATOR.value,
+                        stakes=(
+                            plan.stakes.stakes.value if plan.stakes else ""
+                        ),
+                        note=(
+                            f"speculator at {tier_label} "
+                            f"({spec_verdict.confidence:.2f})"
+                        ),
+                        now=now,
+                    )
+                return DispatchResult(
+                    ts=now,
+                    route=DispatchRoute.JARVIS_SPECULATOR,
+                    plan=plan,
+                    deterministic=det,
+                    claude_debate={f"SPECULATOR_{tier_label}": spec_verdict},
+                    final_vote=spec_verdict.vote,
+                    note=(
+                        f"cascade speculator hit at {tier_label} "
+                        f"(confidence {spec_verdict.confidence:.2f})"
+                    ),
+                )
+
         # 5. Claude-backed: BATMAN orchestrates the debate.
         claude_results = self._run_claude_debate(
             plan=plan, context=context, baseline=det,
@@ -222,6 +282,65 @@ class AvengersDispatch:
     # ---------------------------------------------------------------
     # Internals
     # ---------------------------------------------------------------
+    def _cascade_speculate(
+        self,
+        *,
+        plan: InvocationPlan,
+        context: StructuredContext,
+        baseline: DebateVerdict,
+    ) -> tuple[ParsedVerdict, "ModelTier"] | None:
+        """Try Haiku, then Sonnet -- skip the planned tier if a cheap one
+        is confident enough AND aligns with the deterministic baseline.
+
+        Returns (verdict, tier_used) on success, or None if no cheap-tier
+        verdict cleared the threshold.
+
+        The plan's stakes informs the ceiling: never speculate at or
+        above the planned tier (would be wasteful).
+        """
+        from apex_predator.brain.model_policy import ModelTier
+        ceiling = (
+            plan.stakes.model_tier if plan.stakes else ModelTier.OPUS
+        )
+        ceiling_rank = _TIER_RANK[ceiling]
+
+        # Build the user prompt once (per-call context).
+        user_prompt = (
+            "Context:\n"
+            f"  subsystem={context.subsystem}\n"
+            f"  action={context.action}\n"
+            f"  regime={context.regime} (conf {context.regime_confidence:.2f})\n"
+            f"  stress={context.stress_composite:.2f}\n"
+            f"  sizing_mult={context.sizing_mult:.2f}\n"
+            f"  r_at_risk={context.r_at_risk:.2f}\n"
+            f"  precedent_n={context.precedent_n}, "
+            f"win_rate={context.precedent_win_rate:.2f}\n"
+            f"  doctrine_bias={context.doctrine_net_bias:+.2f}\n"
+            f"  jarvis_baseline={context.jarvis_baseline_verdict}\n\n"
+            "Give your vote in the strict schema."
+        )
+
+        for tier_name in SPECULATOR_TIERS:
+            try_tier = ModelTier(tier_name)
+            # Don't speculate at or above the planned tier.
+            if _TIER_RANK[try_tier] >= ceiling_rank:
+                continue
+            artifact = self.fleet.speculate(
+                tier=try_tier,
+                system_prompt=_SPECULATOR_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+            )
+            if not artifact:
+                continue
+            verdict = parse_verdict(artifact)
+            # Accept if confident AND aligned with deterministic baseline.
+            if (
+                verdict.confidence >= SPECULATOR_THRESHOLD
+                and verdict.vote == baseline.final_vote
+            ):
+                return verdict, try_tier
+        return None
+
     def _route_from_plan(self, plan: InvocationPlan) -> DispatchRoute:
         """Map a no-invoke plan to a dispatch route."""
         if plan.escalation.jarvis_handles:
@@ -341,6 +460,34 @@ class AvengersDispatch:
         if margin < 0.15:
             return baseline.final_vote
         return winner[0]
+
+
+def _speculator_enabled() -> bool:
+    """True iff APEX_CASCADE_SPECULATE env var is truthy."""
+    import os
+    return os.environ.get(SPECULATOR_FLAG_ENV, "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def _stakes_warrant_speculation(plan: InvocationPlan) -> bool:
+    """Speculator only fires on HIGH/CRITICAL stakes -- the cases where
+    the plan would otherwise spend on Sonnet/Opus. At LOW/MEDIUM, the
+    plan already routes to Haiku/Sonnet so speculation buys little.
+    """
+    if plan.stakes is None:
+        return False
+    return plan.stakes.stakes.value in {"HIGH", "CRITICAL"}
+
+
+# Tier rank for "is X cheaper than Y" comparison.
+# Built lazily-imported to avoid a top-level model_policy dep cycle.
+def _build_tier_rank() -> dict[Any, int]:
+    from apex_predator.brain.model_policy import ModelTier
+    return {ModelTier.HAIKU: 0, ModelTier.SONNET: 1, ModelTier.OPUS: 2}
+
+
+_TIER_RANK = _build_tier_rank()
 
 
 def _features_from(ctx: StructuredContext) -> dict[str, float]:

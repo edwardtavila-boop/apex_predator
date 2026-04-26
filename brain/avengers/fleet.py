@@ -217,6 +217,60 @@ class Fleet:
 
     # --- metrics -----------------------------------------------------------
 
+    def speculate(
+        self,
+        *,
+        tier: ModelTier,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> str:
+        """Run a one-off prompt at the given tier without persona dressing.
+
+        Bypasses the persona's ``_system_prompt`` -- the caller provides
+        the full prompt. Used by the cascade speculator (P2b) when we
+        want a structured verdict at a cheaper tier than the plan
+        called for, to see if a smaller model is confident enough to
+        skip the full debate.
+
+        Routes via the persona that owns ``tier`` (HAIKU=Robin,
+        SONNET=Alfred, OPUS=Batman) so the executor + journal path
+        stay consistent. Does NOT consult JARVIS pre-flight (the parent
+        dispatch already did that via ``governor.plan()``).
+
+        Returns the executor's raw text output. Caller is responsible
+        for parsing (typically via ``parse_verdict``) and for any
+        confidence / alignment gating.
+        """
+        pid = _TIER_TO_PERSONA.get(tier)
+        if pid is None:
+            return ""
+        persona = self._personas.get(pid)
+        if persona is None:
+            return ""
+        # Build a minimal envelope so the executor signature is satisfied.
+        # The category is informational only -- the executor doesn't gate
+        # on it, only the system_prompt + user_prompt drive the response.
+        from apex_predator.brain.avengers.base import (
+            SubsystemId,
+            TaskCategory,
+            TaskEnvelope,
+        )
+        envelope = TaskEnvelope(
+            category=TaskCategory.TRIVIAL_LOOKUP,
+            goal="cascade speculator query",
+            caller=SubsystemId.FRAMEWORK_AUTOPILOT,
+            requested_tier=tier,
+        )
+        try:
+            return persona._executor(  # noqa: SLF001 -- dispatcher hook
+                tier=tier,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                envelope=envelope,
+            )
+        except Exception:  # noqa: BLE001 -- speculator failure = fall through
+            return ""
+
     def metrics(self) -> FleetMetrics:
         """Return a denormalized snapshot of the Fleet's usage."""
         return FleetMetrics(

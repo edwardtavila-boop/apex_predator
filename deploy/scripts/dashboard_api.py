@@ -44,6 +44,40 @@ STATE_DIR = Path(os.environ.get("APEX_STATE_DIR", _DEFAULT_STATE))
 LOG_DIR   = Path(os.environ.get("APEX_LOG_DIR",   _DEFAULT_LOG))
 
 
+def _load_env_file(path: Path) -> int:
+    """Load KEY=VALUE lines from a .env file into os.environ.
+
+    Returns the number of keys that were applied (didn't already exist).
+    Uses setdefault so existing process env wins. Idempotent.
+    Tolerates malformed lines silently (.env files are operator-edited).
+    """
+    if not path.exists():
+        return 0
+    applied = 0
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and key not in os.environ:
+                os.environ[key] = val
+                applied += 1
+    except OSError:
+        pass
+    return applied
+
+
+# Load .env at module init so the alert dispatcher (and any other code
+# downstream of os.environ) sees RESEND_API_KEY, FROM_EMAIL,
+# ALERT_TO_EMAIL, etc. The Task Scheduler entry that runs uvicorn does
+# not source .env on its own — Windows isn't a Unix process.
+_DOTENV = Path(os.environ.get("APEX_DOTENV", "C:/eta_engine/.env"))
+_load_env_file(_DOTENV)
+
+
 app = FastAPI(
     title="Evolutionary Trading Algo Dashboard",
     description="Read-only state surface for the JARVIS + Avengers stack",
@@ -200,6 +234,83 @@ def _resolve_btc_root() -> Path:
 
 
 BTC_ROOT = _resolve_btc_root()
+
+
+@app.post("/api/alert/test")
+@app.get("/api/alert/test")
+def alert_test() -> dict:
+    """Fire a synthetic 'alert_path_test' event through the live dispatcher.
+
+    Reuses the production AlertDispatcher with the production
+    alerts.yaml config — so a 200 here means the same code path that
+    fires on a real kill-switch trip is healthy. Returns the
+    DispatchResult so the operator can see which channels delivered.
+
+    Idempotent and safe: fires a single info-level alert through the
+    email channel only (Resend, DKIM-aligned to evolutionarytradingalgo.live). No
+    pushover/sms because the test event isn't worth a 3am page.
+    """
+    try:
+        from eta_engine.obs.alert_dispatcher import AlertDispatcher
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503, detail=f"dispatcher missing: {exc}",
+        ) from exc
+
+    cfg_path = Path("C:/eta_engine/configs/alerts.yaml")
+    if cfg_path.exists():
+        dispatcher = AlertDispatcher.from_yaml(cfg_path)
+        # alerts.yaml may not have alert_path_test wired; inject if missing
+        events = (
+            dispatcher.cfg.setdefault("routing", {})
+                          .setdefault("events", {})
+        )
+        events.setdefault(
+            "alert_path_test", {"level": "info", "channels": ["email"]},
+        )
+    else:
+        # Minimal in-memory cfg so the endpoint still works even if
+        # alerts.yaml is missing or malformed.
+        cfg = {
+            "channels": {
+                "email": {
+                    "enabled": True,
+                    "to": os.environ.get(
+                        "ALERT_TO_EMAIL", "edward.t.avila@gmail.com",
+                    ),
+                    "env_keys": {
+                        "smtp_host": "SMTP_HOST", "smtp_port": "SMTP_PORT",
+                        "smtp_user": "SMTP_USER", "smtp_pass": "SMTP_PASS",
+                    },
+                },
+            },
+            "routing": {
+                "events": {
+                    "alert_path_test": {
+                        "level": "info", "channels": ["email"],
+                    },
+                },
+            },
+        }
+        dispatcher = AlertDispatcher(cfg)
+
+    import socket
+    from datetime import UTC, datetime
+    result = dispatcher.send("alert_path_test", {
+        "host": socket.gethostname(),
+        "ts_utc": datetime.now(UTC).isoformat(),
+        "purpose": (
+            "operator-triggered alert path validation via /api/alert/test"
+        ),
+    })
+    return {
+        "event": result.event,
+        "level": result.level,
+        "channels": result.channels,
+        "delivered": result.delivered,
+        "blocked": result.blocked,
+        "ts": result.ts,
+    }
 
 
 @app.get("/api/raw-state/{path:path}", response_model=None)

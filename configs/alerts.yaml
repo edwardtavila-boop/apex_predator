@@ -32,16 +32,31 @@ channels:
       from_number:  TWILIO_FROM
     to_number: "+1XXXXXXXXXX"   # populate on go-live
 
+  # JARVIS Master Command Center web-push channel. Sends VAPID-signed
+  # browser push notifications to every subscription stored by
+  # POST /api/push/subscribe (mcc_push_subscriptions.jsonl). The
+  # transport is obs.mcc_push_sender.send_to_all, registered in
+  # AlertDispatcher._deliver. No-ops gracefully when pywebpush isn't
+  # installed or the MCC_VAPID_* env vars aren't set -- the channel
+  # reports "send_failed" in the dispatch journal but never crashes
+  # the dispatcher.
+  mcc_push:
+    enabled: true
+    env_keys:
+      vapid_public:  MCC_VAPID_PUBLIC_KEY
+      vapid_private: MCC_VAPID_PRIVATE_KEY
+      vapid_subject: MCC_VAPID_SUBJECT
+
 # Routing — which events go to which channel
 routing:
   events:
     bot_entry:         { level: info,     channels: [pushover] }
     bot_exit_win:      { level: info,     channels: [pushover] }
     bot_exit_loss:     { level: info,     channels: [pushover] }
-    circuit_trip:      { level: warn,     channels: [pushover, email] }
-    dd_trip_wire_hit:  { level: critical, channels: [pushover, email, sms] }
-    apex_rule_violate: { level: critical, channels: [pushover, email, sms] }
-    kill_switch:       { level: critical, channels: [pushover, email, sms] }
+    circuit_trip:      { level: warn,     channels: [pushover, email, mcc_push] }
+    dd_trip_wire_hit:  { level: critical, channels: [pushover, email, sms, mcc_push] }
+    apex_rule_violate: { level: critical, channels: [pushover, email, sms, mcc_push] }
+    kill_switch:       { level: critical, channels: [pushover, email, sms, mcc_push] }
     firm_red_gate:     { level: warn,     channels: [pushover, email] }
     preflight_fail:    { level: warn,     channels: [pushover, email] }
     weekly_review:     { level: info,     channels: [email] }
@@ -51,7 +66,7 @@ routing:
     # the operator gets a mobile push and a paper trail for post-mortem.
     # Re-fire on recovery+re-entry; sustained-drift re-fire is the
     # v0.2.x scope per the residual ledger.
-    broker_equity_drift: { level: warn,     channels: [pushover, email] }
+    broker_equity_drift: { level: warn,     channels: [pushover, email, mcc_push] }
     # ApexRuntime lifecycle + verdict-execution events. All of these
     # were being dispatched in code (run_apex_live.py) but were not
     # registered here, so AlertDispatcher silently dropped them into
@@ -65,10 +80,10 @@ routing:
     # pushover + email so the operator (and inbox) sees an audit
     # entry tying the run to a human authorization.
     runtime_unpaused:     { level: info,     channels: [pushover, email] }
-    boot_refused:         { level: critical, channels: [pushover, email, sms] }
+    boot_refused:         { level: critical, channels: [pushover, email, sms, mcc_push] }
     bot_error:            { level: warn,     channels: [pushover, email] }
-    apex_preempt:         { level: warn,     channels: [pushover, email] }
-    kill_switch_latched:  { level: critical, channels: [pushover, email, sms] }
+    apex_preempt:         { level: warn,     channels: [pushover, email, mcc_push] }
+    kill_switch_latched:  { level: critical, channels: [pushover, email, sms, mcc_push] }
     consistency_status:   { level: warn,     channels: [pushover, email] }
     # Cron-triggered nightly audit summary. The audit always emits
     # (pass / warn / fail verdict) so we route to email-only at INFO
@@ -82,13 +97,13 @@ routing:
     # full account size instead of slicing it. WARN level (pushover
     # + email) so the operator sees it the next time they look at
     # the device but does not get woken up by a config bug.
-    tier_a_invariant_violation: { level: warn, channels: [pushover, email] }
+    tier_a_invariant_violation: { level: warn, channels: [pushover, email, mcc_push] }
     # SLO tracker breach + recovery (sla_alerter.py). Breaches paged
     # via pushover + email; recoveries to email-only since they're
     # confirmatory ("the thing that was broken is now fine") and
     # don't warrant interrupting the operator. Cooldown logic in
     # sla_alerter.py prevents per-probe alert storms.
-    apex_sla_breach:      { level: warn,     channels: [pushover, email] }
+    apex_sla_breach:      { level: warn,     channels: [pushover, email, mcc_push] }
     apex_sla_recovered:   { level: info,     channels: [email] }
 
 # Rate limits

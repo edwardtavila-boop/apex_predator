@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +47,13 @@ logger = logging.getLogger(__name__)
 
 # Path -- MUST stay in sync with scripts.jarvis_dashboard PUSH_SUBSCRIPTIONS.
 PUSH_SUBSCRIPTIONS: Path = Path("~/.local/state/apex_predator/mcc_push_subscriptions.jsonl").expanduser()
+
+# Side-channel file: when a webpush call returns 410 GONE the endpoint is
+# dead and should be pruned. We append here from the alert path (O_APPEND
+# is safe under concurrent senders) and let scripts._mcc_push_housekeeping
+# do the actual prune offline. This keeps writes from the alert-send hot
+# path out of the live subscriptions file.
+DEAD_SUBSCRIPTIONS: Path = Path("~/.local/state/apex_predator/mcc_push_dead.jsonl").expanduser()
 
 # Default TTL for push messages on the push service (seconds).
 DEFAULT_TTL: int = 3600
@@ -59,7 +66,7 @@ _SEVERITY_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass
 class PushResult:
     """Per-call summary suitable for the alert-dispatcher journal."""
 
@@ -67,6 +74,7 @@ class PushResult:
     delivered: int
     failed: int
     skipped: list[str]  # human-readable reasons (missing-deps / no-keys / no-subs)
+    dead_endpoints: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -172,6 +180,7 @@ def send_to_all(
 
     delivered = 0
     failed = 0
+    dead_endpoints: list[str] = []
     for sub in subs:
         try:
             webpush(
@@ -185,15 +194,21 @@ def send_to_all(
             delivered += 1
         except WebPushException as exc:
             failed += 1
-            # 410 GONE => subscription is dead; the next housekeeping cycle
-            # can prune it. We don't prune inline (writes from a sender path
-            # are an accident waiting to happen during a critical alert).
+            status = getattr(getattr(exc, "response", None), "status_code", None)
             logger.warning(
                 "mcc_push_sender: WebPush failed (endpoint=%s..., status=%s): %s",
                 sub["endpoint"][:60],
-                getattr(exc.response, "status_code", "?"),
+                status if status is not None else "?",
                 exc,
             )
+            # 410 GONE => the push service has revoked this subscription.
+            # Append to a dedicated dead-list file (O_APPEND safe under
+            # concurrent senders); scripts._mcc_push_housekeeping prunes
+            # the live subscriptions file offline. We never write to the
+            # subscriptions file from the alert-send path.
+            if status == 410:
+                dead_endpoints.append(sub["endpoint"])
+                _record_dead_endpoint(sub["endpoint"])
         except Exception as exc:  # noqa: BLE001 -- alerts must never crash the dispatcher
             failed += 1
             logger.warning(
@@ -207,4 +222,15 @@ def send_to_all(
         delivered=delivered,
         failed=failed,
         skipped=skipped,
+        dead_endpoints=dead_endpoints,
     )
+
+
+def _record_dead_endpoint(endpoint: str) -> None:
+    """Append a dead endpoint to ``DEAD_SUBSCRIPTIONS``. Best-effort, never raises."""
+    try:
+        DEAD_SUBSCRIPTIONS.parent.mkdir(parents=True, exist_ok=True)
+        with DEAD_SUBSCRIPTIONS.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"endpoint": endpoint}) + "\n")
+    except OSError as exc:
+        logger.warning("mcc_push_sender: could not record dead endpoint: %s", exc)

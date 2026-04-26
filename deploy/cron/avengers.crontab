@@ -54,3 +54,9 @@ APEX_ROOT=__INSTALL_DIR__
 0 2 * * 0 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISK_CLEANUP >> $HOME/.local/log/apex_predator/cron.log 2>&1 # apex-predator:avengers
 # Every minute -- Prometheus metrics flush
 * * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMETHEUS_EXPORT >> $HOME/.local/log/apex_predator/cron.log 2>&1 # apex-predator:avengers
+
+# --------- MCC (Master Command Center push housekeeping) ---------------------
+# Daily 04:00 -- prune dead Web-Push subscriptions captured by
+# obs.mcc_push_sender (HTTP 410 GONE responses appended to mcc_push_dead.jsonl).
+# Idempotent; safe to run repeatedly. See scripts/_mcc_push_housekeeping.py.
+0 4 * * * cd $APEX_ROOT && ./.venv/bin/python -m apex_predator.scripts._mcc_push_housekeeping --quiet >> $HOME/.local/log/apex_predator/cron.log 2>&1 # apex-predator:avengers

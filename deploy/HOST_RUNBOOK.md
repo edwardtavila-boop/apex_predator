@@ -134,23 +134,53 @@ sudo timedatectl set-timezone UTC    # all logs + schedules run on UTC
 sudo timedatectl set-ntp true
 ```
 
-### 2.7 Optional — Cloudflare Tunnel for the dashboard
+### 2.7 Cloudflare Tunnel for the Master Command Center
 
-Skip if you only ever ssh in. If you want `https://apex.yourdomain.com`
-to reach the Streamlit dashboard:
+The **Master Command Center** (`scripts/jarvis_dashboard.py`) is the canonical
+operator console. It's exposed remotely via a Cloudflare Named Tunnel so the
+VPS keeps no public ports open and you reach it from any phone or laptop at
+`https://cmd.<your-domain>`. Auth is handled at the edge by **Cloudflare
+Access** (no app-side credentials).
 
 ```bash
-# See deploy/scripts/cloudflare_setup_named.ps1 for the Windows-side
-# equivalent. On Linux:
+# 1) Install cloudflared
 curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cf.deb
 sudo dpkg -i cf.deb
-cloudflared tunnel login
-cloudflared tunnel create apex-live
-# route: `apex.yourdomain.com -> http://localhost:8501`
-sudo cloudflared service install <tunnel-token>
+
+# 2) Authenticate + create the tunnel
+cloudflared tunnel login                     # browser auth, picks the zone
+cloudflared tunnel create jarvis-mcc         # creates tunnel + creds JSON
+
+# 3) Route DNS: cmd.<your-domain> -> tunnel
+cloudflared tunnel route dns jarvis-mcc cmd.<your-domain>
+
+# 4) Wire ingress -> the MCC loopback port (default 8765)
+mkdir -p ~/.cloudflared && cat > ~/.cloudflared/config.yml <<'EOF'
+tunnel: jarvis-mcc
+credentials-file: /home/apex/.cloudflared/<TUNNEL-UUID>.json
+ingress:
+  - hostname: cmd.<your-domain>
+    service: http://localhost:8765
+  - service: http_status:404
+EOF
+
+# 5) Run as a system service
+sudo cloudflared service install
+sudo systemctl enable --now cloudflared
 ```
 
-UFW stays closed to 8501 — the tunnel speaks loopback only.
+Then in the **Cloudflare Zero Trust dashboard** → Access → Applications →
+Add → Self-hosted, set the application domain to `cmd.<your-domain>` and add
+a single policy: "Allow — Emails ending in `@<your-email-domain>`" (or a
+fixed allow-list of emails). This forces a Google/email login at the edge
+before any traffic reaches the MCC.
+
+UFW stays closed to 8765 — the tunnel speaks loopback only. Once it's up,
+open `https://cmd.<your-domain>` on your phone and tap **Add to Home Screen**
+to install the MCC as a PWA. The app icon, theme, and offline shell are
+served by the MCC itself (`/manifest.webmanifest`, `/sw.js`, `/icon.svg`).
+
+Windows / mac equivalents: `deploy/scripts/cloudflare_setup_named.ps1`.
 
 ---
 

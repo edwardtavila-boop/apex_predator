@@ -34,7 +34,8 @@ journalctl --user -u jarvis-live -f            # tail JARVIS
 | Env secrets | `~/apex_predator/.env` (chmod 600) | read-only |
 | JARVIS live daemon | `systemd --user jarvis-live.service` | always |
 | Avengers dispatcher | `systemd --user avengers-fleet.service` | always |
-| Dashboard backend | `systemd --user apex-dashboard.service` | always |
+| **Master Command Center** | `systemd --user jarvis-command-center.service` (port 8765) | **always** |
+| Dashboard backend (FastAPI API) | `systemd --user apex-dashboard.service` (port 8000) | always |
 | Background tasks | crontab (12 entries tagged `apex-predator:avengers`) | per task cadence |
 | State | `~/.local/state/apex_predator/` | writable by services |
 | Logs | `~/.local/log/apex_predator/` | append-only |

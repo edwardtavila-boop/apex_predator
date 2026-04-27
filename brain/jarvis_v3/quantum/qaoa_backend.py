@@ -132,19 +132,18 @@ def solve_with_qaoa(
     # Sampler selection (qiskit_algorithms 0.4+ QAOA takes a Sampler,
     # not an Estimator -- QAOA samples the optimal bitstring rather
     # than estimating an expectation value).
+    #
+    # We prefer ``qiskit.primitives.StatevectorSampler`` for the local
+    # path because it accepts QAOA's parameterized ansatz directly
+    # without needing a basis-gate transpilation pass. Aer's V2
+    # SamplerV2 trips on "unknown instruction: QAOA" because QAOA
+    # is a custom gate that needs decomposition.
     sampler = None
     sampler_kind = ""
     if use_simulator:
-        try:
-            from qiskit_aer.primitives import SamplerV2 as _AerSampler
-            sampler = _AerSampler(seed=seed)
-            sampler_kind = "qiskit_aer.SamplerV2"
-        except (ImportError, TypeError):
-            pass
-        if sampler is None:
-            from qiskit.primitives import StatevectorSampler
-            sampler = StatevectorSampler(seed=seed)
-            sampler_kind = "qiskit.primitives.StatevectorSampler"
+        from qiskit.primitives import StatevectorSampler
+        sampler = StatevectorSampler(seed=seed)
+        sampler_kind = "qiskit.primitives.StatevectorSampler"
     else:
         # Cloud path: try IBM Runtime; fall back to local simulator
         try:

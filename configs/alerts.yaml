@@ -85,6 +85,17 @@ routing:
     # sla_alerter.py prevents per-probe alert storms.
     apex_sla_breach:      { level: warn,     channels: [pushover, email] }
     apex_sla_recovered:   { level: info,     channels: [email] }
+    # Lever 1 (kaizen, 2026-04-26) -- daily +1 ticket from the kaizen
+    # close-cycle. Routed to email-only at INFO so the operator gets a
+    # paper trail without being paged. Run by `Eta-Kaizen-DailyClose`
+    # at 22:30 ET; see scripts/run_kaizen_close_cycle.py.
+    kaizen_plus_one:        { level: info,     channels: [email] }
+    # Lever 7 (regime-shift early warning, 2026-04-26) -- JARVIS denial
+    # rate spiked above threshold for the recent window. Could mean a
+    # regime shift, a feed disconnect, or a config bug. WARN level so
+    # the operator gets a mobile push but isn't woken up. Cooldown logic
+    # in obs/jarvis_denial_rate_alerter.py prevents per-minute spam.
+    jarvis_denial_rate_high: { level: warn,    channels: [pushover, email] }
 
 # Rate limits
 rate_limit:

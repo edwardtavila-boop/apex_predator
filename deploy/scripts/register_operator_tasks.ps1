@@ -181,6 +181,24 @@ $tasks = @(
         Cwd        = $MnqEtaBotDir
         Trigger    = "Weekly-Sunday-1900"
         Notes      = "Sunday 19:00 post-gamma shadow harness"
+    },
+    # Lever 1 (kaizen, 2026-04-26): close the daily cycle, produce the +1 ticket.
+    @{
+        Name       = "Eta-Kaizen-DailyClose"
+        Exec       = $Python
+        Args       = "-m eta_engine.scripts.run_kaizen_close_cycle"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Daily-2230"
+        Notes      = "Daily 22:30 -- close kaizen cycle + produce mandatory +1 ticket. Doctrine: every cycle MUST emit a ticket."
+    },
+    # Lever 7 (regime-shift alert, 2026-04-26): denial-rate watcher.
+    @{
+        Name       = "Eta-Jarvis-DenialRate"
+        Exec       = $Python
+        Args       = "-m eta_engine.obs.jarvis_denial_rate_alerter"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Every1Min"
+        Notes      = "Every 1 min -- if JARVIS denial rate >= 50% for 5+ min, fire Resend alert (with cooldown)"
     }
 )
 

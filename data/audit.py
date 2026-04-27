@@ -72,15 +72,30 @@ def _resolve_library_lookup(
     * ``funding`` — files written as ``<X>FUND_<TF>.csv`` by
       ``scripts/fetch_funding_rates``, looked up under the synthetic
       symbol ``<X>FUND``.
-    * ``onchain`` / ``sentiment`` / ``macro`` — not yet covered by
-      the bar-CSV library; reported as missing until those feed
-      shapes are added (see fetch_funding_rates pattern as the
-      template).
+    * ``onchain`` — files written as ``<X>ONCHAIN_<TF>.csv`` by
+      ``scripts/fetch_onchain_history``, looked up under the synthetic
+      symbol ``<X>ONCHAIN``. Defaults to daily ("D") when ``timeframe``
+      is None on the requirement (the canonical Glassnode-style cadence).
+    * ``sentiment`` — files written as ``<X>SENT_<TF>.csv`` looked up
+      under ``<X>SENT``. Same default-D fallback as onchain.
+    * ``macro`` — files written as ``<NAME>MACRO_<TF>.csv`` (e.g.
+      ``DXYMACRO_D.csv``). Unlike the others the symbol IS the macro
+      ticker (DXY, VIX, FEAR_GREED, etc.) so the synthetic suffix goes
+      after the requirement's symbol verbatim.
     """
     if _is_bar_kind(req.kind) and req.timeframe is not None:
         return lib.get(symbol=req.symbol, timeframe=req.timeframe)
     if req.kind == "funding" and req.timeframe is not None:
         return lib.get(symbol=f"{req.symbol}FUND", timeframe=req.timeframe)
+    if req.kind == "onchain":
+        tf = req.timeframe or "D"
+        return lib.get(symbol=f"{req.symbol}ONCHAIN", timeframe=tf)
+    if req.kind == "sentiment":
+        tf = req.timeframe or "D"
+        return lib.get(symbol=f"{req.symbol}SENT", timeframe=tf)
+    if req.kind == "macro":
+        tf = req.timeframe or "D"
+        return lib.get(symbol=f"{req.symbol}MACRO", timeframe=tf)
     return None
 
 

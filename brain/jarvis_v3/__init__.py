@@ -100,4 +100,9 @@ __all__ = [
     "ood_detector",
     "self_drift_monitor",
     "postmortem",
+    # Wave-14 explainability + operator-facing layer
+    "narrative_generator",
+    "operator_coach",
+    "skill_health_registry",
+    "daily_brief",
 ]

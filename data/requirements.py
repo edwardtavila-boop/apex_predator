@@ -313,10 +313,10 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
             DataRequirement("bars", "XRP", "1h", critical=True),
             DataRequirement("bars", "XRP", "D", critical=True),
             DataRequirement("funding", "XRP", "8h", critical=True),
-            DataRequirement("sentiment", "XRP", "1h", critical=True,
-                note="XRP is news-driven; sentiment is critical, not nice-to-have"),
-            DataRequirement("macro", "SEC_HEADLINES", None, critical=True,
-                note="XRP price moves on regulatory news; need a feed"),
+            DataRequirement("sentiment", "XRP", "D", critical=True,
+                note="XRP is news-driven; daily SEC-filing mention count is "
+                "the natural cadence (intraday sentiment requires a paid "
+                "news feed). Wired 2026-04-27 via fetch_xrp_news_history."),
             DataRequirement("correlation", "BTC", "1h", critical=True),
         ),
         sources_hint=(

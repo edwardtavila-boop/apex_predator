@@ -63,6 +63,16 @@ DEFAULT_ROOTS: tuple[Path, ...] = (
     # call surfaces the new datasets automatically.
     Path(r"C:\crypto_data"),
     Path(r"C:\crypto_data\history"),
+    # On-chain time series (BTCONCHAIN_D.csv etc.) written by
+    # scripts/fetch_onchain_history. Sentiment + macro feeds use the
+    # same root + the SENT/MACRO suffix conventions documented in
+    # data.audit._resolve_library_lookup.
+    Path(r"C:\crypto_data\onchain"),
+    Path(r"C:\crypto_data\sentiment"),
+    Path(r"C:\crypto_data\macro"),
+    # IBKR-native crypto bars for the pre-live drift comparison
+    # (scripts/fetch_ibkr_crypto_bars writes here).
+    Path(r"C:\crypto_data\ibkr\history"),
 )
 
 

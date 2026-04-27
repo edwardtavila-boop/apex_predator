@@ -40,13 +40,51 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
 
-_BASE = "https://fapi.binance.com/fapi/v1/fundingRate"
+# Binance is US-geo-blocked; Bybit is the US-friendly default.
+# Bybit funding history: https://api.bybit.com/v5/market/funding/history
+_BYBIT_BASE = "https://api.bybit.com/v5/market/funding/history"
+_BINANCE_BASE = "https://fapi.binance.com/fapi/v1/fundingRate"
 _USER_AGENT = "eta-engine/fetch_btc_funding_extended"
 
 
-def _fetch_chunk(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
+def _fetch_chunk_bybit(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Bybit funding history (US-friendly). Returns up to 200 records."""
     url = (
-        f"{_BASE}?symbol={symbol}&startTime={start_ms}&endTime={end_ms}&limit=1000"
+        f"{_BYBIT_BASE}?category=linear&symbol={symbol}"
+        f"&startTime={start_ms}&endTime={end_ms}&limit=200"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(data, dict):
+                return []
+            result = data.get("result") or {}
+            rows = result.get("list") or []
+            # Normalize Bybit shape -> Binance shape
+            out = []
+            for r in rows:
+                try:
+                    out.append({
+                        "fundingTime": int(r["fundingRateTimestamp"]),
+                        "fundingRate": float(r["fundingRate"]),
+                    })
+                except (KeyError, ValueError, TypeError):
+                    continue
+            return out
+    except urllib.error.HTTPError as exc:
+        body = exc.read()[:200] if hasattr(exc, "read") else b""
+        print(f"  Bybit HTTP {exc.code}: {body!r}")
+        return []
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        print(f"  Bybit fetch error: {exc!r}")
+        return []
+
+
+def _fetch_chunk_binance(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Binance funding (geo-blocked from US — fallback only)."""
+    url = (
+        f"{_BINANCE_BASE}?symbol={symbol}&startTime={start_ms}&endTime={end_ms}&limit=1000"
     )
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
@@ -55,11 +93,19 @@ def _fetch_chunk(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
             return data if isinstance(data, list) else []
     except urllib.error.HTTPError as exc:
         body = exc.read()[:200] if hasattr(exc, "read") else b""
-        print(f"  HTTP {exc.code}: {body!r}")
+        print(f"  Binance HTTP {exc.code}: {body!r}")
         return []
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        print(f"  fetch error: {exc!r}")
+        print(f"  Binance fetch error: {exc!r}")
         return []
+
+
+def _fetch_chunk(symbol: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Try Bybit first (US-friendly), fall back to Binance."""
+    rows = _fetch_chunk_bybit(symbol, start_ms, end_ms)
+    if rows:
+        return rows
+    return _fetch_chunk_binance(symbol, start_ms, end_ms)
 
 
 def fetch_funding(

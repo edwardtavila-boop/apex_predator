@@ -50,8 +50,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
 
-_BASE = "https://fapi.binance.com/futures/data/openInterestHist"
+# Binance is US-geo-blocked; Bybit is the US-friendly default.
+# Bybit OI history: https://api.bybit.com/v5/market/open-interest
+_BYBIT_BASE = "https://api.bybit.com/v5/market/open-interest"
+_BINANCE_BASE = "https://fapi.binance.com/futures/data/openInterestHist"
 _USER_AGENT = "eta-engine/fetch_btc_open_interest"
+
+# Bybit's intervalTime takes specific values
+_TF_TO_BYBIT_INTERVAL: dict[str, str] = {
+    "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h",
+    "4h": "4h", "1d": "1d",
+}
 
 _TF_TO_PERIOD: dict[str, str] = {
     "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h",
@@ -59,10 +68,43 @@ _TF_TO_PERIOD: dict[str, str] = {
 }
 
 
-def _fetch_chunk(symbol: str, period: str, start_ms: int, end_ms: int) -> list[dict]:
-    """Binance returns latest 500 starting from end_ms backward when start is set."""
+def _fetch_chunk_bybit(
+    symbol: str, period: str, start_ms: int, end_ms: int,
+) -> list[dict]:
+    """Bybit OI history (US-friendly). Returns 200 most recent records
+    in [startTime, endTime]. Schema differs from Binance — normalize
+    in the caller.
+    """
+    interval = _TF_TO_BYBIT_INTERVAL.get(period)
+    if interval is None:
+        return []
     url = (
-        f"{_BASE}?symbol={symbol}&period={period}"
+        f"{_BYBIT_BASE}?category=linear&symbol={symbol}"
+        f"&intervalTime={interval}&startTime={start_ms}&endTime={end_ms}&limit=200"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(data, dict):
+                return []
+            result = data.get("result") or {}
+            return result.get("list") or []
+    except urllib.error.HTTPError as exc:
+        body = exc.read()[:200] if hasattr(exc, "read") else b""
+        print(f"  Bybit HTTP {exc.code}: {body!r}")
+        return []
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        print(f"  Bybit fetch error: {exc!r}")
+        return []
+
+
+def _fetch_chunk_binance(
+    symbol: str, period: str, start_ms: int, end_ms: int,
+) -> list[dict]:
+    """Binance OI history (geo-blocked from US — fallback only)."""
+    url = (
+        f"{_BINANCE_BASE}?symbol={symbol}&period={period}"
         f"&startTime={start_ms}&endTime={end_ms}&limit=500"
     )
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
@@ -72,11 +114,38 @@ def _fetch_chunk(symbol: str, period: str, start_ms: int, end_ms: int) -> list[d
             return data if isinstance(data, list) else []
     except urllib.error.HTTPError as exc:
         body = exc.read()[:200] if hasattr(exc, "read") else b""
-        print(f"  HTTP {exc.code}: {body!r}")
+        print(f"  Binance HTTP {exc.code}: {body!r}")
         return []
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        print(f"  fetch error: {exc!r}")
+        print(f"  Binance fetch error: {exc!r}")
         return []
+
+
+def _normalize_bybit(rows: list[dict]) -> list[dict]:
+    """Bybit row shape: {timestamp: '...', openInterest: '...'}.
+    Returns list of {time, sumOpenInterest, sumOpenInterestValue}.
+    Bybit returns OI in BASE currency; USD value not directly given,
+    so we leave open_interest_usd as 0 (price-multiplied later if needed).
+    """
+    out: list[dict] = []
+    for r in rows:
+        try:
+            ts_ms = int(r["timestamp"])
+            oi = float(r["openInterest"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        out.append({"timestamp": ts_ms, "sumOpenInterest": str(oi),
+                    "sumOpenInterestValue": "0"})
+    return out
+
+
+def _fetch_chunk(symbol: str, period: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Try Bybit first (US-friendly), fall back to Binance."""
+    rows = _fetch_chunk_bybit(symbol, period, start_ms, end_ms)
+    if rows:
+        return _normalize_bybit(rows)
+    rows = _fetch_chunk_binance(symbol, period, start_ms, end_ms)
+    return rows
 
 
 def fetch_oi(

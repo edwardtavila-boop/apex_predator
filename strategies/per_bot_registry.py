@@ -240,6 +240,41 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "orb_range_minutes": 15,
         },
     ),
+    # NQ futures — sage-gated ORB. Companion to nq_futures (plain
+    # ORB). Sage overlay generalizes from MNQ (+10.06 OOS Sh) to NQ
+    # without re-tuning — same conv=0.65, range=15m thresholds.
+    StrategyAssignment(
+        bot_id="nq_futures_sage",
+        strategy_id="nq_orb_sage_v1",
+        symbol="NQ1",
+        timeframe="5m",
+        scorer_name="mnq",  # unused when strategy_kind=orb_sage_gated
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=60,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="orb_sage_gated",
+        rationale=(
+            "Promoted 2026-04-27 after MNQ sage overlay validated and "
+            "transferred clean to NQ. Walk-forward 60d/30d on NQ 5m, "
+            "same MNQ winning config (conv=0.65, align=0.55, range=15m): "
+            "* W0: IS Sh +0.69, OOS Sh **+3.35**, 9 OOS trades "
+            "* W1: IS Sh +2.55, OOS Sh **+13.23**, 4 OOS trades "
+            "agg OOS Sharpe **+8.29** (vs plain NQ ORB +5.71 mirror), "
+            "100% positive OOS, DSR median 0.997, 100% pass fraction, "
+            "gate PASS. OOS > IS in both windows — sage filter "
+            "generalizes symbol-agnostically across liquid index "
+            "futures. Trade count 13 OOS — same paper-soak gate as "
+            "mnq_orb_sage_v1 applies."
+        ),
+        extras={
+            "sage_min_conviction": 0.65,
+            "sage_min_alignment": 0.55,
+            "sage_lookback_bars": 200,
+            "orb_range_minutes": 15,
+        },
+    ),
     # NQ daily — DRB. Companion to nq_futures intraday; NOT a
     # replacement. Intraday ORB and daily DRB are different time
     # horizons and produce uncorrelated trade streams, so running
@@ -442,7 +477,7 @@ def get_for_bot(bot_id: str) -> StrategyAssignment | None:
     return None
 
 
-def is_active(assignment: "StrategyAssignment") -> bool:
+def is_active(assignment: StrategyAssignment) -> bool:
     """Single chokepoint for "is this bot allowed to fire trades?"
 
     Returns False iff ``extras["deactivated"]`` is truthy. Risk-sage

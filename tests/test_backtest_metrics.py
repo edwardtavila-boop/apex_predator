@@ -20,7 +20,28 @@ def test_compute_sharpe_smoke() -> None:
     from eta_engine.backtest.metrics import compute_sharpe
 
     assert callable(compute_sharpe)
-    # TODO: invoke with realistic inputs and assert on output
+
+
+def test_compute_sharpe_handles_fp_noise_constant_returns() -> None:
+    """Three identical -1pct returns must NOT blow up to -1.2e+16.
+
+    Regression: 2026-04-27 ETH/SOL walk-forward windows produced this
+    exact pattern and poisoned the aggregate OOS Sharpe by 15 orders
+    of magnitude. The constant series has sd=1.3e-17 (FP rounding),
+    not the mathematically-correct 0; the guard treats relative
+    dispersion below 1e-12 of the mean as effectively constant.
+    """
+    from eta_engine.backtest.metrics import compute_sharpe
+
+    # Exact returns from the reproducer.
+    rets = [-0.01, -0.01, -0.010000000000000023]
+    assert compute_sharpe(rets) == 0.0
+
+    # True-zero stdev still returns 0 (existing behaviour preserved).
+    assert compute_sharpe([-0.01, -0.01, -0.01]) == 0.0
+
+    # Real signal still produces a non-zero Sharpe.
+    assert compute_sharpe([0.01, -0.005, 0.02, 0.005]) != 0.0
 
 
 def test_compute_sortino_smoke() -> None:

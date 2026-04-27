@@ -35,7 +35,16 @@ def _stdev(xs: Iterable[float]) -> float:
 def compute_sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     """Annualized Sharpe ratio assuming 252 trading days.
 
-    Returns 0.0 if stdev is zero or sample too small.
+    Returns 0.0 if stdev is zero, sample too small, or the sample has
+    only floating-point-noise dispersion around a constant value.
+
+    The constant-noise guard catches a real bug surfaced 2026-04-27:
+    three identical -1pct returns produced sd=1.3e-17 (FP rounding,
+    not a real signal), which made Sharpe blow up to -1.2e+16 and
+    poisoned the walk-forward aggregate. The threshold compares the
+    sample stdev to abs(mean) — if the spread is ~1e-12 the size of
+    the level itself, the series is effectively constant and Sharpe
+    is mathematically undefined.
     """
     if len(returns) < 2:
         return 0.0
@@ -43,6 +52,13 @@ def compute_sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     mu = _mean(excess)
     sd = _stdev(excess)
     if sd == 0.0:
+        return 0.0
+    # FP-noise guard. abs(mu) of the sample is the natural scale; if
+    # sd is more than ~12 orders of magnitude smaller, the dispersion
+    # is rounding error, not signal. The 1e-12 threshold corresponds
+    # to ~4 decimal digits of relative precision, well above what
+    # honest market data exhibits.
+    if abs(mu) > 0.0 and sd / abs(mu) < 1e-12:
         return 0.0
     return round(mu / sd * math.sqrt(252), 4)
 

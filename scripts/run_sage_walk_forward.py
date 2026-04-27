@@ -107,6 +107,40 @@ def _build_strategy(name: str):  # type: ignore[no-untyped-def]  # noqa: ANN202
             f"sage_conv>={cfg.sage.min_conviction:.2f})"
         )
         return (lambda: SageGatedORBStrategy(cfg)), label
+    if name == "crypto_orb_sage_gated":
+        # Same overlay machinery, but the embedded ORB is a CryptoORB
+        # (UTC midnight anchor, 60m range, 24/7 session). The sage
+        # instrument_class hint is "crypto" so per-instrument school
+        # gates fire correctly (e.g. funding/onchain are NOT skipped).
+        from eta_engine.strategies.crypto_orb_strategy import CryptoORBConfig
+        from eta_engine.strategies.sage_consensus_strategy import (
+            SageConsensusConfig,
+        )
+        from eta_engine.strategies.sage_gated_orb_strategy import (
+            SageGatedORBConfig,
+            SageGatedORBStrategy,
+        )
+        sage_cfg = SageConsensusConfig(
+            min_conviction=float(os.environ.get("SAGE_MIN_CONVICTION", "0.65")),
+            min_consensus=float(os.environ.get("SAGE_MIN_CONSENSUS", "0.30")),
+            min_alignment=float(os.environ.get("SAGE_MIN_ALIGNMENT", "0.55")),
+            sage_lookback_bars=int(os.environ.get("SAGE_LOOKBACK_BARS", "200")),
+            atr_period=14, atr_stop_mult=1.5, rr_target=2.0,
+            risk_per_trade_pct=0.01,
+            min_bars_between_trades=6, max_trades_per_day=2,
+            warmup_bars=60, instrument_class="crypto",
+            apply_edge_weights=False,
+        )
+        cfg = SageGatedORBConfig(
+            orb=CryptoORBConfig(),
+            sage=sage_cfg,
+            overlay_enabled=True,
+        )
+        label = (
+            f"crypto_orb_sage_gated(range={cfg.orb.range_minutes}m, "
+            f"sage_conv>={cfg.sage.min_conviction:.2f}, instr=crypto)"
+        )
+        return (lambda: SageGatedORBStrategy(cfg)), label
     raise ValueError(f"unknown strategy: {name}")
 
 
@@ -114,7 +148,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--strategy", default="sage_consensus",
-        choices=["sage_consensus", "orb_sage_gated"],
+        choices=["sage_consensus", "orb_sage_gated", "crypto_orb_sage_gated"],
         help="Which sage-driven strategy to run.",
     )
     args = parser.parse_args()

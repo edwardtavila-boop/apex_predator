@@ -108,6 +108,32 @@ def test_registry_check_passes_for_mnq_futures() -> None:
     assert "baseline" in extras
 
 
+def test_registry_check_passes_for_mnq_futures_sage() -> None:
+    """Sage-overlay sibling must also be soak-preppable."""
+    ok, msg, extras = _registry_check("mnq_futures_sage")
+    assert ok, msg
+    assert extras["bot_id"] == "mnq_futures_sage"
+    assert extras["strategy_id"] == "mnq_orb_sage_v1"
+    assert "baseline" in extras
+
+
+def test_registry_check_rejects_unknown_bot() -> None:
+    ok, msg, _ = _registry_check("does_not_exist")
+    assert not ok
+    assert "does_not_exist" in msg
+
+
+def test_registry_check_rejects_non_orb_kind() -> None:
+    """A bot wired to confluence/drb/etc. should fail the soak gate.
+
+    nq_daily_drb is real and uses strategy_kind='drb'; the soak script
+    only supports orb / orb_sage_gated strategies right now.
+    """
+    ok, msg, _ = _registry_check("nq_daily_drb")
+    assert not ok
+    assert "drb" in msg or "expected" in msg
+
+
 # ---------------------------------------------------------------------------
 # IBKR pre-flight (no-gateway path)
 # ---------------------------------------------------------------------------

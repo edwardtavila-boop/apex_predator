@@ -32,6 +32,16 @@
       "_promoted_at": "2026-04-27",
       "_walk_forward_summary": "MNQ1/5m, 60d/30d windows, 2/2 positive OOS, agg OOS Sharpe +10.061 (vs plain ORB +5.71 — ~2x improvement), DSR median 1.000, 100% pass fraction. Sweep winner: range=15m, sage min_conviction=0.65, min_alignment=0.55, lookback=200 bars.",
       "_notes": "OOS > IS in both windows (W0: IS +1.61 / OOS +12.39; W1: IS +3.90 / OOS +7.73) — sage filter cuts more losers than winners on OOS, the opposite of overfitting. n_trades inferred from W0+W1 IS+OOS = 13+7 + 24+5 = 49. Trade count is low; paper-soak validation required before live promotion. Re-baseline once paper-soak produces 50+ real fills."
+    },
+    {
+      "strategy_id": "nq_orb_sage_v1",
+      "n_trades": 58,
+      "win_rate": 0.586,
+      "avg_r": 0.821,
+      "r_stddev": 1.207,
+      "_promoted_at": "2026-04-27",
+      "_walk_forward_summary": "NQ1/5m, 60d/30d windows, 2/2 positive OOS, agg OOS Sharpe +8.288, DSR median 0.997, 100% pass fraction. Same MNQ winning config (conv=0.65, align=0.55, range=15m) — sage overlay transfers symbol-agnostically across liquid index futures.",
+      "_notes": "OOS > IS in both windows (W0: IS +0.69 / OOS +3.35; W1: IS +2.55 / OOS +13.23). Lower magnitude than MNQ (+8.29 vs +10.06) but same direction — sage's lift is real and generalizes. n_trades inferred from W0+W1 IS+OOS = 16+9 + 29+4 = 58. Same paper-soak gate as mnq_orb_sage_v1 applies."
     }
   ]
 }

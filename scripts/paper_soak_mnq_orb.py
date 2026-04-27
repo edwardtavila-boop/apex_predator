@@ -178,15 +178,25 @@ def _redact_account(account_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _registry_check() -> tuple[bool, str, dict[str, Any]]:
-    """Confirm mnq_futures is wired to ORB and has a pinned baseline."""
-    a = get_for_bot("mnq_futures")
+_SUPPORTED_KINDS: frozenset[str] = frozenset({"orb", "orb_sage_gated"})
+
+
+def _registry_check(bot_id: str = "mnq_futures") -> tuple[bool, str, dict[str, Any]]:
+    """Confirm the named bot is wired to a supported ORB-family strategy
+    and has a pinned baseline.
+
+    ``bot_id`` defaults to ``mnq_futures`` for back-compat with the
+    initial single-bot script. Pass ``mnq_futures_sage`` for the
+    sage-overlay variant; the same pre-flight checks apply.
+    """
+    a = get_for_bot(bot_id)
     if a is None:
-        return False, "registry has no entry for mnq_futures", {}
-    if a.strategy_kind != "orb":
+        return False, f"registry has no entry for {bot_id}", {}
+    if a.strategy_kind not in _SUPPORTED_KINDS:
+        supported = ", ".join(sorted(_SUPPORTED_KINDS))
         return (
             False,
-            f"mnq_futures strategy_kind is {a.strategy_kind!r}, expected 'orb'",
+            f"{bot_id} strategy_kind is {a.strategy_kind!r}, expected one of {supported}",
             {},
         )
     baseline = _load_pinned_baseline(a.strategy_id)
@@ -278,17 +288,23 @@ def _expected_trade_band(n_sessions: int) -> tuple[int, int]:
     return (max(1, n_sessions // 2), n_sessions)
 
 
-def build_plan(start: date, days: int) -> SoakPlan | None:
+def build_plan(
+    start: date, days: int, *, bot_id: str = "mnq_futures",
+) -> SoakPlan | None:
     """Build a SoakPlan or return None if any pre-flight fails.
+
+    ``bot_id`` selects which registry entry's strategy gets soak-prepped.
+    Defaults to ``mnq_futures`` (plain ORB); pass ``mnq_futures_sage``
+    for the sage-overlay variant.
 
     The function prints check-by-check status to stdout so the
     operator can see what passed and what didn't, even on failure.
     """
-    print("\n=== mnq_orb_v1 paper-soak pre-flight ===")
+    print(f"\n=== {bot_id} paper-soak pre-flight ===")
     print(f"start={start.isoformat()} days={days}")
 
     # 1) Registry + baseline
-    ok, msg, reg_extras = _registry_check()
+    ok, msg, reg_extras = _registry_check(bot_id)
     print(f"[{'OK' if ok else 'FAIL'}] registry: {msg}")
     if not ok:
         sys.exit(1)
@@ -401,6 +417,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help="Calendar-day window (RTH-only sessions are filtered).",
     )
     p.add_argument(
+        "--bot-id",
+        default="mnq_futures",
+        choices=["mnq_futures", "mnq_futures_sage", "nq_futures", "nq_futures_sage"],
+        help=(
+            "Registry bot id to soak-prep. Defaults to mnq_futures "
+            "(plain ORB). Choose mnq_futures_sage for the sage-overlay "
+            "variant; nq_futures / nq_futures_sage for the NQ siblings."
+        ),
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Run pre-flight + print plan but do NOT write artifacts.",
@@ -410,7 +436,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    plan = build_plan(args.start, args.days)
+    plan = build_plan(args.start, args.days, bot_id=args.bot_id)
     if plan is None:
         return 1  # pragma: no cover - build_plan exits on its own paths
     print("\n=== Plan ===")

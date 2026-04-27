@@ -54,6 +54,12 @@ Urgency = Literal["low", "normal", "high"]
 _CRYPTO_NATIVES = {"ETHUSDT", "BTCUSDT", "SOLUSDT", "XRPUSDT"}
 _FUTURES_ROOTS = ("MNQ", "NQ", "ES", "MES", "RTY")
 
+# CME crypto futures (M2, 2026-04-26): the US-legal substitutes for
+# offshore perps. When IS_US_PERSON=True the router translates BTCUSDT
+# -> MBT, ETHUSDT -> MET, SOLUSDT -> SOL, XRPUSDT -> XRP and routes to
+# IBKR. These codes need to be recognized as futures for routing.
+_CME_CRYPTO_FUTURES = ("MBT", "MET", "BTC", "ETH", "SOL", "XRP")
+
 # ---------------------------------------------------------------------------
 # US-person policy (operator mandate 2026-04-26, M2)
 # ---------------------------------------------------------------------------
@@ -124,7 +130,24 @@ def _resolve_preferred_futures_venue(requested: str) -> str:
 
 
 def _is_futures(symbol: str) -> bool:
-    return symbol.upper().startswith(_FUTURES_ROOTS)
+    up = symbol.upper()
+    if up.startswith(_FUTURES_ROOTS):
+        return True
+    # M2: CME crypto futures (MBT/MET/BTC/ETH/SOL/XRP) are also routed
+    # via the futures venue (IBKR primary). Recognize exact codes and the
+    # CME month-coded form: <root><month-letter><yy> like MBTH26 (March
+    # 2026 micro Bitcoin). Month letters: F G H J K M N Q U V X Z.
+    import re as _re
+    for code in _CME_CRYPTO_FUTURES:
+        if up == code:
+            return True
+        if up.startswith(code):
+            suffix = up[len(code):]
+            if not suffix or suffix[0] == " ":
+                return True
+            if _re.fullmatch(r"[FGHJKMNQUVXZ]\d{1,2}", suffix):
+                return True
+    return False
 
 
 def _is_crypto(symbol: str) -> bool:
@@ -246,6 +269,42 @@ class SmartRouter:
 
     # ----- execution -----
 
+    def _translate_for_us_legal_routing(self, req: OrderRequest) -> OrderRequest:
+        """M2 (2026-04-26): translate offshore-perp symbols to CME futures.
+
+        For a US person trying to place an order on ``BTCUSDT`` (which would
+        otherwise route to Bybit, prohibited), this rewrites the symbol to
+        ``MBT`` (CME Micro Bitcoin) so the rest of the router treats it as
+        a CME futures order and sends it to IBKR.
+
+        Returns the request unchanged if:
+          * IS_US_PERSON is False
+          * symbol has no CME equivalent (e.g. DOGEUSDT)
+          * symbol is already a futures contract
+
+        The original symbol is preserved in ``raw["original_symbol"]`` for
+        audit + journal traceability.
+        """
+        if not IS_US_PERSON:
+            return req
+        # Lazy import to avoid circular reference if cme_mapping ever
+        # imports anything from venues.
+        from eta_engine.venues.cme_mapping import is_crypto_perp, to_cme
+
+        if not is_crypto_perp(req.symbol):
+            return req
+        cme_symbol = to_cme(req.symbol, micro=True)
+        if cme_symbol is None:
+            return req
+        logger.info(
+            "M2 translate: symbol=%s -> %s (US-person CME-routing via IBKR)",
+            req.symbol, cme_symbol,
+        )
+        new_raw = dict(req.raw) if hasattr(req, "raw") and req.raw else {}
+        new_raw["original_symbol"] = req.symbol
+        new_raw["m2_translated"] = True
+        return req.model_copy(update={"symbol": cme_symbol, "raw": new_raw})
+
     async def place_with_failover(
         self,
         req: OrderRequest,
@@ -254,12 +313,15 @@ class SmartRouter:
     ) -> OrderResult:
         """Try primary; on REJECTED or exception, try fallback (up to max_attempts).
 
-        US-person policy (M2, 2026-04-26): when :data:`IS_US_PERSON` is True
-        and the chosen venue is in :data:`NON_FCM_VENUES`, the router refuses
-        the order outright. This is NOT a fallback path -- it is a hard stop
-        intended to prevent an inadvertent live route to an offshore venue
-        the operator is legally not permitted to use.
+        US-person policy (M2, 2026-04-26):
+          * crypto perp symbols (BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT) are
+            transparently translated to their CME futures equivalents
+            (MBT, MET, SOL, XRP) and routed to IBKR
+          * any remaining order to a venue in :data:`NON_FCM_VENUES` is
+            HARD-REFUSED. This is NOT a fallback path -- it is a stop.
         """
+        # M2 step 1: translate offshore perp symbol to CME equivalent.
+        req = self._translate_for_us_legal_routing(req)
         primary = self.choose_venue(req.symbol, req.qty, urgency)
 
         # M2 hard refusal: US person + non-FCM venue -> RuntimeError before

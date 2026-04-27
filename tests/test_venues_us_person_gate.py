@@ -58,24 +58,30 @@ def test_fcm_venues_not_in_non_fcm() -> None:
 
 
 @pytest.mark.asyncio
-async def test_place_with_failover_refuses_bybit_for_us_person(
+async def test_btcusdt_translated_to_mbt_for_us_person(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Live route to Bybit must raise RuntimeError, not silently route."""
+    """M2: BTCUSDT for a US person is translated to MBT (CME Micro Bitcoin)
+    and the venue choice flips from bybit to ibkr. We verify the translation
+    by inspecting the helper directly so we don't have to mock IBKR's
+    network layer."""
     monkeypatch.setattr(router_mod, "IS_US_PERSON", True)
     r = SmartRouter(preferred_crypto_venue="bybit")
     req = OrderRequest(
         symbol="BTCUSDT",
         side=Side.BUY,
-        qty=0.001,
+        qty=1,
         order_type=OrderType.MARKET,
     )
-    with pytest.raises(RuntimeError, match="REFUSED"):
-        await r.place_with_failover(req)
+    translated = r._translate_for_us_legal_routing(req)
+    assert translated.symbol == "MBT"
+    assert translated.raw.get("original_symbol") == "BTCUSDT"
+    assert translated.raw.get("m2_translated") is True
+    assert r.choose_venue(translated.symbol, translated.qty).name == "ibkr"
 
 
 @pytest.mark.asyncio
-async def test_place_with_failover_refuses_okx_for_us_person(
+async def test_ethusdt_translated_to_met_for_us_person(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(router_mod, "IS_US_PERSON", True)
@@ -83,11 +89,57 @@ async def test_place_with_failover_refuses_okx_for_us_person(
     req = OrderRequest(
         symbol="ETHUSDT",
         side=Side.BUY,
-        qty=0.01,
+        qty=1,
+        order_type=OrderType.MARKET,
+    )
+    translated = r._translate_for_us_legal_routing(req)
+    assert translated.symbol == "MET"
+    assert r.choose_venue(translated.symbol, translated.qty).name == "ibkr"
+
+
+@pytest.mark.asyncio
+async def test_solusdt_xrpusdt_translated_for_us_person(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(router_mod, "IS_US_PERSON", True)
+    r = SmartRouter()
+    for perp, expected_cme in [("SOLUSDT", "SOL"), ("XRPUSDT", "XRP")]:
+        req = OrderRequest(symbol=perp, side=Side.BUY, qty=1, order_type=OrderType.MARKET)
+        t = r._translate_for_us_legal_routing(req)
+        assert t.symbol == expected_cme, f"{perp} should translate to {expected_cme}, got {t.symbol}"
+        assert r.choose_venue(t.symbol, t.qty).name == "ibkr"
+
+
+@pytest.mark.asyncio
+async def test_unmapped_perp_still_blocked_for_us_person(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A perp with no CME equivalent (e.g. DOGEUSDT) cannot be translated;
+    the gate must still hard-refuse it instead of silently sending to Bybit."""
+    monkeypatch.setattr(router_mod, "IS_US_PERSON", True)
+    r = SmartRouter(preferred_crypto_venue="bybit")
+    req = OrderRequest(
+        symbol="DOGEUSDT",  # not in CRYPTO_PERP_TO_CME_MICRO
+        side=Side.BUY,
+        qty=1,
         order_type=OrderType.MARKET,
     )
     with pytest.raises(RuntimeError, match="REFUSED"):
         await r.place_with_failover(req)
+
+
+def test_cme_codes_recognized_as_futures() -> None:
+    """The CME crypto codes MBT/MET/BTC/ETH/SOL/XRP are recognized as futures
+    so the rest of the router routes them via IBKR."""
+    from eta_engine.venues.router import _is_futures
+    for code in ("MBT", "MET", "BTC", "ETH", "SOL", "XRP"):
+        assert _is_futures(code), f"{code} should be classified as a CME future"
+    # And with month codes (e.g. MBTH26 = March 2026)
+    for code in ("MBTH26", "METM27", "SOLZ26"):
+        assert _is_futures(code), f"{code} (month-coded) should be classified as a future"
+    # Non-futures must NOT match
+    for code in ("BTCUSDT", "ETHUSDT", "DOGEUSDT"):
+        assert not _is_futures(code), f"{code} should NOT be classified as a future"
 
 
 # ─── M2: CME mapping ─────────────────────────────────────────────────────

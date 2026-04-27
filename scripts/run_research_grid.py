@@ -245,6 +245,65 @@ def _build_crypto_strategy_factory(  # type: ignore[no-untyped-def]  # noqa: ANN
             **_safe_kwargs(GridConfig, _filter_extras(extras, "grid")),
         )
         return lambda: GridTradingStrategy(cfg)
+    if kind == "compression_breakout":
+        # Foundation strategy (2026-04-27): volatility-compression
+        # release breakout (BB-width percentile + ATR < ATR_MA, then
+        # breakout above N-bar high with trend EMA + volume z + close
+        # location filters). Asset-class presets: btc_*, eth_*, sol_*,
+        # mnq_*, nq_*. The extras["compression_preset"] string selects.
+        from eta_engine.strategies.compression_breakout_strategy import (
+            CompressionBreakoutConfig,
+            CompressionBreakoutStrategy,
+            btc_compression_preset,
+            eth_compression_preset,
+            mnq_compression_preset,
+            nq_compression_preset,
+            sol_compression_preset,
+        )
+        preset_factories = {
+            "btc": btc_compression_preset, "eth": eth_compression_preset,
+            "sol": sol_compression_preset, "mnq": mnq_compression_preset,
+            "nq": nq_compression_preset,
+        }
+        preset_name = (extras.get("compression_preset") or "btc").lower()
+        base_cfg = preset_factories.get(preset_name, btc_compression_preset)()
+        # Allow extras to override individual fields via "compression_*"
+        overrides = _filter_extras(extras, "compression")
+        # Drop the "preset" override (not a CompressionBreakoutConfig field)
+        overrides.pop("preset", None)
+        cfg = CompressionBreakoutConfig(
+            **{**base_cfg.__dict__,
+               **_safe_kwargs(CompressionBreakoutConfig, overrides)},
+        )
+        return lambda: CompressionBreakoutStrategy(cfg)
+    if kind == "sweep_reclaim":
+        # Foundation strategy (2026-04-27): mechanical Wyckoff
+        # spring/upthrust translation. Asset presets:
+        # btc_daily_*, eth_daily_*, sol_daily_*, mnq_intraday_*,
+        # nq_intraday_*. extras["sweep_preset"] selects.
+        from eta_engine.strategies.sweep_reclaim_strategy import (
+            SweepReclaimConfig,
+            SweepReclaimStrategy,
+            btc_daily_sweep_preset,
+            eth_daily_sweep_preset,
+            mnq_intraday_sweep_preset,
+            nq_intraday_sweep_preset,
+            sol_daily_sweep_preset,
+        )
+        preset_factories = {
+            "btc": btc_daily_sweep_preset, "eth": eth_daily_sweep_preset,
+            "sol": sol_daily_sweep_preset, "mnq": mnq_intraday_sweep_preset,
+            "nq": nq_intraday_sweep_preset,
+        }
+        preset_name = (extras.get("sweep_preset") or "btc").lower()
+        base_cfg = preset_factories.get(preset_name, btc_daily_sweep_preset)()
+        overrides = _filter_extras(extras, "sweep")
+        overrides.pop("preset", None)
+        cfg = SweepReclaimConfig(
+            **{**base_cfg.__dict__,
+               **_safe_kwargs(SweepReclaimConfig, overrides)},
+        )
+        return lambda: SweepReclaimStrategy(cfg)
     msg = f"unknown crypto strategy_kind: {kind!r}"
     raise ValueError(msg)
 

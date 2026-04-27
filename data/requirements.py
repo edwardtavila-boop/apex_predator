@@ -307,6 +307,19 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
             "Coinbase/Binance ETH bars + funding",
         ),
     ),
+    # eth_compression is the compression-breakout variant of eth_perp.
+    # Same ETH 1h bars as eth_perp; needs ATR + BB-width (computed
+    # internally from price). PROMOTED 2026-04-27 as the cleanest
+    # gate-passer of the foundation supercharge sweep.
+    BotRequirements(
+        bot_id="eth_compression",
+        requirements=(
+            DataRequirement("bars", "ETH", "1h", critical=True),
+        ),
+        sources_hint=(
+            "Coinbase/Binance ETH bars (no exotic feeds — pure price-action)",
+        ),
+    ),
     BotRequirements(
         bot_id="xrp_perp",
         requirements=(

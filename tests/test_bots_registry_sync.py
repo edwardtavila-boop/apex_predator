@@ -67,6 +67,7 @@ VARIANT_BOT_IDS: set[str] = {
     "btc_regime_trend_etf",  # regime-trend ETF variant; bot dir = bots/btc_hybrid/
     "btc_ensemble_2of3",  # ensemble vote variant; bot dir = bots/btc_hybrid/
     "eth_sage_daily",  # sage-daily variant; bot dir = bots/eth_perp/
+    "eth_compression",  # compression-breakout variant; bot dir = bots/eth_perp/
 }
 
 

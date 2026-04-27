@@ -864,6 +864,48 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "because the goal is *exposure*, not edge."
         ),
     ),
+    # ETH compression breakout — PROMOTED 2026-04-27 from the
+    # foundation supercharge sweep. The cleanest gate-passer of all
+    # 10 cells tested in run_foundation_supercharge_sweep.
+    StrategyAssignment(
+        bot_id="eth_compression",
+        strategy_id="eth_compression_v1",
+        symbol="ETH",
+        timeframe="1h",
+        scorer_name="btc",  # unused when strategy_kind=compression_breakout
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="compression_breakout",
+        rationale=(
+            "PROMOTED 2026-04-27 from the foundation supercharge sweep "
+            "(scripts/run_foundation_supercharge_sweep). Default ETH "
+            "compression preset (BB-width pct cap 0.30, RR 2.0, ATR-stop "
+            "1.8x, trend-EMA 200, volume z >= 0.4, close-location >= 0.65). "
+            "Walk-forward 90d/30d, 9 windows: agg IS Sharpe **+1.63**, "
+            "agg OOS Sharpe **+3.86**, 54 OOS trades, gate PASS. The ONLY "
+            "cell of the (BTC, ETH, SOL, MNQ1, NQ1) x (compression, sweep) "
+            "supercharge matrix to clear the strict DSR gate. "
+            "BTC compression came close (IS +0.06, OOS +0.50, 358 trades, "
+            "DSR 28%) but didn't pass; SOL compression was net-negative; "
+            "MNQ/NQ samples too thin (107d 5m). ETH 1h has 360d of "
+            "Coinbase spot bars; pre-live swap to IBKR-native CME ETH "
+            "+ drift check via scripts/compare_coinbase_vs_ibkr."
+        ),
+        extras={
+            "compression_preset": "eth",
+            # Default preset values — runner can override individual fields
+            # via "compression_*" extras keys.
+            "promotion_status": "production_candidate",
+            "warmup_policy": {
+                "promoted_on": "2026-04-27",
+                "warmup_days": 30,
+                "risk_multiplier_during_warmup": 0.5,
+            },
+        },
+    ),
 )
 
 

@@ -24,7 +24,7 @@ def test_every_assignment_is_immutable() -> None:
     """frozen=True must hold — operators must edit the registry source,
     not mutate at runtime."""
     a = ASSIGNMENTS[0]
-    with pytest.raises(Exception):  # FrozenInstanceError on dataclass(frozen=True)
+    with pytest.raises(Exception):  # noqa: B017 - FrozenInstanceError on dataclass(frozen=True)
         a.bot_id = "tampered"  # type: ignore[misc]
 
 
@@ -72,11 +72,16 @@ def test_thresholds_in_valid_range() -> None:
     # confluence threshold entirely. Adding a new self-contained
     # strategy here is the one-line change to keep the registry tests
     # green for it.
-    _IGNORES_THRESHOLD = {
+    _IGNORES_THRESHOLD = {  # noqa: N806 - module-style constant inside test fn
         "orb", "drb", "grid", "crypto_orb",
         "crypto_trend", "crypto_meanrev", "crypto_scalp",
         "sage_consensus", "orb_sage_gated", "crypto_regime_trend",
         "crypto_macro_confluence", "sage_daily_gated", "ensemble_voting",
+        # Foundation strategies (2026-04-27): compression-breakout
+        # and sweep-reclaim use their own internal triggers (BB-width
+        # percentile + ATR-MA / wick + reclaim) and don't read the
+        # confluence threshold.
+        "compression_breakout", "sweep_reclaim",
     }
     for a in ASSIGNMENTS:
         if a.strategy_kind in _IGNORES_THRESHOLD:

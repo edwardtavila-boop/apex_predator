@@ -185,7 +185,14 @@ class TestAskJarvis:
         )
         assert allowed is False
         assert cap is None
-        assert code == "jarvis_error"
+        # Both codes mean "the admin chain crashed; fail closed".
+        # ``jarvis_error`` is emitted by the legacy admin-only path
+        # (when ETA_USE_JARVIS_FULL is unset). ``admin_error`` is the
+        # more granular code emitted by the wave-12 intelligence layer
+        # when the admin's request_approval raises mid-pipeline. The
+        # contract that callers care about is "allowed=False, cap=None,
+        # non-empty machine-readable code" -- not the exact string.
+        assert code in ("jarvis_error", "admin_error")
 
 
 # --------------------------------------------------------------------------- #

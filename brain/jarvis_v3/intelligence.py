@@ -356,9 +356,25 @@ class JarvisIntelligence:
         sentiment = float(payload.get("sentiment", 0.0))
         sage_score = float(payload.get("sage_score", 0.0))
         slip = float(payload.get("slippage_bps_estimate", 0.0))
-        # ctx can refine fields if available
+        # ctx can refine fields if available.
+        #
+        # ``ctx.stress_score`` is a v2 ``StressScore`` pydantic object
+        # (composite + components + binding_constraint) when produced
+        # by ``build_snapshot``. Older callers may pass a bare float in
+        # ``stress_score`` (or omit it entirely). Be tolerant of both:
+        # prefer ``.composite`` when it exists, otherwise coerce
+        # whatever truthy value we got.
         if ctx is not None:
-            stress = float(getattr(ctx, "stress_score", stress) or stress)
+            ctx_stress = getattr(ctx, "stress_score", None)
+            if ctx_stress is not None:
+                composite = getattr(ctx_stress, "composite", None)
+                if composite is not None:
+                    stress = float(composite)
+                else:
+                    # Unknown shape -- keep payload-derived stress on failure
+                    import contextlib
+                    with contextlib.suppress(TypeError, ValueError):
+                        stress = float(ctx_stress)
         return Proposal(
             signal_id=str(getattr(req, "request_id", "unknown")),
             direction=direction,

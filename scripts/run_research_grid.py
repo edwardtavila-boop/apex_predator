@@ -176,6 +176,18 @@ def _build_crypto_strategy_factory(  # type: ignore[no-untyped-def]  # noqa: ANN
             **_safe_kwargs(CryptoScalpConfig, _filter_extras(extras, "crypto_scalp")),
         )
         return lambda: CryptoScalpStrategy(cfg)
+    if kind == "crypto_regime_trend":
+        from eta_engine.strategies.crypto_regime_trend_strategy import (
+            CryptoRegimeTrendConfig,
+            CryptoRegimeTrendStrategy,
+        )
+        cfg = CryptoRegimeTrendConfig(
+            **_safe_kwargs(
+                CryptoRegimeTrendConfig,
+                _filter_extras(extras, "crypto_regime_trend"),
+            ),
+        )
+        return lambda: CryptoRegimeTrendStrategy(cfg)
     if kind == "grid":
         from eta_engine.strategies.grid_trading_strategy import (
             GridConfig,
@@ -264,6 +276,24 @@ def run_cell(cell: ResearchCell) -> CellResult:
             ctx_builder=lambda b, h: {},
             strategy_factory=lambda: ORBStrategy(orb_cfg),
         )
+    elif cell.strategy_kind == "orb_sage_gated":
+        # ORB with the multi-school sage overlay as a veto filter.
+        # Composition strategy: embeds a real ORBStrategy and delegates
+        # to it, then runs sage-consensus and rejects entries the panel
+        # disagrees with. Same maybe_enter contract as ORB/DRB.
+        from eta_engine.strategies.sage_gated_orb_strategy import (
+            SageGatedORBConfig,
+            SageGatedORBStrategy,
+        )
+        sage_cfg = SageGatedORBConfig()
+        res = WalkForwardEngine().run(
+            bars=bars,
+            pipeline=FeaturePipeline.default(),
+            config=wf,
+            base_backtest_config=base_cfg,
+            ctx_builder=lambda b, h: {},
+            strategy_factory=lambda: SageGatedORBStrategy(sage_cfg),
+        )
     elif cell.strategy_kind == "drb":
         # DRB is the daily-timeframe sibling of ORB. It also bypasses
         # the confluence-scorer path — without this branch the DRB bots
@@ -280,7 +310,8 @@ def run_cell(cell: ResearchCell) -> CellResult:
             strategy_factory=lambda: DRBStrategy(drb_cfg),
         )
     elif cell.strategy_kind in (
-        "crypto_orb", "crypto_trend", "crypto_meanrev", "crypto_scalp", "grid",
+        "crypto_orb", "crypto_trend", "crypto_meanrev", "crypto_scalp",
+        "crypto_regime_trend", "grid",
     ):
         # Crypto-specific strategy variants. All share the same
         # maybe_enter(bar, hist, equity, config) -> _Open|None contract

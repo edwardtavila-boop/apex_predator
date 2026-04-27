@@ -235,14 +235,21 @@ def serve_theme_css() -> PlainTextResponse:
 @app.get("/js/{filename}", response_class=PlainTextResponse)
 def serve_js_module(filename: str) -> PlainTextResponse:
     """Serve a JS module from deploy/status_page/js/. Path-traversal-safe."""
-    if "/" in filename or "\\" in filename or filename.startswith("."):
+    if "/" in filename or "\\" in filename or filename.startswith(".") or "\x00" in filename:
         raise HTTPException(status_code=400, detail="invalid filename")
-    js_path = _STATUS_PAGE.parent / "js" / filename
-    if not js_path.is_file() or js_path.parent != _STATUS_PAGE.parent / "js":
-        raise HTTPException(status_code=404, detail=f"{filename} not found")
+    # Resolve js_dir lazily so monkeypatching _STATUS_PAGE in tests works.
+    js_dir = _STATUS_PAGE.parent / "js"
+    js_path = js_dir / filename
+    try:
+        resolved = js_path.resolve()
+        js_dir_resolved = js_dir.resolve()
+        if not resolved.is_file() or not resolved.is_relative_to(js_dir_resolved):
+            raise HTTPException(status_code=404, detail=f"{filename} not found")
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail=f"{filename} not found") from None
     return PlainTextResponse(
-        js_path.read_text(encoding="utf-8"),
-        media_type="application/javascript",
+        resolved.read_text(encoding="utf-8"),
+        media_type="text/javascript",
     )
 
 

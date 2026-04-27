@@ -128,7 +128,7 @@ def test_interactive_stores_all_five_when_user_fills_everything(
         [
             "trader@example.com",  # USERNAME
             "pw-1",  # PASSWORD (getpass)
-            "",  # APP_ID (takes default "ApexPredator")
+            "",  # APP_ID (takes default "EtaEngine")
             "app-sec-xyz",  # APP_SECRET (getpass)
             "12345",  # CID
         ]
@@ -141,7 +141,7 @@ def test_interactive_stores_all_five_when_user_fills_everything(
     assert rc == 0
     assert stored["TRADOVATE_USERNAME"] == "trader@example.com"
     assert stored["TRADOVATE_PASSWORD"] == "pw-1"
-    assert stored["TRADOVATE_APP_ID"] == "ApexPredator"  # from default
+    assert stored["TRADOVATE_APP_ID"] == "EtaEngine"  # from default
     assert stored["TRADOVATE_APP_SECRET"] == "app-sec-xyz"
     assert stored["TRADOVATE_CID"] == "12345"
     out = capsys.readouterr().out
@@ -202,7 +202,7 @@ def test_interactive_overwrites_when_user_says_yes(
         [
             "y",  # overwrite USERNAME?
             "new-u",  # new username
-            "ApexPredator",  # APP_ID (default)
+            "EtaEngine",  # APP_ID (default)
             "12345",  # CID
         ]
     )
@@ -243,7 +243,7 @@ def test_interactive_returns_1_when_user_skips_required_fields(
     rc = sts.cmd_interactive()
     assert rc == 1  # not 5/5
     # APP_ID has a default, so it's the only one stored
-    assert stored == {"TRADOVATE_APP_ID": "ApexPredator"}
+    assert stored == {"TRADOVATE_APP_ID": "EtaEngine"}
 
 
 def test_interactive_reports_keyring_set_failure(
@@ -257,7 +257,7 @@ def test_interactive_reports_keyring_set_failure(
 
     monkeypatch.setattr(sts.SECRETS, "set", boom)
 
-    answers = iter(["trader@example.com", "pw-1", "ApexPredator", "sec", "1"])
+    answers = iter(["trader@example.com", "pw-1", "EtaEngine", "sec", "1"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     monkeypatch.setattr(sts.getpass, "getpass", lambda prompt="": next(answers))
 

@@ -30,7 +30,7 @@ All results fold into a single ``ApexDecision`` pydantic envelope that
 the dashboard can render and the audit log can persist.
 
 Design: everything is dependency-injected. Default factory wires sane
-defaults so ``ApexPredatorCore()`` "just works," but tests swap any
+defaults so ``EtaEngineCore()`` "just works," but tests swap any
 component for a stub.
 """
 
@@ -90,7 +90,7 @@ if TYPE_CHECKING:
 
 
 class ApexDecision(BaseModel):
-    """Merged envelope returned by ``ApexPredatorCore.decide()``."""
+    """Merged envelope returned by ``EtaEngineCore.decide()``."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -110,7 +110,7 @@ class ApexDecision(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class ApexPredatorCore:
+class EtaEngineCore:
     """The Evolutionary Trading Algo Core meta-controller.
 
     All sub-components can be supplied at construction; any omitted is
@@ -351,7 +351,7 @@ class ApexPredatorCore:
 def factory(
     audit_path: Path | str | None = None,
     context_engine: object | None = None,
-) -> ApexPredatorCore:
+) -> EtaEngineCore:
     """Build a core with JarvisAdmin wired if inputs are provided."""
     admin: JarvisAdmin | None = None
     if audit_path is not None or context_engine is not None:
@@ -359,4 +359,4 @@ def factory(
             engine=context_engine,
             audit_path=Path(audit_path) if audit_path else None,
         )
-    return ApexPredatorCore(admin=admin)
+    return EtaEngineCore(admin=admin)

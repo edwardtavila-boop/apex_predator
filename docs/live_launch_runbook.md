@@ -400,7 +400,7 @@ from eta_engine.core.secrets import SecretsManager
 sm = SecretsManager()
 sm.set("TRADOVATE_USERNAME", "your_username")
 sm.set("TRADOVATE_PASSWORD", "your_password")
-sm.set("TRADOVATE_APP_ID", "ApexPredator")
+sm.set("TRADOVATE_APP_ID", "EtaEngine")
 sm.set("TRADOVATE_APP_SECRET", "app_secret_from_tradovate_dev_portal")
 sm.set("TRADOVATE_CID", "client_id_from_tradovate_dev_portal")
 print("OK")
@@ -426,7 +426,7 @@ async def main() -> None:
         api_key="",
         api_secret=sm.get("TRADOVATE_PASSWORD") or "",
         demo=True,
-        app_id="ApexPredator",
+        app_id="EtaEngine",
         app_version="1.0",
         cid=sm.get("TRADOVATE_CID") or "",
         app_secret=sm.get("TRADOVATE_APP_SECRET") or "",

@@ -214,7 +214,7 @@ def play_round(
 def default_policy(event: MarketEvent) -> str:
     """Baseline policy: DENY if regime_hint is RISK_OFF/CRISIS or stress > 0.5.
 
-    Real callers pass their own policy (e.g. the ApexPredatorCore wrapped
+    Real callers pass their own policy (e.g. the EtaEngineCore wrapped
     as a callable). This is the trivial baseline for benchmarking.
     """
     if event.regime_hint in {"RISK_OFF", "CRISIS"}:

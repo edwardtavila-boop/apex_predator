@@ -45,7 +45,7 @@ REPO_ROOT = ROOT.parent
 
 TZ_ET = ZoneInfo("America/New_York")
 CRON_LINE = "0 20 * * 0"  # Sunday 20:00 ET
-TASK_NAME = "ApexPredatorWeeklyReview"
+TASK_NAME = "EtaEngineWeeklyReview"
 
 
 def _within_window(now_et: datetime, tolerance_minutes: int = 30) -> bool:

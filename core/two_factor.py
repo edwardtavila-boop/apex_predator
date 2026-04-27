@@ -143,7 +143,7 @@ class TotpSecret(BaseModel):
             "via SECRETS.get(secret_ref) at verify time."
         ),
     )
-    issuer: str = Field(default="ApexPredator")
+    issuer: str = Field(default="EtaEngine")
     account: str = Field(default="operator")
 
     def __str__(self) -> str:

@@ -66,7 +66,7 @@ class TradovateVenue(VenueBase):
         api_secret: str = "",
         *,
         demo: bool = True,
-        app_id: str = "ApexPredator",
+        app_id: str = "EtaEngine",
         app_version: str = "1.0",
         cid: str = "",
         app_secret: str = "",

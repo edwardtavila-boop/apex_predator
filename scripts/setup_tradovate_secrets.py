@@ -20,7 +20,7 @@ Where to find each value
 TRADOVATE_USERNAME    Your Tradovate login email.
 TRADOVATE_PASSWORD    Your Tradovate account password (same as web login).
 TRADOVATE_APP_ID      Free-form name you registered the API app under
-                      (e.g. "ApexPredator"). Default is "ApexPredator".
+                      (e.g. "EtaEngine"). Default is "EtaEngine".
 TRADOVATE_APP_SECRET  Secret issued when your CID was registered. Found
                       in Tradovate > Trader > Apps > [your app] > Secret.
 TRADOVATE_CID         Numeric Client ID for the registered app. Same
@@ -52,7 +52,7 @@ from eta_engine.core.secrets import (  # noqa: E402
 _FIELDS: list[tuple[str, str, bool, str]] = [
     (TRADOVATE_USERNAME, "Tradovate username (email)", False, ""),
     (TRADOVATE_PASSWORD, "Tradovate account password", True, ""),
-    (TRADOVATE_APP_ID, "Tradovate app ID (free-form name)", False, "ApexPredator"),
+    (TRADOVATE_APP_ID, "Tradovate app ID (free-form name)", False, "EtaEngine"),
     (TRADOVATE_APP_SECRET, "Tradovate APP SECRET (from Trader > Apps)", True, ""),
     (TRADOVATE_CID, "Tradovate CID (numeric Client ID)", False, ""),
 ]

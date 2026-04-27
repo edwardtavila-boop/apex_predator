@@ -267,7 +267,7 @@ class TestUnleashed:
         )
 
     def test_decide_produces_envelope(self):
-        core = unleashed.ApexPredatorCore()
+        core = unleashed.EtaEngineCore()
         ctx = self._ctx()
         req = ActionRequest(
             subsystem=SubsystemId.BOT_MNQ,
@@ -282,7 +282,7 @@ class TestUnleashed:
         assert dec.projection is not None
 
     def test_portfolio_breach_downgrades(self):
-        core = unleashed.ApexPredatorCore()
+        core = unleashed.EtaEngineCore()
         ctx = self._ctx()
         req = ActionRequest(
             subsystem=SubsystemId.BOT_BTC_PERP,
@@ -306,7 +306,7 @@ class TestUnleashed:
         assert dec.portfolio.cluster_breach
 
     def test_dashboard_snapshot(self):
-        core = unleashed.ApexPredatorCore()
+        core = unleashed.EtaEngineCore()
         ctx = self._ctx()
         snap = core.dashboard_snapshot(ctx)
         assert snap["regime"] == "NEUTRAL"

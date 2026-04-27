@@ -136,7 +136,7 @@ def _build_tradovate(*, demo: bool) -> TradovateVenue:
         api_key=_secret(TRADOVATE_USERNAME),
         api_secret=_secret(TRADOVATE_PASSWORD),
         demo=demo,
-        app_id=_secret(TRADOVATE_APP_ID) or "ApexPredator",
+        app_id=_secret(TRADOVATE_APP_ID) or "EtaEngine",
         cid=_secret(TRADOVATE_CID),
         app_secret=_secret(TRADOVATE_APP_SECRET),
     )

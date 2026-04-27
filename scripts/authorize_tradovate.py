@@ -122,7 +122,7 @@ async def _run(demo: bool) -> tuple[int, AuthReport]:
     # Real auth path — creds are present.
     username = SECRETS.get(TRADOVATE_USERNAME) or ""
     password = SECRETS.get(TRADOVATE_PASSWORD) or ""
-    app_id = SECRETS.get(TRADOVATE_APP_ID) or "ApexPredator"
+    app_id = SECRETS.get(TRADOVATE_APP_ID) or "EtaEngine"
     cid = SECRETS.get(TRADOVATE_CID) or ""
     app_secret = SECRETS.get(TRADOVATE_APP_SECRET) or ""
     venue = TradovateVenue(

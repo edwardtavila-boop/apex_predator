@@ -88,7 +88,7 @@ class TastytradeConfig:
     venue_type: str = "paper"
     require_cert_host: bool = True
     default_instrument_type: str = "Future"
-    default_source: str = "ApexPredatorPaper"
+    default_source: str = "EtaEnginePaper"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> TastytradeConfig:

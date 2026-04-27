@@ -151,7 +151,7 @@ def test_authorized_when_all_creds_present_and_http_ok(
         {
             "TRADOVATE_USERNAME": "trader@example.com",
             "TRADOVATE_PASSWORD": "account-pw",
-            "TRADOVATE_APP_ID": "ApexPredator",
+            "TRADOVATE_APP_ID": "EtaEngine",
             "TRADOVATE_APP_SECRET": "app-sec-xyz",
             "TRADOVATE_CID": "12345",
         },
@@ -196,7 +196,7 @@ def test_authorized_when_all_creds_present_and_http_ok(
     assert payload["password"] == "account-pw"
     assert payload["sec"] == "app-sec-xyz"
     assert payload["cid"] == "12345"
-    assert payload["appId"] == "ApexPredator"
+    assert payload["appId"] == "EtaEngine"
 
 
 # --------------------------------------------------------------------------- #

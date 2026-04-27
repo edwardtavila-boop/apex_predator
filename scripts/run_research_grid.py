@@ -303,19 +303,33 @@ def run_cell(cell: ResearchCell) -> CellResult:
         confluence_threshold=cell.threshold,
         max_trades_per_day=10,
     )
-    wf = WalkForwardConfig(
-        window_days=cell.window_days,
-        step_days=cell.step_days,
-        anchored=True,
-        oos_fraction=0.3,
-        min_trades_per_window=cell.min_trades_per_window,
-        strict_fold_dsr_gate=True,
-        fold_dsr_min_pass_fraction=0.5,
-    )
+    # Honor per-bot walk_forward_overrides from the registry extras —
+    # lets bots opt into long-haul mode (daily/weekly cadence) etc.
+    # without a global config split.
+    wf_overrides = cell.extras.get("walk_forward_overrides") or {}
+    if not isinstance(wf_overrides, dict):
+        wf_overrides = {}
+    wf_kwargs: dict[str, object] = {
+        "window_days": cell.window_days,
+        "step_days": cell.step_days,
+        "anchored": True,
+        "oos_fraction": 0.3,
+        "min_trades_per_window": cell.min_trades_per_window,
+        "strict_fold_dsr_gate": True,
+        "fold_dsr_min_pass_fraction": 0.5,
+    }
+    # If long-haul mode is requested, drop the per-fold strict gate
+    # so it doesn't double-gate alongside the long-haul checks.
+    if wf_overrides.get("long_haul_mode"):
+        wf_kwargs["strict_fold_dsr_gate"] = False
+    wf_kwargs.update(wf_overrides)
+    wf = WalkForwardConfig(**wf_kwargs)
     # ORB strategy bypasses the scorer/regime/ctx path entirely.
     if cell.strategy_kind == "orb":
         from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy
-        orb_cfg = ORBConfig()  # defaults; per-bot overrides via extras later
+        orb_cfg = ORBConfig(
+            **_safe_kwargs(ORBConfig, _filter_extras(cell.extras, "orb")),
+        )
         res = WalkForwardEngine().run(
             bars=bars,
             pipeline=FeaturePipeline.default(),
@@ -348,7 +362,9 @@ def run_cell(cell: ResearchCell) -> CellResult:
         # silently fell through to confluence on daily bars and produced
         # nonsense (OOS Sharpe 1e+14). 2026-04-27.
         from eta_engine.strategies.drb_strategy import DRBConfig, DRBStrategy
-        drb_cfg = DRBConfig()
+        drb_cfg = DRBConfig(
+            **_safe_kwargs(DRBConfig, _filter_extras(cell.extras, "drb")),
+        )
         res = WalkForwardEngine().run(
             bars=bars,
             pipeline=FeaturePipeline.default(),

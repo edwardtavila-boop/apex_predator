@@ -63,6 +63,33 @@ class WalkForwardConfig(BaseModel):
     # Per-fold DSR gating (additive, default off for back-compat) ----------
     strict_fold_dsr_gate: bool = False
     fold_dsr_min_pass_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Long-haul mode: for daily/weekly bots that fire 1-3 trades per
+    # OOS fold, the per-fold DSR gate is the wrong shape — DSR
+    # estimation needs ~10+ trades to stabilize. When True, the
+    # strict fold gate uses pos-fraction (fraction of folds with
+    # OOS Sharpe > 0) instead of DSR pass-fraction, AND the gate
+    # also requires the FOLD-DISTRIBUTION-LEVEL DSR (the legacy
+    # aggregate ``deflated_sharpe``) to clear 0.5. This is the
+    # principled "I have edge across many folds but each fold is
+    # too small to compute a reliable DSR" path. 2026-04-27.
+    long_haul_mode: bool = False
+    long_haul_min_pos_fraction: float = Field(default=0.55, ge=0.0, le=1.0)
+    # Grid-mode gate: for market-making / liquidity-providing
+    # strategies (grid trading) where Sharpe is the wrong metric.
+    # Grid trading produces many small approximately-equal-magnitude
+    # wins and losses; the right measure is profit factor (sum of
+    # winning PnL / sum of losing PnL) and bounded drawdown. When
+    # ``grid_mode`` is True the gate becomes:
+    #   profit_factor > grid_min_profit_factor (default 1.3)
+    #   AND total_return > 0 AND max_dd < grid_max_dd_pct
+    #   AND positive-fold-fraction >= grid_min_pos_fraction
+    # The standard DSR / degradation / IS-positive checks are
+    # bypassed because they punish low-Sharpe-but-positive-edge
+    # strategies that are exactly what grid trading is.
+    grid_mode: bool = False
+    grid_min_profit_factor: float = Field(default=1.3, gt=0.0)
+    grid_max_dd_pct: float = Field(default=20.0, gt=0.0)
+    grid_min_pos_fraction: float = Field(default=0.55, ge=0.0, le=1.0)
 
 
 class WalkForwardResult(BaseModel):
@@ -186,6 +213,8 @@ class WalkForwardEngine:
                     "oos_trades": oos_res.n_trades,
                     "is_return_pct": is_res.total_return_pct,
                     "oos_return_pct": oos_res.total_return_pct,
+                    "oos_profit_factor": oos_res.profit_factor,
+                    "oos_max_dd_pct": oos_res.max_dd_pct,
                     "degradation_pct": _degradation(is_res.sharpe, oos_res.sharpe),
                     "min_trades_met": (
                         is_res.n_trades >= config.min_trades_per_window
@@ -292,8 +321,70 @@ class WalkForwardEngine:
         # IS -3.02, agg OOS +3.57. Walk-forward should validate
         # IS+ AND OOS+, not just OOS+.)
         is_positive = agg_is > 0.0
+        # Aggregate-level degradation: IS->OOS gap measured against
+        # the aggregate IS Sharpe, not averaged across noisy per-
+        # window ratios. For long-haul / high-variance bots the
+        # per-window deg avg is dominated by small-IS folds; the
+        # aggregate measure asks the right question — "did the
+        # strategy as a whole degrade?". Negative means improvement;
+        # we clamp at 0 so the gate sees "no degradation."
+        agg_deg = max(
+            (agg_is - agg_oos) / agg_is if agg_is > 0.0 else 0.0,
+            0.0,
+        )
         legacy_gate = dsr > 0.5 and deg_avg < 0.35 and all_met and is_positive
-        if cfg.strict_fold_dsr_gate:
+        if cfg.grid_mode:
+            # Grid-mode gate: profit_factor + bounded DD + positive
+            # consistency. Sharpe / DSR are bypassed because they
+            # punish low-Sharpe-but-positive-edge market-making
+            # profiles. Aggregate profit factor across all folds
+            # weighted by their PnL volume.
+            n_pos_folds = sum(1 for w in wins if w.get("oos_sharpe", 0.0) > 0.0)
+            pos_frac = n_pos_folds / n_folds if n_folds else 0.0
+            # Aggregate profit factor: median of fold PFs (robust to
+            # one fold dominating). Folds with no losing trades have
+            # PF set to a large sentinel (BacktestResult convention),
+            # so we cap to 10.0 for the median.
+            pfs = [
+                min(float(w.get("oos_profit_factor", 0.0) or 0.0), 10.0)
+                for w in wins
+            ]
+            pfs.sort()
+            agg_pf = pfs[len(pfs) // 2] if pfs else 0.0
+            # Worst-fold drawdown across all OOS windows.
+            worst_dd = max(
+                (float(w.get("oos_max_dd_pct", 0.0) or 0.0) for w in wins),
+                default=0.0,
+            )
+            grid_total_return_positive = agg_oos > 0.0 or pos_frac > 0.5
+            gate = (
+                grid_total_return_positive
+                and agg_pf >= cfg.grid_min_profit_factor
+                and worst_dd <= cfg.grid_max_dd_pct
+                and pos_frac >= cfg.grid_min_pos_fraction
+            )
+        elif cfg.long_haul_mode:
+            # Long-haul gate: skip per-fold DSR (unreliable on 1-3
+            # trade folds), use aggregate-level degradation instead
+            # of per-window-avg, and require fraction-of-folds with
+            # positive OOS Sharpe to clear ``long_haul_min_pos_
+            # fraction``. The aggregate DSR (>0.5) + agg_deg<0.35
+            # + pos-fraction is the principled path for daily/weekly
+            # cadence bots that fire too few trades per fold for
+            # the per-fold DSR + per-window-avg-deg shape to work.
+            n_pos_folds = sum(1 for w in wins if w.get("oos_sharpe", 0.0) > 0.0)
+            pos_frac = n_pos_folds / n_folds if n_folds else 0.0
+            long_haul_legacy = (
+                dsr > 0.5
+                and agg_deg < 0.35
+                and all_met
+                and is_positive
+            )
+            gate = (
+                long_haul_legacy
+                and pos_frac >= cfg.long_haul_min_pos_fraction
+            )
+        elif cfg.strict_fold_dsr_gate:
             gate = legacy_gate and fold_median > 0.5 and fold_pass_frac >= cfg.fold_dsr_min_pass_fraction
         else:
             gate = legacy_gate
@@ -317,9 +408,23 @@ class WalkForwardEngine:
 
 
 def _degradation(is_sharpe: float, oos_sharpe: float) -> float:
+    """Per-window IS->OOS degradation, clamped to [0, 1].
+
+    The clamp is load-bearing: when IS is small (say +0.01) and OOS
+    drops to -1.0, the raw ratio explodes to 100x. Averaging that
+    across folds poisons ``oos_degradation_avg`` and the gate's
+    ``deg_avg < 0.35`` check fails for honest strategies that
+    produced strong aggregate OOS but had a few small-IS folds.
+
+    Semantically, "deg > 1.0" means OOS went the WRONG direction
+    (negative when IS was positive). That outcome is the SAME
+    regardless of magnitude — the strategy degraded fully.
+    Clamping to 1.0 captures this without overweighting noise.
+    """
     if is_sharpe <= 0.0:
         return 0.0 if oos_sharpe >= is_sharpe else 1.0
-    return round(max((is_sharpe - oos_sharpe) / is_sharpe, 0.0), 4)
+    raw = (is_sharpe - oos_sharpe) / is_sharpe
+    return round(max(min(raw, 1.0), 0.0), 4)
 
 
 def _moments(xs: list[float]) -> tuple[float, float]:

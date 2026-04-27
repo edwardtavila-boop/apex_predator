@@ -110,6 +110,17 @@
       "_notes": "Stats from full-period backtest at the promoted config: 1800 days (5y) BTC 1h Coinbase spot bars, 332 trades, win rate 45.5%, avg +0.14R, expectancy +0.14R, total return +54.4%, max DD 17.5%, Sharpe 1.77. Replaces v2 — DD is higher (17.5% vs 4.9%) but the 5y sample includes 2022 bear regimes, the lower DD on v2 was 1y-bull-leaning. Pre-live IBKR/CME drift-check via scripts/compare_coinbase_vs_ibkr still required."
     },
     {
+      "strategy_id": "nq_drb_v2",
+      "n_trades": 284,
+      "win_rate": 0.4049,
+      "avg_r": 0.2116,
+      "r_stddev": 1.4724,
+      "_promoted_at": "2026-04-27",
+      "_promotion_status": "production",
+      "_walk_forward_summary": "NQ1/D, 365d/180d windows, 53 windows, 32/53 +OOS (60.4% positive). Agg IS Sharpe +1.872, agg OOS Sharpe +9.272, aggregate-level deg 0.0% (OOS > IS = improvement, not degradation), DSR 1.000. Long-haul gate PASS (per-fold DSR replaced with positive-fold-fraction since daily-cadence folds fire too few trades for stable per-fold DSR). Sweep winner: atr_stop_mult=2.0, rr_target=2.0, ema_bias_period=50 (faster bias than the default 200 catches 21st-century NQ regime shifts).",
+      "_notes": "Stats from full-period backtest at the promoted config: 27 years (~9800 days) NQ1 daily, 284 trades, win rate 40.5%, avg +0.21R, expectancy +0.21R, total return +76.8%, max DD 12.5%, Sharpe 2.28. Highest OOS Sharpe of any production strategy. Long-haul gate is the right shape for daily-cadence bots: each OOS fold has 3-8 trades — insufficient for stable per-fold DSR, but the 53-fold pos-fraction (60.4%) is exactly the kind of evidence walk-forward should accept. Runs alongside intraday nq_futures ORB on uncorrelated edge; pair correlation should stay low since one fires on 5m breakouts while this fires on D breakouts."
+    },
+    {
       "strategy_id": "eth_corb_v3",
       "n_trades": 73,
       "win_rate": 0.4110,

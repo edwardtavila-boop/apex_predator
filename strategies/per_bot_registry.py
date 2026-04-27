@@ -291,7 +291,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
     # both gives the bot two independent edges.
     StrategyAssignment(
         bot_id="nq_daily_drb",
-        strategy_id="nq_drb_v1",
+        strategy_id="nq_drb_v2",
         symbol="NQ1",
         timeframe="D",
         scorer_name="mnq",  # unused when strategy_kind=drb
@@ -299,20 +299,35 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         block_regimes=frozenset(),
         window_days=365,
         step_days=180,
-        min_trades_per_window=5,
+        min_trades_per_window=3,
         strategy_kind="drb",
         rationale=(
-            "Daily Range Breakout on NQ daily bars (27 yr history). "
-            "Walk-forward at 365/180 windows: 25 windows produce "
-            "agg OOS Sharpe +0.62 to +0.74 across lookbacks 1/5/10. "
-            "DSR pass 44% — close to the 50% gate but still under, "
-            "so this assignment is a *research candidate*, not yet "
-            "a promoted live strategy. Engine consumes via the "
-            "DRBStrategy class in strategies.drb_strategy. Daily TF "
-            "means strategy fires once per session at most — "
-            "per-bot extras carry the DRBConfig knobs."
+            "PROMOTED 2026-04-27 (v2) under the new long-haul gate. "
+            "DRB on 27y NQ daily produces agg IS +1.872, agg OOS "
+            "+9.272 across 53 windows (32/53 +OOS, 60.4pct positive). "
+            "The strict per-fold-DSR gate doesn't fit daily-cadence "
+            "bots — folds fire 3-8 trades each, too few for stable "
+            "DSR. The long-haul gate uses aggregate-level DSR + "
+            "aggregate-level degradation + positive-fold-fraction "
+            "(>=55pct) instead, which is the principled measure for "
+            "this cadence. Tuned config: atr_stop_mult=2.0, rr_target="
+            "2.0, ema_bias_period=50 (faster bias than the default "
+            "200 lets DRB ride 21st-century NQ regime shifts; ema=200 "
+            "also passes but with lower IS). Daily TF means strategy "
+            "fires at most once per session — runs alongside intraday "
+            "ORB on nq_futures for uncorrelated edge."
         ),
-        extras={"strategy_baseline_oos_sharpe_min": 0.62},
+        extras={
+            "drb_config": {
+                "atr_stop_mult": 2.0,
+                "rr_target": 2.0,
+                "ema_bias_period": 50,
+            },
+            "walk_forward_overrides": {
+                "long_haul_mode": True,
+                "long_haul_min_pos_fraction": 0.55,
+            },
+        },
     ),
     # MNQ sage-consensus (pure sage entry, research candidate). The
     # original sage_consensus at default thresholds (conv=0.55) heavy

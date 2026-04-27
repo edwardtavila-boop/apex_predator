@@ -1,0 +1,62 @@
+# EVOLUTIONARY TRADING ALGO  //  configs/tradingview.yaml
+# TradingView headless-Chrome capture targets.
+#
+# Loaded by `scripts/run_tradingview_capture.py` and converted into a
+# `data.tradingview.client.TradingViewConfig`. Adding/removing symbols
+# here is a hot config -- the daemon picks up changes on restart.
+#
+# `symbol` follows the TradingView convention `EXCHANGE:TICKER`. The
+# common ones for this fleet:
+#
+#   CME_MINI:NQ1!         (Nasdaq 100 e-micro front-month)
+#   CME_MINI:MNQ1!        (Micro Nasdaq 100 front-month)
+#   BINANCE:BTCUSDT       (BTC perp / spot proxy)
+#   BINANCE:ETHUSDT
+#   BINANCE:SOLUSDT
+#   BINANCE:XRPUSDT
+#
+# `interval` accepts TradingView intervals: "1", "5", "15", "60",
+# "240", "1D".
+#
+# `indicators` is a list of legend names to record. The chart MUST
+# already have the indicator added (the operator does this once during
+# the auth-state refresh). Names are case-insensitive prefix matches,
+# so "RSI" matches "RSI (14, close)" but not "Stoch RSI".
+
+poll:
+  indicators_seconds: 5.0
+  watchlist_seconds:  15.0
+  alerts_seconds:     30.0
+
+watchlist_url: "https://www.tradingview.com/watchlist/"
+alerts_url:    "https://www.tradingview.com/alerts/"
+chart_url_template: "https://www.tradingview.com/chart/?symbol={symbol}&interval={interval}"
+headless: true
+nav_timeout_ms: 60000
+
+targets:
+  # --- Futures (MNQ + NQ) ------------------------------------------------
+  - symbol:     "CME_MINI:NQ1!"
+    interval:   "5"
+    indicators: ["RSI", "MACD", "Volume MA", "ATR"]
+
+  - symbol:     "CME_MINI:MNQ1!"
+    interval:   "1"
+    indicators: ["RSI", "MACD", "Volume MA", "ATR"]
+
+  # --- Crypto perps (ETH/SOL/XRP + BTC seed) -----------------------------
+  - symbol:     "BINANCE:BTCUSDT"
+    interval:   "5"
+    indicators: ["RSI", "Volume MA", "ATR"]
+
+  - symbol:     "BINANCE:ETHUSDT"
+    interval:   "5"
+    indicators: ["RSI", "Volume MA"]
+
+  - symbol:     "BINANCE:SOLUSDT"
+    interval:   "5"
+    indicators: ["RSI", "Volume MA"]
+
+  - symbol:     "BINANCE:XRPUSDT"
+    interval:   "5"
+    indicators: ["RSI", "Volume MA"]

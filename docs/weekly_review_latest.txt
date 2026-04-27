@@ -10,7 +10,7 @@ Firm verdict: SKIPPED
 Votes: Quant=UNKNOWN  RedTeam=UNKNOWN  Risk=UNKNOWN  Macro=UNKNOWN  Micro=UNKNOWN  PM=UNKNOWN
 --------------------------------------------------------------------------------
 Actions required:
-  - Verdict SKIPPED unrecognized — manual triage required
+  - Verdict SKIPPED unrecognized ï¿½ manual triage required
 --------------------------------------------------------------------------------
 Kill log entries at time of review: 3
 ================================================================================

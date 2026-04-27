@@ -3,9 +3,24 @@ EVOLUTIONARY TRADING ALGO  //  venues.router
 ================================
 Smart routing with failover + circuit breakers.
 
-Crypto (ETH/BTC/SOL/XRP USDT) -> Bybit primary, OKX fallback.
+Crypto (ETH/BTC/SOL/XRP USDT) -> Bybit primary, OKX fallback. (Non-US only.)
 
 Futures (MNQ/NQ/ES/MES/RTY) -> IBKR primary, Tastytrade fallback.
+
+US-person policy (operator mandate 2026-04-26, M2)
+--------------------------------------------------
+When :data:`IS_US_PERSON` is True (default — set via the ``APEX_IS_US_PERSON``
+env var), :func:`SmartRouter.place_with_failover` HARD-REFUSES to send a live
+order to a venue in :data:`NON_FCM_VENUES` (Bybit, OKX, Deribit, Hyperliquid,
+etc.). Those adapters remain importable for unit tests + offline backtests,
+they just cannot route real money for a US person.
+
+US-legal crypto exposure comes from CME futures (BTC, MBT, ETH, MET, SOL, XRP)
+routed through IBKR. See :mod:`eta_engine.venues.cme_mapping` for the
+crypto-perp -> CME-futures translation table.
+
+Override (`APEX_IS_US_PERSON=false`) is only allowed with documented
+compliance counsel approval — it is not a developer convenience flag.
 
 Broker dormancy policy (operator mandate 2026-04-24)
 ----------------------------------------------------
@@ -20,6 +35,7 @@ comes back online, flip :data:`DORMANT_BROKERS` back to the empty set.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Literal
@@ -37,6 +53,26 @@ Urgency = Literal["low", "normal", "high"]
 
 _CRYPTO_NATIVES = {"ETHUSDT", "BTCUSDT", "SOLUSDT", "XRPUSDT"}
 _FUTURES_ROOTS = ("MNQ", "NQ", "ES", "MES", "RTY")
+
+# ---------------------------------------------------------------------------
+# US-person policy (operator mandate 2026-04-26, M2)
+# ---------------------------------------------------------------------------
+#: True when the operator is a US person and live routes to non-FCM venues
+#: must be refused. Default True. Override only via env var with documented
+#: compliance approval. NOT a developer-convenience flag.
+IS_US_PERSON: bool = os.environ.get("APEX_IS_US_PERSON", "true").lower() in (
+    "1", "true", "yes", "y",
+)
+
+#: Venues that are NOT registered as FCMs / are not available to US persons
+#: under current US securities + commodities law. The router refuses to send
+#: LIVE orders to any of these when :data:`IS_US_PERSON` is True. The adapters
+#: stay importable for unit tests + offline backtests. To trade these from
+#: the USA, the operator must produce documented compliance-counsel guidance
+#: AND set ``APEX_IS_US_PERSON=false`` explicitly in the live process env.
+NON_FCM_VENUES: frozenset[str] = frozenset({
+    "bybit", "okx", "deribit", "hyperliquid",
+})
 
 # ---------------------------------------------------------------------------
 # Broker dormancy policy (operator mandate 2026-04-24)
@@ -216,8 +252,39 @@ class SmartRouter:
         max_attempts: int = 2,
         urgency: Urgency = "normal",
     ) -> OrderResult:
-        """Try primary; on REJECTED or exception, try fallback (up to max_attempts)."""
+        """Try primary; on REJECTED or exception, try fallback (up to max_attempts).
+
+        US-person policy (M2, 2026-04-26): when :data:`IS_US_PERSON` is True
+        and the chosen venue is in :data:`NON_FCM_VENUES`, the router refuses
+        the order outright. This is NOT a fallback path -- it is a hard stop
+        intended to prevent an inadvertent live route to an offshore venue
+        the operator is legally not permitted to use.
+        """
         primary = self.choose_venue(req.symbol, req.qty, urgency)
+
+        # M2 hard refusal: US person + non-FCM venue -> RuntimeError before
+        # any network call. Failover does NOT save us here -- if primary is
+        # bybit and fallback is okx, both are blocked for US persons. The
+        # symbol must be re-routed to a CME equivalent through IBKR (see
+        # eta_engine.venues.cme_mapping) at the bot layer.
+        if IS_US_PERSON and primary.name in NON_FCM_VENUES:
+            msg = (
+                f"REFUSED: live order to venue={primary.name!r} blocked by "
+                f"IS_US_PERSON=true (operator mandate M2, 2026-04-26). "
+                f"Symbol={req.symbol!r}. Use the CME futures equivalent via "
+                f"IBKR -- see eta_engine.venues.cme_mapping.to_cme(). "
+                f"To override, set APEX_IS_US_PERSON=false in the live "
+                f"process env with documented compliance approval."
+            )
+            logger.error("M2_BLOCK %s", msg)
+            self._failover_log.append({
+                "venue": primary.name,
+                "reason": "us_person_non_fcm_block",
+                "symbol": req.symbol,
+                "ts": time.time(),
+            })
+            raise RuntimeError(msg)
+
         attempted: list[VenueBase] = []
         last_exc: Exception | None = None
         last_result: OrderResult | None = None
@@ -225,6 +292,22 @@ class SmartRouter:
 
         venue: VenueBase | None = primary
         while venue is not None and len(attempted) < max_attempts:
+            # M2 belt-and-suspenders: even if a future code path reroutes
+            # the failover chain into a non-FCM venue, refuse it here too.
+            if IS_US_PERSON and venue.name in NON_FCM_VENUES:
+                logger.error(
+                    "M2_BLOCK failover skipped non-FCM venue=%s symbol=%s",
+                    venue.name, req.symbol,
+                )
+                self._failover_log.append({
+                    "venue": venue.name,
+                    "reason": "us_person_non_fcm_block_in_failover",
+                    "symbol": req.symbol,
+                    "ts": time.time(),
+                })
+                attempted.append(venue)
+                venue = self._fallback_for(venue)
+                continue
             circuit = self._venue_circuits.get(venue.name)
             if circuit is not None and circuit.is_open():
                 logger.warning("circuit OPEN for venue=%s, skipping", venue.name)

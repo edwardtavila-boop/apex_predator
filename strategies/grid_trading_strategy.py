@@ -70,6 +70,27 @@ class GridConfig:
     # fading a strong trend into the ground.
     trend_filter: bool = True
 
+    # ---- Adaptive volatility mode (2026-04-27 user mandate) -----------
+    # When ``adaptive_volatility`` is True, grid_spacing_pct becomes a
+    # FUNCTION of the current ATR percentile rather than a fixed value:
+    #   * At low ATR (<= adaptive_atr_pct_min): use ``adaptive_min_spacing_pct``
+    #   * At high ATR (>= adaptive_atr_pct_max): use ``adaptive_max_spacing_pct``
+    #   * Linearly interpolate between
+    # This implements the user spec: "Grid spacing expands when
+    # volatility expands and tightens when volatility contracts."
+    adaptive_volatility: bool = False
+    adaptive_atr_pct_lookback: int = 100
+    adaptive_atr_pct_min: float = 0.30  # below this ATR%-rank → min spacing
+    adaptive_atr_pct_max: float = 0.70  # above this → max spacing
+    adaptive_min_spacing_pct: float = 0.0025  # 0.25%
+    adaptive_max_spacing_pct: float = 0.012   # 1.2%
+    # Kill switch: when ATR rank > this, disable the grid entirely
+    # (volatility regime suggests trending, not grid-friendly).
+    adaptive_kill_atr_pct: float = 0.85
+    # Range break kill switch — when price closes beyond ref by
+    # this multiple of n_levels grid spacing, disable until reset.
+    range_break_mult: float = 1.0
+
 
 @dataclass
 class _GridState:
@@ -83,6 +104,62 @@ class GridTradingStrategy:
     def __init__(self, config: GridConfig | None = None) -> None:
         self.cfg = config or GridConfig()
         self._state = _GridState()
+        # Audit counters for adaptive mode
+        self._n_kill_atr: int = 0
+        self._n_kill_range_break: int = 0
+        self._n_adaptive_widened: int = 0
+        self._n_adaptive_tightened: int = 0
+
+    @property
+    def grid_stats(self) -> dict[str, int]:
+        return {
+            "kill_atr": self._n_kill_atr,
+            "kill_range_break": self._n_kill_range_break,
+            "adaptive_widened": self._n_adaptive_widened,
+            "adaptive_tightened": self._n_adaptive_tightened,
+        }
+
+    def _adaptive_spacing_pct(self, hist: list) -> float | None:  # noqa: ANN001
+        """Compute volatility-adjusted grid spacing. Returns None when
+        the kill switch fires (ATR percentile too high)."""
+        if not self.cfg.adaptive_volatility:
+            return self.cfg.grid_spacing_pct
+        # Need full lookback to compute percentile reliably
+        lookback = self.cfg.adaptive_atr_pct_lookback
+        if len(hist) < lookback + self.cfg.atr_period + 1:
+            return self.cfg.grid_spacing_pct
+        # Compute rolling ATR series over the lookback window
+        atrs: list[float] = []
+        period = self.cfg.atr_period
+        for i in range(len(hist) - lookback, len(hist)):
+            window = hist[max(0, i - period):i]
+            if not window:
+                continue
+            atrs.append(sum(b.high - b.low for b in window) / len(window))
+        if not atrs:
+            return self.cfg.grid_spacing_pct
+        current_atr = atrs[-1]
+        sorted_atrs = sorted(atrs)
+        rank = sum(1 for v in sorted_atrs if v <= current_atr) / len(sorted_atrs)
+        # Kill switch
+        if rank > self.cfg.adaptive_kill_atr_pct:
+            self._n_kill_atr += 1
+            return None
+        # Linear interpolate between min and max spacing
+        lo = self.cfg.adaptive_atr_pct_min
+        hi = self.cfg.adaptive_atr_pct_max
+        if rank <= lo:
+            self._n_adaptive_tightened += 1
+            return self.cfg.adaptive_min_spacing_pct
+        if rank >= hi:
+            self._n_adaptive_widened += 1
+            return self.cfg.adaptive_max_spacing_pct
+        # Interpolate
+        frac = (rank - lo) / max(hi - lo, 1e-9)
+        return (
+            self.cfg.adaptive_min_spacing_pct
+            + frac * (self.cfg.adaptive_max_spacing_pct - self.cfg.adaptive_min_spacing_pct)
+        )
 
     def maybe_enter(
         self,
@@ -107,9 +184,20 @@ class GridTradingStrategy:
         if mid <= 0.0:
             return None
 
-        # Build grid levels around the reference
-        spacing = self.cfg.grid_spacing_pct * mid
+        # Build grid levels around the reference. When adaptive mode
+        # is enabled, spacing scales with volatility regime; the kill
+        # switch returns None when ATR rank exceeds threshold.
+        spacing_pct = self._adaptive_spacing_pct(hist)
+        if spacing_pct is None:
+            return None
+        spacing = spacing_pct * mid
         if spacing <= 0.0:
+            return None
+        # Range-break kill switch: if price has decisively closed
+        # outside grid range (beyond n_levels rungs), disable for this bar.
+        max_dist = self.cfg.range_break_mult * self.cfg.n_levels * spacing
+        if abs(bar.close - mid) > max_dist:
+            self._n_kill_range_break += 1
             return None
         long_levels = [mid - i * spacing for i in range(1, self.cfg.n_levels + 1)]
         short_levels = [mid + i * spacing for i in range(1, self.cfg.n_levels + 1)]

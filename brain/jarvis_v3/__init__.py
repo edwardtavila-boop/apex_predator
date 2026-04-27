@@ -37,6 +37,16 @@ Supercharge / Evolutionary Trading Algo Core
   * philosophy            -- encoded Evolutionary Trading Algo doctrine
   * unleashed             -- meta-controller that orchestrates everything
 
+Consolidation (Wave-12 / 2026-04-27): JARVIS as source of truth
+  * intelligence          -- JarvisIntelligence wraps JarvisAdmin with
+                              memory_rag + causal + world_model +
+                              firm_board_debate; one consult() call
+  * feedback_loop         -- close_trade() propagates realized R to
+                              memory + bandits + calibrator + journal
+  * health_check          -- jarvis_health() one-call self-diagnostic
+  * admin_query           -- read-only operator queries against the
+                              verdict + trade-close logs
+
 Design principles carry from v2: pure / deterministic / pydantic-typed /
 opt-in (nothing breaks if a caller doesn't know about v3).
 """
@@ -64,4 +74,9 @@ __all__ = [
     "kaizen",
     "philosophy",
     "unleashed",
+    # Wave-12 consolidation (JARVIS as source of truth)
+    "intelligence",
+    "feedback_loop",
+    "health_check",
+    "admin_query",
 ]

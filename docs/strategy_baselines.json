@@ -44,6 +44,17 @@
       "_notes": "OOS > IS in both windows (W0: IS +0.69 / OOS +3.35; W1: IS +2.55 / OOS +13.23). Lower magnitude than MNQ (+8.29 vs +10.06) but same direction — sage's lift is real and generalizes. n_trades inferred from W0+W1 IS+OOS = 16+9 + 29+4 = 58. Same paper-soak gate as mnq_orb_sage_v1 applies."
     },
     {
+      "strategy_id": "mnq_sage_consensus_v1",
+      "n_trades": 19,
+      "win_rate": 0.526,
+      "avg_r": 0.700,
+      "r_stddev": 1.351,
+      "_promoted_at": "2026-04-27",
+      "_promotion_status": "research_candidate",
+      "_walk_forward_summary": "MNQ1/5m, 60d/30d, 2 windows, agg OOS Sharpe +2.291 (vs original sage_consensus -1.15 — sage as entry signal works at restrictive conv=0.75). W0: IS +9.17 / OOS +4.58 (4 trades); W1: IS +5.02 / OOS 0 (2 trades, min_trades_met=False). DSR median 0.651, DSR pass 50%. Gate FAIL only because W1 has <5 trades. Best cell from 60-cell sweep: conv=0.75, align=0.70, cooldown=12, max=1.",
+      "_notes": "Research candidate, not promoted to live. n_trades = W0+W1 IS+OOS = 3+4+10+2 = 19 across 107 days. Promote to live once MNQ 5m data extends past ~6 months and window count grows from 2 to 6+. The flipped-success demonstrates pure sage CAN be an entry signal — but only with very strict thresholds + sparse firing."
+    },
+    {
       "strategy_id": "btc_corb_sage_v1",
       "n_trades": 49,
       "win_rate": 0.490,

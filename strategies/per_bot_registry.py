@@ -314,6 +314,49 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={"strategy_baseline_oos_sharpe_min": 0.62},
     ),
+    # MNQ sage-consensus (pure sage entry, research candidate). The
+    # original sage_consensus at default thresholds (conv=0.55) heavy
+    # IS-overfit (W0: IS +2.08/OOS -0.00, W1: IS +1.80/OOS -2.30, agg
+    # OOS Sh -1.15). The 60-cell restrictive sweep (2026-04-27) found
+    # conv=0.75, align=0.70 flips it: agg OOS Sh +2.29, DSR pass 50%.
+    # Gate FAIL only because W1 fires 2 OOS trades (<5-trade floor).
+    # Sage as the entry signal works when restrictive enough.
+    StrategyAssignment(
+        bot_id="mnq_sage_consensus",
+        strategy_id="mnq_sage_consensus_v1",
+        symbol="MNQ1",
+        timeframe="5m",
+        scorer_name="mnq",  # unused when strategy_kind=sage_consensus
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=60,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="sage_consensus",
+        rationale=(
+            "Research candidate. Original sage_consensus overfit "
+            "(IS Sh +2.08 / OOS -0.00 W0, IS +1.80 / OOS -2.30 W1, "
+            "agg OOS Sh -1.15). The 60-cell sweep on 2026-04-27 "
+            "found a restrictive-threshold region where the strategy "
+            "stops over-trading: conv=0.75, align=0.70 -> agg OOS Sh "
+            "+2.29 (W0: IS +9.17 / OOS +4.58, W1: IS +5.02 / OOS 0). "
+            "Only 6 OOS trades total -- W1 fires 2 trades which "
+            "trips min_trades_met=False, so gate FAIL. Promote to "
+            "live ONLY after MNQ 5m data extends past ~6 months "
+            "(currently 107d) so window count grows from 2 to 6+. "
+            "Pure sage as entry can work, but only with very strict "
+            "thresholds + low fire rate."
+        ),
+        extras={
+            "sage_min_conviction": 0.75,
+            "sage_min_alignment": 0.70,
+            "sage_min_bars_between_trades": 12,
+            "sage_max_trades_per_day": 1,
+            "sage_lookback_bars": 200,
+            "instrument_class": "futures",
+            "research_candidate": True,
+        },
+    ),
     # BTC hybrid (sage research candidate). 180-cell sweep on BTC 1h
     # found best cell at conv=0.40, range=30m, lookback=200: agg OOS
     # Sharpe +3.157 (vs plain crypto_orb +2.73 — sage adds +0.43 OOS

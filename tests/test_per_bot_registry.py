@@ -69,6 +69,10 @@ def test_summary_markdown_includes_every_bot() -> None:
 
 def test_thresholds_in_valid_range() -> None:
     for a in ASSIGNMENTS:
+        if a.strategy_kind == "orb":
+            # ORB doesn't consume confluence_threshold — the field is
+            # ignored for ORB-kind assignments. Skip the range check.
+            continue
         assert 0.0 < a.confluence_threshold <= 10.0, (
             f"{a.bot_id} threshold {a.confluence_threshold} out of (0, 10]"
         )

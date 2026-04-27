@@ -1,0 +1,25 @@
+{
+  "year": 2026,
+  "n_trades": 75,
+  "by_section": {
+    "6781": {
+      "n_trades": 75,
+      "gross_gain_usd": 7068.64,
+      "gross_loss_usd": -4836.03,
+      "net_usd": 2232.61
+    }
+  },
+  "by_bot": {
+    "mnq_futures": {
+      "n_trades": 75,
+      "net_usd": 2232.61
+    }
+  },
+  "totals": {
+    "gross_gain_usd": 7068.64,
+    "gross_loss_usd": -4836.03,
+    "net_pnl_usd": 2232.61
+  },
+  "wash_sale_flagged": 42,
+  "_notes": "Form 8949 columns are split into 8949_short (\u22641y holding) and 8949_long (>1y). Form 6781 captures Section 1256 contracts (regulated futures) with the 60/40 LT/ST rule applied at the form level \u2014 see your CPA. wash_sale_flag is heuristic only."
+}

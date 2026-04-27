@@ -147,6 +147,44 @@ class BaseBot(abc.ABC):
         """
         self._eta_logger = logger
 
+    def observe_fill_for_learning(
+        self,
+        *,
+        feature_bucket: str,
+        r_multiple: float,
+    ) -> None:
+        """Tier-4 #12 (2026-04-27): online-learning hook for fill outcomes.
+
+        Bots that opt into the rebalancer / online-learning pipeline call
+        this on every closed trade. ``feature_bucket`` is the strategy-
+        specific descriptor (e.g. ``"confluence_8"``, ``"regime_trend"``).
+        ``r_multiple`` is the realized R-multiple of the trade (+1.0 = won
+        a 1R trade, -1.0 = stopped at 1R, etc.).
+
+        Backward-compatible: if the bot doesn't have an ``OnlineUpdater``
+        attached (default), this is a no-op. To opt in::
+
+            from eta_engine.brain.online_learning import OnlineUpdater
+            self._online_updater = OnlineUpdater(bot_name=self.config.name)
+
+        Then in ``on_fill``, after computing R::
+
+            self.observe_fill_for_learning(
+                feature_bucket=f"confluence_{int(c)}",
+                r_multiple=R,
+            )
+        """
+        upd = getattr(self, "_online_updater", None)
+        if upd is None:
+            return
+        try:
+            upd.observe(feature_bucket=feature_bucket, r_multiple=r_multiple)
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning(
+                "online_updater.observe failed (non-fatal): %s", exc,
+            )
+
     @abc.abstractmethod
     async def start(self) -> None: ...
     @abc.abstractmethod

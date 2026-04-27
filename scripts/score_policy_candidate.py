@@ -98,23 +98,146 @@ def champion_metrics(records: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def candidate_metrics(records: list[dict[str, Any]], *, candidate_module: str | None) -> dict[str, float]:
-    """Replay records through a candidate policy and aggregate.
+def _reconstruct_jarvis_context_minimal(record: dict[str, Any]) -> Any:
+    """Build a minimal JarvisContext from an audit record.
 
-    SCAFFOLD: when candidate_module is None, we mirror champion metrics
-    (no-op replay). When provided, we'd dynamically import the module's
-    `evaluate_request_v2(req, ctx)` callable and re-evaluate every record.
+    The audit record stores ``stress_composite`` + ``session_phase`` but
+    not the nested StressScore/JarvisSuggestion objects. We reconstruct
+    just enough so a candidate policy can read the fields it cares about.
+    """
+    from datetime import UTC, datetime
+    from eta_engine.brain.jarvis_admin import ActionSuggestion
+    from eta_engine.brain.jarvis_context import (
+        JarvisContext,
+        JarvisSuggestion,
+        SessionPhase,
+        StressScore,
+    )
+
+    # stress_composite from response (denormalized in audit)
+    resp = record.get("response", {}) or {}
+    stress_c = resp.get("stress_composite")
+    if stress_c is None:
+        stress_c = float(record.get("stress_composite") or 0.0)
+    binding = resp.get("binding_constraint", "")
+
+    # session_phase
+    sp_str = resp.get("session_phase") or record.get("session_phase") or "OVERNIGHT"
+    try:
+        sp = SessionPhase(sp_str)
+    except ValueError:
+        sp = SessionPhase.OVERNIGHT
+
+    # jarvis_action (the action SUGGESTION the engine produced)
+    ja_str = record.get("jarvis_action", "TRADE")
+    try:
+        ja = ActionSuggestion(ja_str)
+    except ValueError:
+        ja = ActionSuggestion.TRADE
+
+    # JarvisContext has many required fields (equity, regime, journal, ...)
+    # but for replay scoring we only need the fields a candidate actually
+    # reads (stress_score, session_phase, suggestion). Use model_construct
+    # to bypass validation so we don't have to fabricate equity curves
+    # and trade journals for every audit record.
+    return JarvisContext.model_construct(
+        ts=datetime.now(UTC),
+        suggestion=JarvisSuggestion(
+            action=ja,
+            reason="reconstructed for candidate replay",
+            confidence=0.5,
+        ),
+        stress_score=StressScore(composite=float(stress_c), binding_constraint=binding, components=[]),
+        session_phase=sp,
+    )
+
+
+def _reconstruct_action_request(record: dict[str, Any]) -> Any:
+    from eta_engine.brain.jarvis_admin import ActionRequest, ActionType, SubsystemId
+
+    req = record.get("request", {}) or {}
+    try:
+        subsystem = SubsystemId(req.get("subsystem", "operator"))
+    except ValueError:
+        subsystem = SubsystemId.OPERATOR
+    try:
+        action = ActionType(req.get("action", "ORDER_PLACE"))
+    except ValueError:
+        action = ActionType.ORDER_PLACE
+    return ActionRequest(
+        request_id=req.get("request_id", "replay"),
+        subsystem=subsystem,
+        action=action,
+        payload=req.get("payload") or {},
+        rationale=req.get("rationale", ""),
+    )
+
+
+def candidate_metrics(records: list[dict[str, Any]], *, candidate_module: str | None) -> dict[str, float]:
+    """Replay records through a registered candidate policy and aggregate.
+
+    When ``candidate_module`` is ``None``, returns champion metrics
+    (TIE baseline). When provided, looks up the candidate via
+    ``brain.jarvis_v3.candidate_policy.get_candidate`` and replays
+    every record through it, reconstructing minimal JarvisContext +
+    ActionRequest from the audit fields.
     """
     if candidate_module is None:
-        # No candidate -- just return champion metrics so the report
-        # shows "current policy vs current policy = TIE" baseline.
         return champion_metrics(records)
-    # TODO: wire in candidate evaluator. The challenge is reconstructing
-    # JarvisContext from the audit record's stress_composite + session_phase
-    # fields. Keep this a scaffold until a stable candidate-policy interface
-    # lands.
-    logger.warning("candidate replay not yet implemented; returning champion baseline")
-    return champion_metrics(records)
+
+    # Trigger registry side-effects (auto-register all shipped candidates).
+    try:
+        from eta_engine.brain.jarvis_v3 import policies  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("policies package import failed: %s", exc)
+
+    from eta_engine.brain.jarvis_v3.candidate_policy import get_candidate
+
+    try:
+        candidate = get_candidate(candidate_module)
+    except KeyError:
+        logger.error("no candidate registered as '%s' -- did you import the module?",
+                     candidate_module)
+        return champion_metrics(records)
+
+    if not records:
+        return {"total": 0, "approval_rate": 0.0, "avg_cap": 1.0}
+
+    cand_verdicts: dict[str, int] = {}
+    cand_caps: list[float] = []
+    cap_tightened = 0
+    total = 0
+
+    for rec in records:
+        try:
+            ctx = _reconstruct_jarvis_context_minimal(rec)
+            req = _reconstruct_action_request(rec)
+            cand_resp = candidate(req, ctx)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("replay skipped 1 record: %s", exc)
+            continue
+        total += 1
+        v = cand_resp.verdict.value if hasattr(cand_resp.verdict, "value") else str(cand_resp.verdict)
+        cand_verdicts[v] = cand_verdicts.get(v, 0) + 1
+        if v == "CONDITIONAL":
+            cap = cand_resp.size_cap_mult if cand_resp.size_cap_mult is not None else 0.5
+            cand_caps.append(float(cap))
+            # Did the candidate tighten vs the champion's recorded cap?
+            champ_cap = (rec.get("response", {}) or {}).get("size_cap_mult")
+            if isinstance(champ_cap, (int, float)) and float(cap) < float(champ_cap):
+                cap_tightened += 1
+
+    approved = cand_verdicts.get("APPROVED", 0)
+    return {
+        "total": total,
+        "approved": approved,
+        "approval_rate": round(approved / total, 4) if total else 0.0,
+        "avg_cap": round(sum(cand_caps) / len(cand_caps), 4) if cand_caps else 1.0,
+        "denied": cand_verdicts.get("DENIED", 0),
+        "deferred": cand_verdicts.get("DEFERRED", 0),
+        "conditional": len(cand_caps),
+        "cap_tightened_count": cap_tightened,
+    }
 
 
 def compare(champ: dict[str, float], cand: dict[str, float]) -> dict[str, str]:

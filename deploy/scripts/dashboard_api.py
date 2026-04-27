@@ -220,6 +220,32 @@ def favicon() -> FileResponse | HTMLResponse:
     return HTMLResponse(status_code=204)
 
 
+@app.get("/theme.css", response_class=PlainTextResponse)
+def serve_theme_css() -> PlainTextResponse:
+    """Serve the dashboard CSS theme."""
+    css = _STATUS_PAGE.parent / "theme.css"
+    if not css.exists():
+        return PlainTextResponse("/* theme.css missing */", media_type="text/css")
+    return PlainTextResponse(
+        css.read_text(encoding="utf-8"),
+        media_type="text/css",
+    )
+
+
+@app.get("/js/{filename}", response_class=PlainTextResponse)
+def serve_js_module(filename: str) -> PlainTextResponse:
+    """Serve a JS module from deploy/status_page/js/. Path-traversal-safe."""
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="invalid filename")
+    js_path = _STATUS_PAGE.parent / "js" / filename
+    if not js_path.is_file() or js_path.parent != _STATUS_PAGE.parent / "js":
+        raise HTTPException(status_code=404, detail=f"{filename} not found")
+    return PlainTextResponse(
+        js_path.read_text(encoding="utf-8"),
+        media_type="application/javascript",
+    )
+
+
 @app.get("/metrics", response_class=PlainTextResponse)
 def prometheus_metrics() -> PlainTextResponse:
     """Prometheus OpenMetrics endpoint. Reads the textfile written by

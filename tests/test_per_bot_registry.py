@@ -68,10 +68,16 @@ def test_summary_markdown_includes_every_bot() -> None:
 
 
 def test_thresholds_in_valid_range() -> None:
+    # Strategy kinds that have their own filtering and ignore the
+    # confluence threshold entirely. Adding a new self-contained
+    # strategy here is the one-line change to keep the registry tests
+    # green for it.
+    _IGNORES_THRESHOLD = {
+        "orb", "drb", "crypto_orb",
+        "crypto_trend", "crypto_meanrev", "crypto_scalp",
+    }
     for a in ASSIGNMENTS:
-        if a.strategy_kind == "orb":
-            # ORB doesn't consume confluence_threshold — the field is
-            # ignored for ORB-kind assignments. Skip the range check.
+        if a.strategy_kind in _IGNORES_THRESHOLD:
             continue
         assert 0.0 < a.confluence_threshold <= 10.0, (
             f"{a.bot_id} threshold {a.confluence_threshold} out of (0, 10]"

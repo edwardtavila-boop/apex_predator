@@ -266,6 +266,19 @@ class RouterAdapter:
     #: the adapter session-agnostic; bots without an EOD policy never
     #: set this.
     session_gate: Any | None = None
+    #: Optional ``bot_id`` identifying the registry entry that owns
+    #: this adapter (e.g. ``"mnq_futures"``). When set, ``push_bar``
+    #: queries :func:`per_bot_registry.is_bot_active` BEFORE running
+    #: the dispatcher and short-circuits to ``None`` if the bot is
+    #: marked deactivated via ``extras["deactivated"]=True``. This is
+    #: the canonical kill-switch chokepoint flagged by risk-sage on
+    #: 2026-04-27 — the prior approach (raising
+    #: ``confluence_threshold`` to an unreachable value) is a
+    #: tripwire, not a kill-switch, because a config reload could
+    #: silently re-arm the bot. ``None`` (default) keeps the adapter
+    #: registry-agnostic for backtests and unit tests that don't
+    #: route through the registry.
+    bot_id: str | None = None
 
     # private
     _bars: deque[Bar] = field(init=False, repr=False)
@@ -293,7 +306,8 @@ class RouterAdapter:
         # Convert the bar's epoch-millisecond ``ts`` to a UTC datetime
         # the gate expects. Fall back gracefully when ``ts`` is absent
         # or malformed -- the hot loop must never crash on a bad bar.
-        from datetime import UTC, datetime as _dt
+        from datetime import UTC
+        from datetime import datetime as _dt
 
         ts_raw = bar.get("ts") or bar.get("timestamp")
         try:
@@ -366,6 +380,25 @@ class RouterAdapter:
         eligibility in that case.
         """
         self._append_bar_dict(bar_dict)
+        # Registry kill-switch chokepoint — risk-sage 2026-04-27.
+        # Short-circuit BEFORE dispatch so a deactivated bot never
+        # produces an actionable signal, regardless of what the
+        # router would have decided. Cheap dict lookup; cost is
+        # negligible vs the per-bar dispatch path.
+        if self.bot_id is not None:
+            try:
+                from eta_engine.strategies.per_bot_registry import is_bot_active
+
+                if not is_bot_active(self.bot_id):
+                    self._last_decision = None
+                    return None
+            except Exception:  # noqa: BLE001 -- never crash the hot loop
+                # If the registry import or lookup fails, default to
+                # ALLOWING the bot to fire. Failing-closed here would
+                # make a transient registry import error look like a
+                # global kill-switch event, which is worse than
+                # treating the registry as unavailable.
+                pass
         self._tick_scheduler_safely()
         ctx = context_from_dict(
             bar_dict,

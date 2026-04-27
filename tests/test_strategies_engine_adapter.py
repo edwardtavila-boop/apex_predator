@@ -419,3 +419,44 @@ class TestRouterAdapterWithStubRegistry:
         # Internally the adapter assigns ts=0, 1
         ts_values = [b.ts for b in adapter.bars]
         assert ts_values == [0, 1]
+
+
+class TestRegistryKillSwitchChokepoint:
+    """The risk-sage chokepoint (2026-04-27) — when bot_id is set,
+    push_bar must short-circuit to None for any bot whose registry
+    extras carry ``deactivated=True``. The xrp_perp registry entry
+    is used as the canonical fixture since the operator muted it
+    for "no news feed" reasons in the same review."""
+
+    def test_deactivated_bot_short_circuits_to_none(self) -> None:
+        # xrp_perp is muted in the registry — adapter must return None
+        # without buffering a dispatch decision.
+        adapter = RouterAdapter(asset="MNQ", bot_id="xrp_perp")
+        out = adapter.push_bar(_bar_dict(0))
+        assert out is None
+        assert adapter.last_decision is None, (
+            "muted bots must not record a dispatch decision either"
+        )
+
+    def test_active_bot_runs_normally(self) -> None:
+        # mnq_futures is active — adapter must dispatch as usual.
+        adapter = RouterAdapter(asset="MNQ", bot_id="mnq_futures")
+        adapter.push_bar(_bar_dict(0))
+        # The dispatch path runs; last_decision is populated.
+        assert adapter.last_decision is not None
+
+    def test_unset_bot_id_runs_normally(self) -> None:
+        # bot_id=None preserves the legacy code path used by every
+        # backtest and unit test that doesn't route through registry.
+        adapter = RouterAdapter(asset="MNQ", bot_id=None)
+        adapter.push_bar(_bar_dict(0))
+        assert adapter.last_decision is not None
+
+    def test_unknown_bot_id_short_circuits_to_none(self) -> None:
+        # is_bot_active returns False for unknown bot_ids — same
+        # as a deactivated bot, the adapter must short-circuit.
+        # Better to fail-shut on a typo than silently route.
+        adapter = RouterAdapter(asset="MNQ", bot_id="does_not_exist_xyz")
+        out = adapter.push_bar(_bar_dict(0))
+        assert out is None
+        assert adapter.last_decision is None

@@ -82,7 +82,7 @@ class BaselineSnapshot(BaseModel):
     r_stddev: float = Field(ge=0.0, description="Per-trade R standard deviation")
 
     @classmethod
-    def from_trades(cls, strategy_id: str, trades: "Sequence[Trade]") -> "BaselineSnapshot":
+    def from_trades(cls, strategy_id: str, trades: Sequence[Trade]) -> BaselineSnapshot:
         if not trades:
             return cls(strategy_id=strategy_id, n_trades=0, win_rate=0.0, avg_r=0.0, r_stddev=0.0)
         rs = [t.pnl_r for t in trades]
@@ -124,7 +124,7 @@ class DriftAssessment(BaseModel):
 def assess_drift(
     *,
     strategy_id: str,
-    recent: "Sequence[Trade]",
+    recent: Sequence[Trade],
     baseline: BaselineSnapshot,
     min_trades: int = 20,
     amber_z: float = 2.0,
@@ -224,4 +224,138 @@ def assess_drift(
         win_rate_z=wr_z,
         avg_r_z=r_z,
         reasons=reasons,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fleet correlation penalty (quant-sage 2026-04-27)
+# ---------------------------------------------------------------------------
+#
+# Quant-sage flagged that BTC + ETH on the same `crypto_orb` may be
+# one strategy not two — DSR for the fleet needs an explicit
+# correlation penalty, otherwise we're double-counting the same edge.
+# The :class:`FleetCorrelationAssessment` quantifies that risk on
+# realized trade R-values so the operator sees when two bots
+# tagged via ``extras["fleet_corr_partner"]`` are firing in lockstep.
+#
+# Severity escalates as correlation rises:
+#   * < amber_rho            -> green   (independent enough)
+#   * amber_rho..red_rho     -> amber   (treat as 1.5x exposure)
+#   * >= red_rho             -> red     (treat as ONE bot for risk)
+
+
+class FleetCorrelationAssessment(BaseModel):
+    """Quant-sage's correlation-penalty verdict for a registered pair.
+
+    ``recommended_action`` is the operator-facing instruction:
+      * ``"independent"`` — risk-budget the two bots normally.
+      * ``"halve_one"`` — keep both bots active but cut their per-bot
+        risk in half so the sum mimics a single-bot exposure.
+      * ``"merge_for_risk"`` — treat the pair as ONE bot for the
+        FleetRiskGate / portfolio-rebalancer; the realized PnL already
+        looks single-source, so per-bot caps do nothing.
+    """
+
+    bot_a: str
+    bot_b: str
+    severity: Severity
+    n_paired: int = Field(ge=0)
+    rho: float = Field(ge=-1.0, le=1.0)
+    recommended_action: Literal["independent", "halve_one", "merge_for_risk"]
+    reasons: list[str] = Field(default_factory=list)
+
+
+def _pearson(xs: list[float], ys: list[float]) -> float:
+    """Pearson correlation; 0.0 on degenerate inputs."""
+    n = len(xs)
+    if n < 2 or n != len(ys):
+        return 0.0
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    sxy = sum((xs[i] - mx) * (ys[i] - my) for i in range(n))
+    sxx = sum((xs[i] - mx) ** 2 for i in range(n))
+    syy = sum((ys[i] - my) ** 2 for i in range(n))
+    denom = math.sqrt(sxx * syy)
+    if denom <= 0.0:
+        return 0.0
+    return sxy / denom
+
+
+def assess_fleet_correlation(
+    *,
+    bot_a: str,
+    recent_a: Sequence[Trade],
+    bot_b: str,
+    recent_b: Sequence[Trade],
+    min_paired: int = 10,
+    amber_rho: float = 0.5,
+    red_rho: float = 0.7,
+) -> FleetCorrelationAssessment:
+    """Score realised-R correlation between a registered bot pair.
+
+    The pair's recent trade streams are zipped by sequence position
+    (the n-th trade of each), so this is a *trade-aligned* Pearson
+    rho — not a calendar-aligned one. That's intentional: bots fire
+    asynchronously, but two bots monetising the same regime tend to
+    open trades within minutes of each other, so sequence alignment
+    is a reasonable proxy with much less plumbing than calendar
+    alignment.
+
+    Sample sizes below ``min_paired`` return ``green`` with a
+    "insufficient sample" reason — same idiom as ``assess_drift``.
+
+    Thresholds default to amber=0.5 / red=0.7, matching the registry
+    rationale on the eth_perp + btc_hybrid pair: "if rho > 0.7 over
+    30 days, treat the pair as one bot for risk-budget purposes."
+    """
+    rs_a = [t.pnl_r for t in recent_a]
+    rs_b = [t.pnl_r for t in recent_b]
+    n = min(len(rs_a), len(rs_b))
+    if n < min_paired:
+        return FleetCorrelationAssessment(
+            bot_a=bot_a, bot_b=bot_b,
+            severity="green",
+            n_paired=n,
+            rho=0.0,
+            recommended_action="independent",
+            reasons=[f"insufficient sample: {n} < {min_paired} paired trades"],
+        )
+
+    xs = rs_a[-n:]
+    ys = rs_b[-n:]
+    rho = _pearson(xs, ys)
+
+    if rho >= red_rho:
+        return FleetCorrelationAssessment(
+            bot_a=bot_a, bot_b=bot_b,
+            severity="red",
+            n_paired=n,
+            rho=rho,
+            recommended_action="merge_for_risk",
+            reasons=[
+                f"trade-aligned rho={rho:+.2f} >= {red_rho} over {n} trades; "
+                "the pair monetises the same edge — treat as ONE bot for "
+                "fleet risk-budget purposes."
+            ],
+        )
+    if rho >= amber_rho:
+        return FleetCorrelationAssessment(
+            bot_a=bot_a, bot_b=bot_b,
+            severity="amber",
+            n_paired=n,
+            rho=rho,
+            recommended_action="halve_one",
+            reasons=[
+                f"trade-aligned rho={rho:+.2f} in [{amber_rho},{red_rho}) "
+                f"over {n} trades; cut one bot's risk_per_trade_pct in "
+                "half so the pair's combined exposure mimics a single bot."
+            ],
+        )
+    return FleetCorrelationAssessment(
+        bot_a=bot_a, bot_b=bot_b,
+        severity="green",
+        n_paired=n,
+        rho=rho,
+        recommended_action="independent",
+        reasons=[f"trade-aligned rho={rho:+.2f} < {amber_rho} over {n} trades"],
     )

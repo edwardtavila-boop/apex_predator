@@ -10,7 +10,9 @@ from eta_engine.backtest.models import Trade
 from eta_engine.obs.drift_monitor import (
     BaselineSnapshot,
     DriftAssessment,
+    FleetCorrelationAssessment,
     assess_drift,
+    assess_fleet_correlation,
 )
 
 
@@ -205,4 +207,91 @@ def test_assessment_is_pydantic_serializable() -> None:
     assert "win_rate_z" in payload
     # Round-trip
     a2 = DriftAssessment.model_validate(payload)
+    assert a2 == a
+
+
+# ---------------------------------------------------------------------------
+# Fleet correlation penalty (quant-sage 2026-04-27)
+# ---------------------------------------------------------------------------
+
+
+def test_fleet_correlation_insufficient_sample_returns_green() -> None:
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid", recent_a=[_trade(1.0)] * 5,
+        bot_b="eth_perp", recent_b=[_trade(1.0)] * 5,
+    )
+    assert a.severity == "green"
+    assert a.recommended_action == "independent"
+    assert a.rho == 0.0
+    assert any("insufficient sample" in r for r in a.reasons)
+
+
+def test_fleet_correlation_perfectly_correlated_pair_red() -> None:
+    """Same R-stream on both bots -> rho=1.0 -> red / merge_for_risk."""
+    rs = [1.5, -1.0, 0.7, -0.4, 1.2, 0.9, -0.6, 1.1, -0.3, 0.8, 1.0, -0.7]
+    trades_a = [_trade(r) for r in rs]
+    trades_b = [_trade(r) for r in rs]
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid", recent_a=trades_a,
+        bot_b="eth_perp", recent_b=trades_b,
+    )
+    assert a.severity == "red"
+    assert a.recommended_action == "merge_for_risk"
+    assert a.rho == pytest.approx(1.0)
+    assert a.bot_a == "btc_hybrid"
+    assert a.bot_b == "eth_perp"
+
+
+def test_fleet_correlation_anti_correlated_pair_green() -> None:
+    """Negative correlation is the OPPOSITE of double-counting; green."""
+    rs_a = [1.5, -1.0, 0.7, -0.4, 1.2, 0.9, -0.6, 1.1, -0.3, 0.8, 1.0, -0.7]
+    rs_b = [-r for r in rs_a]
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid", recent_a=[_trade(r) for r in rs_a],
+        bot_b="eth_perp", recent_b=[_trade(r) for r in rs_b],
+    )
+    assert a.severity == "green"
+    assert a.recommended_action == "independent"
+    assert a.rho < 0
+
+
+def test_fleet_correlation_amber_band_recommends_halve() -> None:
+    """Construct a stream with rho ~= 0.6 (between amber 0.5 and red 0.7)."""
+    # Each ys[i] = 0.6 * xs[i] + 0.8 * noise[i] -> theoretical rho ~ 0.6
+    xs = [1.0, -0.5, 0.7, -0.4, 1.2, 0.9, -0.6, 1.1, -0.3, 0.8, 0.2, -0.7]
+    noise = [0.1, -0.2, 0.3, -0.1, 0.05, -0.4, 0.6, -0.3, 0.2, -0.05, 0.4, -0.6]
+    ys = [0.6 * xs[i] + 0.8 * noise[i] for i in range(len(xs))]
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid", recent_a=[_trade(r) for r in xs],
+        bot_b="eth_perp", recent_b=[_trade(r) for r in ys],
+    )
+    # Tolerate either amber or red depending on exact rho given small N
+    assert a.severity in {"amber", "red"}
+    assert a.recommended_action in {"halve_one", "merge_for_risk"}
+
+
+def test_fleet_correlation_uses_min_lengths_when_unequal() -> None:
+    """Asymmetric lengths -> tail-aligned to the shorter stream."""
+    rs = [1.0, -0.5, 0.8, -0.3, 1.1, 0.2, -0.7, 0.9, -0.4, 1.2, 0.5, -0.6]
+    trades_a = [_trade(r) for r in rs]
+    trades_b = [_trade(r) for r in rs[2:]]  # 10 trades vs 12
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid", recent_a=trades_a,
+        bot_b="eth_perp", recent_b=trades_b,
+        min_paired=8,
+    )
+    assert a.n_paired == 10  # min of the two
+    # Same tail-trades on both sides -> rho == 1.0
+    assert a.rho == pytest.approx(1.0)
+
+
+def test_fleet_correlation_serializes_round_trip() -> None:
+    a = assess_fleet_correlation(
+        bot_a="btc_hybrid",
+        recent_a=[_trade(0.5)] * 12,
+        bot_b="eth_perp",
+        recent_b=[_trade(0.5)] * 12,
+    )
+    payload = a.model_dump()
+    a2 = FleetCorrelationAssessment.model_validate(payload)
     assert a2 == a

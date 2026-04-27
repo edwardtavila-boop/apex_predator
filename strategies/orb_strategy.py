@@ -60,7 +60,7 @@ Limitations / honest scope
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timezone
+from datetime import datetime, time
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -108,6 +108,17 @@ class ORBConfig:
     risk_per_trade_pct: float = 0.01  # 1% of equity per trade
     max_trades_per_day: int = 1  # one ORB trade per session by default
 
+    # ── Cross-asset ES filter (opt-in) ──
+    # When True, the strategy ALSO requires ES1 to be breaking out
+    # of its own opening range in the same direction. Cross-asset
+    # confirmation cuts MNQ-only false breakouts driven by sector
+    # rotation rather than broad index momentum.
+    require_es_confirmation: bool = False
+    # Internal: ES bars are loaded lazily by the runner script and
+    # injected via a single ctx_builder that returns {"es_bars": ...}.
+    # Strategy itself doesn't reach into the data library — keeps
+    # the test surface clean.
+
 
 # ---------------------------------------------------------------------------
 # Strategy
@@ -124,6 +135,11 @@ class _DayState:
     range_complete: bool = False
     trades_today: int = 0
     breakout_taken: bool = False  # True once we've entered today; blocks re-entry
+    # ES-correlation filter state. Tracks ES1 range alongside MNQ.
+    # Populated only when ORBConfig.require_es_confirmation=True
+    # AND the ctx provides an "es_bars" alignment.
+    es_range_high: float | None = None
+    es_range_low: float | None = None
 
 
 class ORBStrategy:
@@ -146,11 +162,11 @@ class ORBStrategy:
 
     def maybe_enter(
         self,
-        bar: "BarData",
-        hist: "list[BarData]",
+        bar: BarData,
+        hist: list[BarData],
         equity: float,
-        config: "BacktestConfig",
-    ) -> "_Open | None":
+        config: BacktestConfig,
+    ) -> _Open | None:
         """Return an open trade or None. Same contract as engine._enter."""
         local_ts = bar.timestamp.astimezone(self._tz)
         today = local_ts.date()
@@ -271,7 +287,7 @@ class ORBStrategy:
 # ---------------------------------------------------------------------------
 
 
-def _atr(hist: "list[BarData]", period: int = 14) -> float:
+def _atr(hist: list[BarData], period: int = 14) -> float:
     """Simple ATR over the last ``period`` bars (high-low only).
 
     Doesn't fold in true range from gap-up days; for intraday MNQ

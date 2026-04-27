@@ -47,6 +47,20 @@ Consolidation (Wave-12 / 2026-04-27): JARVIS as source of truth
   * admin_query           -- read-only operator queries against the
                               verdict + trade-close logs
 
+Self-awareness (Wave-13 / 2026-04-27): JARVIS knows himself
+  * replay_engine         -- counterfactual replay of new policy over
+                              past consultations -> quantified lift
+  * premortem             -- enumerate failure modes BEFORE approval
+                              with kill-prob from world model + RAG
+  * thesis_tracker        -- written thesis + invalidation rules,
+                              runtime monitor for early-exit signals
+  * ood_detector          -- Mahalanobis-style novelty score so JARVIS
+                              shrinks confidence in unprecedented states
+  * self_drift_monitor    -- JARVIS watches his own verdict
+                              distribution; flags drift > 2-sigma
+  * postmortem            -- auto-postmortem generator for losing
+                              trades with per-layer attribution
+
 Design principles carry from v2: pure / deterministic / pydantic-typed /
 opt-in (nothing breaks if a caller doesn't know about v3).
 """
@@ -79,4 +93,11 @@ __all__ = [
     "feedback_loop",
     "health_check",
     "admin_query",
+    # Wave-13 self-awareness
+    "replay_engine",
+    "premortem",
+    "thesis_tracker",
+    "ood_detector",
+    "self_drift_monitor",
+    "postmortem",
 ]

@@ -112,6 +112,7 @@ class WalkForwardEngine:
         config: WalkForwardConfig,
         base_backtest_config: BacktestConfig,
         ctx_builder: object | None = None,
+        scorer: object | None = None,
     ) -> WalkForwardResult:
         if not bars:
             return WalkForwardResult()
@@ -134,10 +135,12 @@ class WalkForwardEngine:
                     "end_date": oos_bars[-1].timestamp,
                 }
             )
-            is_res = BacktestEngine(pipeline, is_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-IS").run(is_bars)
-            oos_res = BacktestEngine(pipeline, oos_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-OOS").run(
-                oos_bars
-            )
+            is_res = BacktestEngine(
+                pipeline, is_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-IS", scorer=scorer,
+            ).run(is_bars)
+            oos_res = BacktestEngine(
+                pipeline, oos_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-OOS", scorer=scorer,
+            ).run(oos_bars)
             oos_skew, oos_kurt = _fold_moments_from_trades(oos_res.trades)
             win_results.append(
                 {

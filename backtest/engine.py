@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from collections.abc import Callable
+
 from eta_engine.backtest.metrics import (
     compute_expectancy,
     compute_max_dd,
@@ -17,7 +19,7 @@ from eta_engine.backtest.metrics import (
     compute_sortino,
 )
 from eta_engine.backtest.models import BacktestConfig, BacktestResult, Trade
-from eta_engine.core.confluence_scorer import score_confluence
+from eta_engine.core.confluence_scorer import ConfluenceResult, score_confluence
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -60,11 +62,16 @@ class BacktestEngine:
         config: BacktestConfig,
         ctx_builder: Any | None = None,
         strategy_id: str = "eta_default",
+        scorer: Callable[..., ConfluenceResult] | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.config = config
         self.ctx_builder = ctx_builder or (lambda bar, hist: {})
         self.strategy_id = strategy_id
+        # Confluence scorer. Defaults to the global 5-feature scorer.
+        # Pass score_confluence_mnq (or any other 5-tuple-accepting
+        # callable) to swap weights without subclassing.
+        self.scorer = scorer or score_confluence
 
     def run(self, bars: Iterable[BarData]) -> BacktestResult:
         equity, curve, trades, hist = self.config.initial_equity, [], [], []
@@ -107,7 +114,7 @@ class BacktestEngine:
     def _enter(self, bar: BarData, hist: list[BarData], equity: float) -> _Open | None:
         ctx = self.ctx_builder(bar, hist)
         results = self.pipeline.compute_all(bar, ctx)
-        score = score_confluence(*self.pipeline.to_confluence_inputs(results))
+        score = self.scorer(*self.pipeline.to_confluence_inputs(results))
         if score.total_score < self.config.confluence_threshold or score.recommended_leverage <= 0:
             return None
         atr = _atr(hist)

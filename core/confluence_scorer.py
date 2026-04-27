@@ -178,3 +178,81 @@ def score_confluence(
         recommended_leverage=_score_to_leverage(total),
         signal=_score_to_signal(total),
     )
+
+
+# ---------------------------------------------------------------------------
+# MNQ-tuned scorer
+# ---------------------------------------------------------------------------
+# MNQ futures don't have a funding rate, on-chain transfers, or a
+# Galaxy Score equivalent. Including those features at any weight
+# either (a) penalises the score when their inputs are correctly zero
+# (futures aren't crypto), or (b) requires the ctx_builder to inject
+# synthetic favorable values (which masks the bar-derived signal).
+#
+# This MNQ-tuned scorer drops them. Total weight collapses from 10
+# to 5; trend_bias + vol_regime alignment alone can clear the 7.0
+# entry threshold. Any future MNQ-specific features (volume regime,
+# CME basis, ES correlation) should be added to MNQ_WEIGHT_TABLE,
+# not the global one.
+
+MNQ_WEIGHT_TABLE: dict[str, float] = {
+    "trend_bias": 3.0,
+    "vol_regime": 2.0,
+    # Crypto-only features intentionally absent.
+}
+_MNQ_TOTAL_WEIGHT = sum(MNQ_WEIGHT_TABLE.values())  # 5.0
+
+
+def score_confluence_mnq(
+    trend_bias: float,
+    vol_regime: float,
+    funding_skew: float = 0.0,  # kept for signature compat with the engine
+    onchain_delta: float = 0.0,
+    sentiment: float = 0.0,
+) -> ConfluenceResult:
+    """MNQ-tuned variant of :func:`score_confluence`.
+
+    Uses only ``trend_bias`` and ``vol_regime``; the remaining args
+    exist solely so this function is a drop-in for the 5-tuple that
+    ``FeaturePipeline.to_confluence_inputs`` returns. Their values
+    are ignored.
+
+    Returns a :class:`ConfluenceResult` whose ``factors`` list still
+    enumerates all five inputs (with weight 0 for the dropped ones)
+    so dashboards rendering the factor breakdown continue to work
+    without special-casing the MNQ scorer.
+    """
+    raw_inputs = {
+        "trend_bias": trend_bias,
+        "vol_regime": vol_regime,
+        "funding_skew": funding_skew,
+        "onchain_delta": onchain_delta,
+        "sentiment": sentiment,
+    }
+    factors: list[ConfluenceFactor] = []
+    weighted_sum = 0.0
+    for name, raw in raw_inputs.items():
+        weight = MNQ_WEIGHT_TABLE.get(name, 0.0)
+        if weight <= 0.0:
+            # Dropped feature — don't surface in factors list since
+            # ConfluenceFactor requires weight > 0. Equivalent to
+            # "feature not part of this scoring regime".
+            continue
+        norm = _NORMALIZERS[name](raw)
+        factors.append(
+            ConfluenceFactor(
+                name=name,
+                weight=weight,
+                raw_value=raw,
+                normalized_score=round(norm, 4),
+            )
+        )
+        weighted_sum += norm * weight
+    total = round(weighted_sum / _MNQ_TOTAL_WEIGHT * 10.0, 2)
+    total = min(total, 10.0)
+    return ConfluenceResult(
+        factors=factors,
+        total_score=total,
+        recommended_leverage=_score_to_leverage(total),
+        signal=_score_to_signal(total),
+    )

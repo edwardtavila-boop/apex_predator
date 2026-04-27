@@ -227,6 +227,7 @@ def main() -> int:
         WalkForwardConfig,
         WalkForwardEngine,
     )
+    from eta_engine.core.confluence_scorer import score_confluence_mnq
     from eta_engine.features.pipeline import FeaturePipeline
 
     data_path = Path(os.environ.get("MNQ_DATA_PATH", r"C:\mnq_data\mnq_5m.csv"))
@@ -238,13 +239,21 @@ def main() -> int:
         print(f"ABORT: zero bars loaded from {data_path}")
         return 1
 
+    # Confluence threshold lowered from 7.0 -> 5.0 specifically for the
+    # MNQ-tuned scorer. With only 2 features active (trend_bias weight
+    # 3, vol_regime weight 2) the practical achievable score on real
+    # MNQ bars is ~5-6 even when both are aligned — 7.0 produces zero
+    # entries. This is a research-time threshold, not a production
+    # value; once MNQ-specific features (volume regime, ES correlation,
+    # CME basis) are added the threshold should rise back toward 7.0.
+    threshold = float(os.environ.get("MNQ_CONFLUENCE_THRESHOLD", "5.0"))
     cfg = BacktestConfig(
         start_date=bars[0].timestamp,
         end_date=bars[-1].timestamp,
         symbol=bars[0].symbol,
         initial_equity=10_000.0,
         risk_per_trade_pct=0.01,
-        confluence_threshold=7.0,
+        confluence_threshold=threshold,
         max_trades_per_day=10,
     )
     wf = WalkForwardConfig(
@@ -262,6 +271,7 @@ def main() -> int:
         config=wf,
         base_backtest_config=cfg,
         ctx_builder=_ctx,
+        scorer=score_confluence_mnq,
     )
 
     print("EVOLUTIONARY TRADING ALGO -- MNQ Real-Data Walk-Forward")

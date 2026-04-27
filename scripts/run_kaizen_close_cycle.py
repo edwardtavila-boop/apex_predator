@@ -93,9 +93,39 @@ def synthesize_inputs(events: list[JournalEvent]) -> dict[str, Any]:
     kpis["override_rate"] = (override_n / total) if total else 0.0
     kpis["total_events"] = float(total)
 
+    # Tier-2 #7 (2026-04-27): outcome -> realized P&L feedback when present.
+    # If events have metadata['realized_r'] (R-multiple of the resulting
+    # trade), aggregate it so the kaizen synthesizer sees money outcomes
+    # not just gate firings. This lets `went_poorly` capture losing
+    # trades, not just blocked actions.
+    realized_rs: list[float] = []
+    losing_intents: Counter[str] = Counter()
+    winning_intents: Counter[str] = Counter()
+    for ev in events:
+        r = ev.metadata.get("realized_r") if isinstance(ev.metadata, dict) else None
+        if isinstance(r, (int, float)):
+            realized_rs.append(float(r))
+            if r < 0:
+                losing_intents[ev.intent] += 1
+            elif r > 0:
+                winning_intents[ev.intent] += 1
+    if realized_rs:
+        kpis["realized_r_total"] = round(sum(realized_rs), 4)
+        kpis["realized_r_mean"] = round(sum(realized_rs) / len(realized_rs), 4)
+        kpis["winning_count"] = float(sum(1 for r in realized_rs if r > 0))
+        kpis["losing_count"] = float(sum(1 for r in realized_rs if r < 0))
+
+    # If we have P&L data, ground "went_well/poorly" in actual money outcomes
+    if winning_intents or losing_intents:
+        went_well_lines = [f"{intent} +R (×{n})" for intent, n in winning_intents.most_common(3)]
+        went_poorly_lines = [f"{intent} -R (×{n})" for intent, n in losing_intents.most_common(3)]
+    else:
+        went_well_lines = [f"{intent} (×{n})" for intent, n in went_well_pool.most_common(3)]
+        went_poorly_lines = [f"{intent} (×{n})" for intent, n in went_poorly_pool.most_common(3)]
+
     return {
-        "went_well": [f"{intent} (×{n})" for intent, n in went_well_pool.most_common(3)],
-        "went_poorly": [f"{intent} (×{n})" for intent, n in went_poorly_pool.most_common(3)],
+        "went_well": went_well_lines,
+        "went_poorly": went_poorly_lines,
         "surprises": surprises[:5],
         "kpis": kpis,
     }

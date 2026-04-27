@@ -96,6 +96,11 @@ routing:
     # the operator gets a mobile push but isn't woken up. Cooldown logic
     # in obs/jarvis_denial_rate_alerter.py prevents per-minute spam.
     jarvis_denial_rate_high: { level: warn,    channels: [pushover, email] }
+    # Tier-1 #2 (position reconciler, 2026-04-27): bot-state vs broker-state drift.
+    # A drift means subsequent risk + size decisions are based on a wrong
+    # position basis -- WARN level (pushover + email) so the operator
+    # sees it the next time they look at their phone.
+    position_drift:        { level: warn,     channels: [pushover, email] }
 
 # Rate limits
 rate_limit:

@@ -84,3 +84,6 @@ docs/jarvis_live_health.json
 docs/jarvis_live_log.jsonl
 docs/preflight_dryrun_log.txt
 docs/preflight_dryrun_report.json
+
+# Operational baselines — schema lives in docs/strategy_baselines.example.json
+docs/strategy_baselines.json

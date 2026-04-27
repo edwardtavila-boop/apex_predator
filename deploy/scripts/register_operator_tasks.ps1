@@ -199,6 +199,42 @@ $tasks = @(
         Cwd        = $EtaEngineDir
         Trigger    = "Every1Min"
         Notes      = "Every 1 min -- if JARVIS denial rate >= 50% for 5+ min, fire Resend alert (with cooldown)"
+    },
+    # Tier-1 #2 (2026-04-27): position reconciler.
+    @{
+        Name       = "Eta-Position-Reconciler"
+        Exec       = $Python
+        Args       = "-m eta_engine.obs.position_reconciler"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Every1Min"
+        Notes      = "Every 1 min -- compare bot-internal positions vs broker; fire position_drift on mismatch."
+    },
+    # Tier-3 #9 (2026-04-27): daemon auto-recovery (heartbeat-based deadlock kill).
+    @{
+        Name       = "Eta-Daemon-Recovery"
+        Exec       = $Python
+        Args       = "-m eta_engine.obs.daemon_recovery_watchdog"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Every1Min"
+        Notes      = "Every 1 min -- kill deadlocked daemons (heartbeat stale > 3x cadence); Task Scheduler restarts."
+    },
+    # Tier-3 #12 (2026-04-27): quarterly archive cleanup.
+    @{
+        Name       = "Eta-Archive-Cleanup-Quarterly"
+        Exec       = $Python
+        Args       = "-m eta_engine.scripts.auto_archive_cleanup --max-age-days 90"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Weekly-Sunday-0345"
+        Notes      = "Sunday 03:45 -- compress + remove _archive_*/ dirs older than 90 days."
+    },
+    # Tier-4 #15 (2026-04-27): investor / inner-circle / beta dashboard.
+    @{
+        Name       = "Eta-Investor-Dashboard-Daily"
+        Exec       = $Python
+        Args       = "-m eta_engine.scripts.generate_investor_dashboard"
+        Cwd        = $EtaEngineDir
+        Trigger    = "Daily-2300"
+        Notes      = "Daily 23:00 -- regenerate investor/beta dashboard HTML at state/investor_dashboard/index.html."
     }
 )
 

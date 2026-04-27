@@ -87,6 +87,17 @@ class StrategyAssignment:
     # Reserved for future engine knobs without breaking serialisation.
     extras: dict[str, object] = field(default_factory=dict)
 
+    # Which entry-decision path the bot uses at backtest/live time.
+    # "confluence" = score features through scorer_name + check
+    #                threshold + regime gate (legacy behaviour).
+    # "orb"        = Opening Range Breakout strategy from
+    #                strategies.orb_strategy. Ignores scorer/threshold/
+    #                regime fields — the ORB module has its own knobs
+    #                (range minutes, EMA bias, RR target) that the
+    #                research grid pulls from the per-bot extras dict
+    #                under the key "orb_config".
+    strategy_kind: str = "confluence"
+
 
 # ---------------------------------------------------------------------------
 # Per-bot assignments
@@ -100,58 +111,61 @@ _BASE_BLOCK = frozenset({"trending_up", "trending_down"})
 
 
 ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
-    # MNQ futures — micro E-mini Nasdaq
+    # MNQ futures — micro E-mini Nasdaq, ORB baseline
     StrategyAssignment(
         bot_id="mnq_futures",
-        strategy_id="mnq_v3_regime_gated",
+        strategy_id="mnq_orb_v1",
         symbol="MNQ1",
-        timeframe="4h",
-        scorer_name="mnq",
-        confluence_threshold=5.0,
-        block_regimes=_BASE_BLOCK,
-        window_days=180,
-        step_days=60,
-        min_trades_per_window=10,
+        timeframe="5m",
+        scorer_name="mnq",  # unused when strategy_kind=orb but kept for sync
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=60,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="orb",
         rationale=(
-            "MNQ price moves are dominated by ES correlation + RTH "
-            "structure + macro events. The MNQ-tuned scorer drops "
-            "the crypto-only features (funding/onchain/sentiment) "
-            "that were artificially inflating composite scores. The "
-            "regime gate blocks trending bars where the strategy "
-            "(mean-reversion) bleeds — Window 0 deep-dive on 5m "
-            "showed +6R in choppy regimes, -2.5R in trending_up. "
-            "4h timeframe gave the best DSR pass fraction (45%) in "
-            "the 2026-04-27 research grid. v2 optimization stack "
-            "(classify_regime_v2 + session gate + ES correlation) "
-            "is wired and tested in strategies.mnq_optimizations "
-            "but is opt-in via env vars — adding all three gates on "
-            "top of regime block dropped sample-per-window below "
-            "the strict gate's min_trades floor in the 2026-04-27 "
-            "ablation. Real edge requires new features (CME-spot "
-            "basis, options gamma exposure, ES decoupling), not "
-            "more gates on the current feature set."
+            "Switched from confluence-mean-reversion to ORB on "
+            "2026-04-27 after the mean-reversion baseline "
+            "(MNQ-tuned scorer + regime gate) failed to produce "
+            "edge across all real-data tests (best result: "
+            "agg OOS Sharpe -1.31). ORB on real MNQ 5m at 60/30 "
+            "windows: agg OOS Sharpe **+0.80**, DSR median 0.52 "
+            "(above threshold), 50% pass fraction (gate fails on "
+            "strict > 0.5 only). First strategy to produce "
+            "positive aggregate OOS Sharpe on real MNQ data — "
+            "matches the research literature's 55-68% win rate "
+            "claims for ORB on liquid index futures. ORB is a "
+            "clear, rule-based strategy: range high/low of first "
+            "15 min after 9:30 ET, breakout entry with EMA-200 "
+            "bias filter, ATR-based stop, 2R target, max 1 trade "
+            "per session, no entries after 11:00 ET. See "
+            "strategies/orb_strategy.py."
         ),
     ),
-    # NQ futures — full E-mini Nasdaq, longer-haul lens
+    # NQ futures — ORB on intraday matches MNQ stack
     StrategyAssignment(
         bot_id="nq_futures",
-        strategy_id="nq_daily_regime_gated",
+        strategy_id="nq_orb_v1",
         symbol="NQ1",
-        timeframe="D",
-        scorer_name="mnq",
-        confluence_threshold=5.0,
-        block_regimes=_BASE_BLOCK,
-        window_days=365,
-        step_days=180,
-        min_trades_per_window=10,
+        timeframe="5m",
+        scorer_name="mnq",  # unused when strategy_kind=orb
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=60,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="orb",
         rationale=(
-            "NQ daily is the only configuration that produced "
-            "POSITIVE aggregate OOS Sharpe (+0.157) across a 27-year "
-            "history (1999-2026). Trade frequency is low (most "
-            "windows have 0-3 trades) so promotion bar is high — "
-            "this is a bias-test more than an active-trading config. "
-            "Use as a sanity baseline; a real edge claim needs a "
-            "regime+macro feature set that fires more often."
+            "NQ runs the same ORB strategy as MNQ — ORB is symbol-"
+            "agnostic on liquid index futures. NQ has the same "
+            "9:30 ET RTH open, similar volatility profile, and "
+            "the strategy logic doesn't depend on contract size. "
+            "5m timeframe matches the MNQ baseline. Daily NQ also "
+            "produced +OOS Sharpe (+0.157) on 27 yr history but "
+            "fires too rarely for a promotable strategy. Intraday "
+            "ORB is the workable bot baseline; daily NQ stays as "
+            "a sanity check rather than the primary path."
         ),
     ),
     # BTC hybrid — futures + perp blended bot

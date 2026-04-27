@@ -115,6 +115,7 @@ class WalkForwardEngine:
         scorer: object | None = None,
         block_regimes: frozenset[str] | set[str] | None = None,
         require_ctx_true: tuple[str, ...] | None = None,
+        strategy_factory: object | None = None,
     ) -> WalkForwardResult:
         if not bars:
             return WalkForwardResult()
@@ -137,15 +138,21 @@ class WalkForwardEngine:
                     "end_date": oos_bars[-1].timestamp,
                 }
             )
+            # strategy_factory: a zero-arg callable that returns a fresh
+            # strategy instance for each window. Required because
+            # strategies hold per-day state — sharing across IS/OOS
+            # windows would leak state. None = use confluence path.
+            is_strategy = strategy_factory() if strategy_factory else None
+            oos_strategy = strategy_factory() if strategy_factory else None
             is_res = BacktestEngine(
                 pipeline, is_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-IS",
                 scorer=scorer, block_regimes=block_regimes,
-                require_ctx_true=require_ctx_true,
+                require_ctx_true=require_ctx_true, strategy=is_strategy,
             ).run(is_bars)
             oos_res = BacktestEngine(
                 pipeline, oos_cfg, ctx_builder=ctx_builder, strategy_id=f"wf-{i}-OOS",
                 scorer=scorer, block_regimes=block_regimes,
-                require_ctx_true=require_ctx_true,
+                require_ctx_true=require_ctx_true, strategy=oos_strategy,
             ).run(oos_bars)
             oos_skew, oos_kurt = _fold_moments_from_trades(oos_res.trades)
             win_results.append(

@@ -62,6 +62,28 @@ def _is_bar_kind(kind: str) -> bool:
     return kind in {"bars", "correlation"}
 
 
+def _resolve_library_lookup(
+    req: "DataRequirement",
+    lib: "DataLibrary",
+) -> "DatasetMeta | None":
+    """Map a DataRequirement to a library dataset.
+
+    * ``bars`` / ``correlation`` — direct (symbol, timeframe) lookup.
+    * ``funding`` — files written as ``<X>FUND_<TF>.csv`` by
+      ``scripts/fetch_funding_rates``, looked up under the synthetic
+      symbol ``<X>FUND``.
+    * ``onchain`` / ``sentiment`` / ``macro`` — not yet covered by
+      the bar-CSV library; reported as missing until those feed
+      shapes are added (see fetch_funding_rates pattern as the
+      template).
+    """
+    if _is_bar_kind(req.kind) and req.timeframe is not None:
+        return lib.get(symbol=req.symbol, timeframe=req.timeframe)
+    if req.kind == "funding" and req.timeframe is not None:
+        return lib.get(symbol=f"{req.symbol}FUND", timeframe=req.timeframe)
+    return None
+
+
 def audit_bot(bot_id: str, library: "DataLibrary | None" = None) -> BotAudit | None:
     """Return coverage for ``bot_id`` or None if no requirements registered."""
     from eta_engine.data.library import default_library
@@ -74,9 +96,7 @@ def audit_bot(bot_id: str, library: "DataLibrary | None" = None) -> BotAudit | N
 
     out = BotAudit(bot_id=bot_id, sources_hint=reqs.sources_hint)
     for req in reqs.requirements:
-        ds = None
-        if _is_bar_kind(req.kind) and req.timeframe is not None:
-            ds = lib.get(symbol=req.symbol, timeframe=req.timeframe)
+        ds = _resolve_library_lookup(req, lib)
         if ds is not None:
             out.available.append((req, ds))
         elif req.critical:

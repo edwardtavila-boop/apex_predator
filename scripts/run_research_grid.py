@@ -59,6 +59,7 @@ class ResearchCell:
     window_days: int
     step_days: int
     min_trades_per_window: int
+    strategy_kind: str = "confluence"  # "confluence" or "orb"
 
 
 @dataclass
@@ -139,15 +140,28 @@ def run_cell(cell: ResearchCell) -> CellResult:
         strict_fold_dsr_gate=True,
         fold_dsr_min_pass_fraction=0.5,
     )
-    res = WalkForwardEngine().run(
-        bars=bars,
-        pipeline=FeaturePipeline.default(),
-        config=wf,
-        base_backtest_config=base_cfg,
-        ctx_builder=_ctx,
-        scorer=_resolve_scorer(cell.scorer_name),
-        block_regimes=cell.block_regimes,
-    )
+    # ORB strategy bypasses the scorer/regime/ctx path entirely.
+    if cell.strategy_kind == "orb":
+        from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy
+        orb_cfg = ORBConfig()  # defaults; per-bot overrides via extras later
+        res = WalkForwardEngine().run(
+            bars=bars,
+            pipeline=FeaturePipeline.default(),
+            config=wf,
+            base_backtest_config=base_cfg,
+            ctx_builder=lambda b, h: {},
+            strategy_factory=lambda: ORBStrategy(orb_cfg),
+        )
+    else:
+        res = WalkForwardEngine().run(
+            bars=bars,
+            pipeline=FeaturePipeline.default(),
+            config=wf,
+            base_backtest_config=base_cfg,
+            ctx_builder=_ctx,
+            scorer=_resolve_scorer(cell.scorer_name),
+            block_regimes=cell.block_regimes,
+        )
     n_pos = sum(1 for w in res.windows if w.get("oos_sharpe", 0.0) > 0)
     return CellResult(
         cell=cell,
@@ -208,6 +222,7 @@ def _matrix_from_registry() -> list[ResearchCell]:
                 window_days=a.window_days,
                 step_days=a.step_days,
                 min_trades_per_window=a.min_trades_per_window,
+                strategy_kind=a.strategy_kind,
             )
         )
     return cells

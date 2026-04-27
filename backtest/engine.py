@@ -65,6 +65,7 @@ class BacktestEngine:
         scorer: Callable[..., ConfluenceResult] | None = None,
         block_regimes: frozenset[str] | set[str] | None = None,
         require_ctx_true: tuple[str, ...] | None = None,
+        strategy: Any | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.config = config
@@ -89,6 +90,13 @@ class BacktestEngine:
         # Empty tuple / None means "no flag gate" — legacy callers
         # are unaffected.
         self.require_ctx_true: tuple[str, ...] = tuple(require_ctx_true or ())
+        # Pluggable strategy. When set, _enter() delegates entirely to
+        # strategy.maybe_enter() and the confluence-scoring path is
+        # bypassed. ORBStrategy is the canonical implementation —
+        # see strategies/orb_strategy.py. Any object exposing
+        # ``maybe_enter(bar, hist, equity, config) -> _Open | None``
+        # works (Protocol-style; no ABC required).
+        self.strategy = strategy
 
     def run(self, bars: Iterable[BarData]) -> BacktestResult:
         equity, curve, trades, hist = self.config.initial_equity, [], [], []
@@ -129,6 +137,11 @@ class BacktestEngine:
     # ── Entry / exit ──
 
     def _enter(self, bar: BarData, hist: list[BarData], equity: float) -> _Open | None:
+        # Pluggable strategy short-circuits the confluence path entirely.
+        # The ORB strategy doesn't need ctx_builder, scorer, or regime
+        # gates — it has its own session/range/EMA filters.
+        if self.strategy is not None:
+            return self.strategy.maybe_enter(bar, hist, equity, self.config)
         ctx = self.ctx_builder(bar, hist)
         # Regime gate runs before scoring so a blocked regime never
         # consumes the trades-per-day budget. Both the gate set and

@@ -119,6 +119,24 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
             "scripts/dual_data_collector.py",
         ),
     ),
+    # mnq_sage_consensus is a multi-school sage-consensus MNQ variant.
+    # Shares bar/correlation needs with mnq_futures_sage; the consensus
+    # layer reads the same streams.
+    BotRequirements(
+        bot_id="mnq_sage_consensus",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("correlation", "ES1", "5m", critical=True,
+                note="ES correlation feeds the sage's institutional school"),
+            DataRequirement("correlation", "DXY", "5m", critical=False),
+            DataRequirement("correlation", "VIX", "5m", critical=False),
+        ),
+        sources_hint=(
+            "tradingview-mcp",
+            "scripts/dual_data_collector.py",
+        ),
+    ),
     # nq_futures_sage mirrors mnq_futures_sage but on NQ — sage-overlay
     # variant of plain ORB. Same data needs as nq_futures; only the
     # decision-time gate differs.
@@ -196,6 +214,35 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
     # 2026-04-27 grid-safe gate). Same data needs as plain BTC crypto_orb.
     BotRequirements(
         bot_id="btc_regime_trend",
+        requirements=(
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="regime classifier baseline"),
+            DataRequirement("correlation", "ETH", "1h", critical=False,
+                note="ETH-BTC correlation as regime confirmation"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+    # btc_sage_daily_etf and btc_regime_trend_etf are ETF-targeted
+    # variants (IBIT / BITB style execution) of the parent strategies.
+    # Same upstream BTC bar/correlation needs; the ETF dimension only
+    # affects venue routing at execution time.
+    BotRequirements(
+        bot_id="btc_sage_daily_etf",
+        requirements=(
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="daily timeframe is the primary signal frame"),
+            DataRequirement("funding", "BTC", "8h", critical=False,
+                note="sage panel reads funding skew when available"),
+        ),
+        sources_hint=(
+            "scripts/fetch_btc_bars.py (Coinbase spot bars)",
+            "scripts/fetch_funding_rates.py (OKX funding)",
+        ),
+    ),
+    BotRequirements(
+        bot_id="btc_regime_trend_etf",
         requirements=(
             DataRequirement("bars", "BTC", "1h", critical=True),
             DataRequirement("bars", "BTC", "D", critical=True,

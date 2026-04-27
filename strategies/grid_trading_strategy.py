@@ -86,11 +86,11 @@ class GridTradingStrategy:
 
     def maybe_enter(
         self,
-        bar: "BarData",
-        hist: "list[BarData]",
+        bar: BarData,
+        hist: list[BarData],
         equity: float,
-        config: "BacktestConfig",
-    ) -> "_Open | None":
+        config: BacktestConfig,
+    ) -> _Open | None:
         if len(hist) < max(self.cfg.min_warmup_bars, self.cfg.ref_lookback):
             return None
 
@@ -149,11 +149,13 @@ class GridTradingStrategy:
                 side = "BUY"
                 entry_price = long_hit
                 target = entry_price + self.cfg.rr_target * spacing
-        elif short_hit is not None:
-            if not self.cfg.trend_filter or bar.close <= mid * (1 + self.cfg.grid_spacing_pct * self.cfg.n_levels):
-                side = "SELL"
-                entry_price = short_hit
-                target = entry_price - self.cfg.rr_target * spacing
+        elif short_hit is not None and (
+            not self.cfg.trend_filter
+            or bar.close <= mid * (1 + self.cfg.grid_spacing_pct * self.cfg.n_levels)
+        ):
+            side = "SELL"
+            entry_price = short_hit
+            target = entry_price - self.cfg.rr_target * spacing
 
         if side is None:
             return None
@@ -162,10 +164,7 @@ class GridTradingStrategy:
         qty = risk_usd / stop_dist
         if qty <= 0.0:
             return None
-        if side == "BUY":
-            stop = entry_price - stop_dist
-        else:
-            stop = entry_price + stop_dist
+        stop = entry_price - stop_dist if side == "BUY" else entry_price + stop_dist
 
         from eta_engine.backtest.engine import _Open
 

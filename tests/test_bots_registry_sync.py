@@ -166,7 +166,9 @@ def test_is_active_chokepoint_returns_false_for_deactivated_bots() -> None:
     The is_active helper is the single chokepoint — verify it
     returns False for the muted xrp_perp and True for active bots."""
     from eta_engine.strategies.per_bot_registry import (
-        get_for_bot, is_active, is_bot_active,
+        get_for_bot,
+        is_active,
+        is_bot_active,
     )
 
     xrp = get_for_bot("xrp_perp")

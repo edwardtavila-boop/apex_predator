@@ -82,14 +82,53 @@ class CellResult:
 
 
 def _filter_extras(extras: dict[str, object], prefix: str) -> dict[str, object]:
-    """Pick the subset of extras prefixed with ``<prefix>_`` and strip
-    the prefix so they map directly to dataclass field names.
+    """Resolve the per-strategy config dict from a registry extras blob.
 
-    Example: extras={"crypto_orb_range_minutes": 240, "deactivated": True}
-             _filter_extras(extras, "crypto_orb") -> {"range_minutes": 240}
+    Two supported shapes:
+
+    1. Nested config (preferred):
+         extras={"crypto_orb_config": {"range_minutes": 240, ...}}
+       Returns ``{"range_minutes": 240, ...}``.
+
+    2. Flat prefixed keys (legacy):
+         extras={"crypto_orb_range_minutes": 240}
+       Returns ``{"range_minutes": 240}``.
+
+    The nested form is preferred because it round-trips to JSON
+    cleanly and groups all knobs for one strategy together. Flat
+    keys remain supported so older registry rows don't break.
+    Unknown / non-strategy keys (e.g. ``deactivated``,
+    ``alt_strategy_kind``) are ignored.
     """
+    nested_key = f"{prefix}_config"
+    nested = extras.get(nested_key)
+    if isinstance(nested, dict):
+        return dict(nested)
     pre = f"{prefix}_"
-    return {k[len(pre):]: v for k, v in extras.items() if k.startswith(pre)}
+    return {
+        k[len(pre):]: v
+        for k, v in extras.items()
+        if k.startswith(pre) and k != nested_key
+    }
+
+
+def _safe_kwargs(cfg_cls: type, kwargs: dict[str, object]) -> dict[str, object]:
+    """Drop kwargs that aren't fields on ``cfg_cls``.
+
+    The registry carries forward-looking knobs (e.g. ``session_cutoff
+    _hour_utc``) that may not exist on the current strategy config. We
+    accept the lag silently rather than crashing the whole grid run —
+    the strategy author can add the field later and it'll start being
+    honored automatically. Logged once per cell when keys are dropped
+    so the gap is visible during research, not hidden.
+    """
+    import dataclasses
+    valid = {f.name for f in dataclasses.fields(cfg_cls)}
+    accepted = {k: v for k, v in kwargs.items() if k in valid}
+    dropped = sorted(set(kwargs) - valid)
+    if dropped:
+        print(f"      [extras] {cfg_cls.__name__}: dropped unknown keys {dropped}")
+    return accepted
 
 
 def _build_crypto_strategy_factory(  # type: ignore[no-untyped-def]  # noqa: ANN202
@@ -106,35 +145,45 @@ def _build_crypto_strategy_factory(  # type: ignore[no-untyped-def]  # noqa: ANN
             CryptoORBConfig,
             crypto_orb_strategy,
         )
-        cfg = CryptoORBConfig(**_filter_extras(extras, "crypto_orb"))
+        cfg = CryptoORBConfig(
+            **_safe_kwargs(CryptoORBConfig, _filter_extras(extras, "crypto_orb")),
+        )
         return lambda: crypto_orb_strategy(cfg)
     if kind == "crypto_trend":
         from eta_engine.strategies.crypto_trend_strategy import (
             CryptoTrendConfig,
             CryptoTrendStrategy,
         )
-        cfg = CryptoTrendConfig(**_filter_extras(extras, "crypto_trend"))
+        cfg = CryptoTrendConfig(
+            **_safe_kwargs(CryptoTrendConfig, _filter_extras(extras, "crypto_trend")),
+        )
         return lambda: CryptoTrendStrategy(cfg)
     if kind == "crypto_meanrev":
         from eta_engine.strategies.crypto_meanrev_strategy import (
             CryptoMeanRevConfig,
             CryptoMeanRevStrategy,
         )
-        cfg = CryptoMeanRevConfig(**_filter_extras(extras, "crypto_meanrev"))
+        cfg = CryptoMeanRevConfig(
+            **_safe_kwargs(CryptoMeanRevConfig, _filter_extras(extras, "crypto_meanrev")),
+        )
         return lambda: CryptoMeanRevStrategy(cfg)
     if kind == "crypto_scalp":
         from eta_engine.strategies.crypto_scalp_strategy import (
             CryptoScalpConfig,
             CryptoScalpStrategy,
         )
-        cfg = CryptoScalpConfig(**_filter_extras(extras, "crypto_scalp"))
+        cfg = CryptoScalpConfig(
+            **_safe_kwargs(CryptoScalpConfig, _filter_extras(extras, "crypto_scalp")),
+        )
         return lambda: CryptoScalpStrategy(cfg)
     if kind == "grid":
         from eta_engine.strategies.grid_trading_strategy import (
             GridConfig,
             GridTradingStrategy,
         )
-        cfg = GridConfig(**_filter_extras(extras, "grid"))
+        cfg = GridConfig(
+            **_safe_kwargs(GridConfig, _filter_extras(extras, "grid")),
+        )
         return lambda: GridTradingStrategy(cfg)
     msg = f"unknown crypto strategy_kind: {kind!r}"
     raise ValueError(msg)

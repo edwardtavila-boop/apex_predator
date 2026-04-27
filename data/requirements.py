@@ -99,6 +99,26 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
         ),
         sources_hint=("tradingview-mcp",),
     ),
+    # mnq_futures_sage is a sage-overlay variant of mnq_futures. Same
+    # underlying bot directory + same data needs as plain MNQ ORB; the
+    # only difference is the sage-consensus gate at decision time, which
+    # consumes the same bar/correlation streams. Listed separately so
+    # the registry-sync audit treats it as its own promotable subject.
+    BotRequirements(
+        bot_id="mnq_futures_sage",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("correlation", "ES1", "5m", critical=True,
+                note="ES correlation feeds the sage's institutional school"),
+            DataRequirement("correlation", "DXY", "5m", critical=False),
+            DataRequirement("correlation", "VIX", "5m", critical=False),
+        ),
+        sources_hint=(
+            "tradingview-mcp",
+            "scripts/dual_data_collector.py",
+        ),
+    ),
     # nq_daily_drb is a daily-timeframe DRB variant of nq_futures. Same
     # underlying bot directory, different strategy_kind in the per_bot
     # registry. Listed here as a separate bot_id so the audit + sync

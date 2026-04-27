@@ -58,6 +58,7 @@ DIR_TO_BOT_ID: dict[str, str] = {
 # their own requirements row and registry entry.
 VARIANT_BOT_IDS: set[str] = {
     "nq_daily_drb",  # daily-DRB variant; bot dir = bots/nq/
+    "mnq_futures_sage",  # sage-gated ORB variant; bot dir = bots/mnq/
 }
 
 

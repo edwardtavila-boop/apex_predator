@@ -24,6 +24,25 @@ in research. So:
 * For **basis features** (when added): both feeds become useful —
   CME minus spot is the basis, an actual crypto-specific signal.
 
+Pre-live swap policy (operator directive 2026-04-27)
+----------------------------------------------------
+Before flipping any crypto bot to real-money live trading:
+  1. Subscribe to IBKR's CME Crypto market-data bundle (~$10/mo).
+  2. Re-fetch the same time windows from IBKR-native CME bars
+     (a sibling fetcher ``scripts/fetch_ibkr_crypto_bars.py`` is
+     scaffolded but not yet wired).
+  3. Re-run the same walk-forward config; capture the IBKR
+     baseline as a separate BaselineSnapshot.
+  4. Call ``obs.drift_monitor.assess_drift`` with Coinbase baseline
+     vs the IBKR re-run. If the drift severity is ``amber`` or
+     ``red``, do NOT promote. Re-tune on IBKR data and repeat.
+  5. Document the comparison in
+     ``docs/research_log/<bot>_data_swap_<datestamp>.md``.
+
+This Coinbase fetcher stays in production as the no-subscription
+path for paper-mode work and as the drift-check comparator for
+every future swap. See memory: ``eta_data_source_policy.md``.
+
 This script is intentionally minimal — no auth (Coinbase public
 endpoints don't require it), no pagination dependency, no async.
 Cron / scheduled-task friendly.

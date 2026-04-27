@@ -152,6 +152,21 @@ def run_cell(cell: ResearchCell) -> CellResult:
             ctx_builder=lambda b, h: {},
             strategy_factory=lambda: ORBStrategy(orb_cfg),
         )
+    elif cell.strategy_kind == "drb":
+        # DRB is the daily-timeframe sibling of ORB. It also bypasses
+        # the confluence-scorer path — without this branch the DRB bots
+        # silently fell through to confluence on daily bars and produced
+        # nonsense (OOS Sharpe 1e+14). 2026-04-27.
+        from eta_engine.strategies.drb_strategy import DRBConfig, DRBStrategy
+        drb_cfg = DRBConfig()
+        res = WalkForwardEngine().run(
+            bars=bars,
+            pipeline=FeaturePipeline.default(),
+            config=wf,
+            base_backtest_config=base_cfg,
+            ctx_builder=lambda b, h: {},
+            strategy_factory=lambda: DRBStrategy(drb_cfg),
+        )
     else:
         res = WalkForwardEngine().run(
             bars=bars,

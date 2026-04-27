@@ -50,30 +50,58 @@ def main() -> int:
     print(lib.summary_markdown())
     print()
 
+    # Bot-coverage audit. Surfaces which bots can run vs which are
+    # blocked on missing data feeds (especially crypto).
+    from eta_engine.data.audit import audit_all
+    from eta_engine.data.audit import summary_markdown as audit_summary
+    audits = audit_all(library=lib)
+    print(audit_summary(audits))
+    print()
+
     if args.dry_run:
         print("(dry-run: no JARVIS event written)")
         return 0
 
     payload = lib.summary_jarvis_payload()
+    runnable = [a.bot_id for a in audits if a.is_runnable]
+    blocked = {
+        a.bot_id: {
+            "missing_critical": [
+                {"kind": r.kind, "symbol": r.symbol, "timeframe": r.timeframe}
+                for r in a.missing_critical
+            ],
+            "sources_hint": list(a.sources_hint),
+        }
+        for a in audits if not a.is_runnable
+    }
+
     journal = DecisionJournal(args.journal)
     journal.append(
         JournalEvent(
             actor=Actor.JARVIS,
             intent="data_inventory",
             rationale=(
-                f"library refreshed: {len(payload)} datasets across "
-                f"{len(lib.symbols())} symbols, {len(lib.timeframes())} timeframes"
+                f"library refreshed: {len(payload)} datasets, "
+                f"{len(lib.symbols())} symbols, {len(lib.timeframes())} timeframes; "
+                f"{len(runnable)}/{len(audits)} bots runnable, "
+                f"{len(blocked)} blocked on missing critical feeds"
             ),
             gate_checks=[
                 f"+datasets:{len(payload)}",
-                f"+symbols:{len(lib.symbols())}",
+                f"+runnable_bots:{len(runnable)}",
+                f"-blocked_bots:{len(blocked)}",
             ],
-            outcome=Outcome.NOTED,
-            metadata={"datasets": payload, "roots": [str(r) for r in lib.roots]},
+            outcome=Outcome.NOTED if not blocked else Outcome.BLOCKED,
+            metadata={
+                "datasets": payload,
+                "roots": [str(r) for r in lib.roots],
+                "runnable_bots": runnable,
+                "blocked_bots": blocked,
+            },
         )
     )
     print(f"[announce_data_library] JARVIS event appended to {args.journal}")
-    return 0
+    return 0 if not blocked else 1
 
 
 if __name__ == "__main__":

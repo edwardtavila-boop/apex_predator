@@ -105,4 +105,9 @@ __all__ = [
     "operator_coach",
     "skill_health_registry",
     "daily_brief",
+    # Wave-15 fleet coordination
+    "fleet_allocator",
+    "risk_budget_allocator",
+    "divergence_detector",
+    "pair_arbitrage_scanner",
 ]

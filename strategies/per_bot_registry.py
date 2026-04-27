@@ -304,6 +304,49 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={"strategy_baseline_oos_sharpe_min": 0.62},
     ),
+    # BTC hybrid (sage research candidate). 180-cell sweep on BTC 1h
+    # found best cell at conv=0.40, range=30m, lookback=200: agg OOS
+    # Sharpe +3.157 (vs plain crypto_orb +2.73 — sage adds +0.43 OOS
+    # Sh on top of the existing baseline). Gate fails on the engine's
+    # additional criteria (deg_avg=0.70 > 0.35 limit and 2/9 windows
+    # have <5 OOS trades), but on raw OOS Sharpe the overlay wins.
+    # Logged as a research candidate; promote to live only after
+    # window count grows enough that all-windows-met is plausible.
+    StrategyAssignment(
+        bot_id="btc_hybrid_sage",
+        strategy_id="btc_corb_sage_v1",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",  # unused when strategy_kind=orb_sage_gated
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=5,
+        strategy_kind="orb_sage_gated",
+        rationale=(
+            "Research candidate from the 2026-04-27 crypto sage sweep "
+            "(180 cells on BTC 1h). Best cell: conv=0.40, align=0.50, "
+            "range=30m, sage_lookback=200, instrument_class=crypto. "
+            "Walk-forward 90d/30d, 9 windows: agg OOS Sharpe +3.157 "
+            "(vs plain crypto_orb +2.73), 6/9 +OOS, DSR median 0.832, "
+            "DSR pass 56%. Gate FAIL on engine's secondary criteria "
+            "(deg_avg=0.70 > 0.35 and 2 of 9 windows have <5 OOS "
+            "trades). The overlay does add edge over the plain "
+            "crypto_orb baseline — keeping the cell pinned here so "
+            "the next research-grid run picks it up automatically. "
+            "Sage runs all 22 schools per breakout candidate; CPU "
+            "cost is fine for 1h bars."
+        ),
+        extras={
+            "sage_min_conviction": 0.40,
+            "sage_min_alignment": 0.50,
+            "sage_lookback_bars": 200,
+            "orb_range_minutes": 30,
+            "instrument_class": "crypto",
+            "research_candidate": True,
+        },
+    ),
     # BTC hybrid — perps-casino tier. Sage-aligned baseline: crypto_orb.
     StrategyAssignment(
         bot_id="btc_hybrid",

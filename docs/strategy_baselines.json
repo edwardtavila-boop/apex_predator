@@ -42,6 +42,17 @@
       "_promoted_at": "2026-04-27",
       "_walk_forward_summary": "NQ1/5m, 60d/30d windows, 2/2 positive OOS, agg OOS Sharpe +8.288, DSR median 0.997, 100% pass fraction. Same MNQ winning config (conv=0.65, align=0.55, range=15m) — sage overlay transfers symbol-agnostically across liquid index futures.",
       "_notes": "OOS > IS in both windows (W0: IS +0.69 / OOS +3.35; W1: IS +2.55 / OOS +13.23). Lower magnitude than MNQ (+8.29 vs +10.06) but same direction — sage's lift is real and generalizes. n_trades inferred from W0+W1 IS+OOS = 16+9 + 29+4 = 58. Same paper-soak gate as mnq_orb_sage_v1 applies."
+    },
+    {
+      "strategy_id": "btc_corb_sage_v1",
+      "n_trades": 49,
+      "win_rate": 0.490,
+      "avg_r": 0.583,
+      "r_stddev": 1.408,
+      "_promoted_at": "2026-04-27",
+      "_promotion_status": "research_candidate",
+      "_walk_forward_summary": "BTC/1h, 90d/30d windows, 9 windows, agg OOS Sharpe +3.157 (vs plain crypto_orb +2.73 — sage adds +0.43), 6/9 positive OOS, DSR median 0.832, DSR pass 56%. Gate FAIL on engine secondary criteria (deg_avg=0.70 > 0.35 and 2 of 9 windows have <5 OOS trades). Best cell from 2026-04-27 180-cell crypto sage sweep: conv=0.40, align=0.50, range=30m, sage_lookback=200, instrument_class=crypto.",
+      "_notes": "Research candidate, not promoted to live. Sage overlay does add OOS Sharpe over plain crypto_orb but trade volume per OOS window is uneven (some windows fire 8 trades, others 2). Promote to live once data extends to ~720d (so 9 windows -> 18+ windows and per-window trade variance averages out). The conv=0.65 thresholds that won on MNQ produce numerical blowup on BTC (-2.7e15) due to over-filtering; the working crypto cell needs conv ~0.40 — much more permissive."
     }
   ]
 }

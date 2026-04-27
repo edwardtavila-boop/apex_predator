@@ -108,6 +108,17 @@
       "_promotion_status": "research_candidate",
       "_walk_forward_summary": "BTC/1h, 90d/30d windows, 9 windows, agg OOS Sharpe +3.157 (vs plain crypto_orb +2.73 — sage adds +0.43), 6/9 positive OOS, DSR median 0.832, DSR pass 56%. Gate FAIL on engine secondary criteria (deg_avg=0.70 > 0.35 and 2 of 9 windows have <5 OOS trades). Best cell from 2026-04-27 180-cell crypto sage sweep: conv=0.40, align=0.50, range=30m, sage_lookback=200, instrument_class=crypto.",
       "_notes": "Research candidate, not promoted to live. Sage overlay does add OOS Sharpe over plain crypto_orb but trade volume per OOS window is uneven (some windows fire 8 trades, others 2). Promote to live once data extends to ~720d (so 9 windows -> 18+ windows and per-window trade variance averages out). The conv=0.65 thresholds that won on MNQ produce numerical blowup on BTC (-2.7e15) due to over-filtering; the working crypto cell needs conv ~0.40 — much more permissive."
+    },
+    {
+      "strategy_id": "eth_corb_sage_daily_v1",
+      "n_trades": 89,
+      "win_rate": 0.516,
+      "avg_r": 0.872,
+      "r_stddev": 1.256,
+      "_promoted_at": "2026-04-27",
+      "_promotion_status": "research_candidate",
+      "_walk_forward_summary": "ETH/1h, 90d/30d windows, 9 windows. Strategy = crypto_orb(range=120m, ATR=3.0, RR=2.5) + sage 22-school composite at DAILY cadence as directional veto (strict mode, conv>=0.40). Agg IS Sharpe +2.46 (vs -0.86 plain crypto_orb baseline — sage flipped IS positive), agg OOS Sharpe **+5.77** (vs +1.38 baseline — 4x lift). 6/9 +OOS, DSR median 0.992, DSR pass 66.7%, deg_avg 0.73 (FAIL the 0.35 cap). Per-window OOS Sharpes: +12.09, +14.74, +4.81, +9.81, +10.85, -15.14, +14.74, 0.00, 0.00.",
+      "_notes": "Research candidate, not promoted to live. ETH lacks ETF flow data so we can't run the BTC formula end-to-end (regime_trend + ETF + sage_daily). Substituting crypto_orb for regime_trend works because ETH's crypto_orb baseline already passes; sage daily gate adds +4.4 OOS Sharpe on top. Gate FAIL on two single-trade-window blowups (W7=2, W8=1) plus W5 regime-shift outlier (-15.14). The +5.77 result is real and IS-positive (resolves the prior eth_corb_v2 promotion blocker), but the strict gate's deg_avg cap and min_trades_met floor need either more data (currently 360d) or a circuit breaker. n_trades = sum across 9 windows IS+OOS = ~89."
     }
   ]
 }

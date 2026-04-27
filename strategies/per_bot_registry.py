@@ -709,6 +709,58 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             },
         },
     ),
+    # ETH sage-daily-gated (research candidate). Sister bot to
+    # eth_perp; applies the BTC sage-daily-gate breakthrough pattern
+    # to ETH using crypto_orb (range=120m, ATR=3.0, RR=2.5) as the
+    # underlying since ETH lacks ETF flow data.
+    StrategyAssignment(
+        bot_id="eth_sage_daily",
+        strategy_id="eth_corb_sage_daily_v1",
+        symbol="ETH",
+        timeframe="1h",
+        scorer_name="btc",  # unused when strategy_kind=sage_daily_gated
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="sage_daily_gated",
+        rationale=(
+            "Generalization test of the BTC sage-daily-gate breakthrough. "
+            "Plain crypto_regime_trend on ETH baseline is NEGATIVE "
+            "(IS -0.90, OOS -2.14, IS-negative in 7/9 windows), so we "
+            "applied the gate over crypto_orb (range=120m, ATR=3.0, "
+            "RR=2.5) — the ETH cell that already cleared the parallel "
+            "sweep. Walk-forward 90d/30d, 9 windows, sage-daily strict "
+            "@ conv=0.40: agg IS Sh **+2.46** (was -0.86 baseline — sage "
+            "flipped IS positive), agg OOS Sh **+5.77** (vs +1.38 "
+            "baseline — 4x lift). 6/9 +OOS, DSR median 0.992, DSR pass "
+            "66.7%. Per-window OOS Sharpes: +12.09, +14.74, +4.81, "
+            "+9.81, +10.85, -15.14, +14.74, 0.00, 0.00. Gate FAIL on "
+            "(a) deg_avg=0.73 > 0.35 cap, driven by W5 -15.14 (2 trades, "
+            "regime-shift outlier) and (b) W7 + W8 fire 1-2 trades each "
+            "(below 3-trade min_trades_met floor). RESEARCH CANDIDATE: "
+            "the +5.77 lift is real and the IS-positive flip resolves "
+            "the prior promotion blocker, but two single-trade-window "
+            "blowups stop the strict gate. Promote to live once data "
+            "extends past current 360d ETH 1h (so 9 windows -> 18+) "
+            "AND a single-window-loss circuit breaker is in place."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "underlying_strategy": "crypto_orb",
+            "crypto_orb_config": {
+                "range_minutes": 120,
+                "atr_stop_mult": 3.0,
+                "rr_target": 2.5,
+                "ema_bias_period": 100,
+                "max_trades_per_day": 2,
+            },
+            "sage_min_daily_conviction": 0.40,
+            "sage_strict_mode": True,
+            "sage_lookback_daily_bars": 200,
+        },
+    ),
     # XRP perp — DEACTIVATED until news/sentiment feed lands.
     StrategyAssignment(
         bot_id="xrp_perp",

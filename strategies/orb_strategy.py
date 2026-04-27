@@ -65,6 +65,8 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from eta_engine.backtest.engine import _Open
     from eta_engine.backtest.models import BacktestConfig
     from eta_engine.core.data_pipeline import BarData
@@ -157,6 +159,25 @@ class ORBStrategy:
         self._day: _DayState | None = None
         self._ema: float | None = None
         self._ema_alpha = 2.0 / (self.cfg.ema_bias_period + 1) if self.cfg.ema_bias_period > 0 else 0.0
+        # ES-correlation filter: caller may attach a provider that maps a
+        # MNQ/NQ bar -> the time-aligned ES bar (or None if ES has no bar
+        # at that minute, e.g. ES holiday). Keeping the provider as a
+        # callable means the strategy never imports the data library.
+        self._es_provider: Callable[[BarData], BarData | None] | None = None
+
+    # -- ES-confirmation plumbing --------------------------------------------
+
+    def attach_es_provider(
+        self, provider: Callable[[BarData], BarData | None] | None,
+    ) -> None:
+        """Wire up an ES-bar provider for the cross-asset filter.
+
+        Pass ``None`` to detach. The provider is called once per
+        primary-asset bar; signature is ``provider(bar) -> ES bar | None``
+        where the returned bar is treated as the time-aligned ES1 bar.
+        Strategy itself stays data-pipeline-agnostic.
+        """
+        self._es_provider = provider
 
     # -- main entry point -----------------------------------------------------
 
@@ -185,6 +206,14 @@ class ORBStrategy:
         local_t = local_ts.timetz().replace(tzinfo=None)
         local_t = time(local_t.hour, local_t.minute, local_t.second)
 
+        # ── ES-confirmation: pull aligned ES bar (if filter is on) ──
+        es_bar: BarData | None = None
+        if self.cfg.require_es_confirmation and self._es_provider is not None:
+            try:
+                es_bar = self._es_provider(bar)
+            except Exception:  # noqa: BLE001 - provider isolation
+                es_bar = None
+
         # ── Phase 1: build the opening range ──
         if not self._day.range_complete:
             if local_t < self.cfg.rth_open_local:
@@ -200,6 +229,17 @@ class ORBStrategy:
                     bar.low if self._day.range_low is None
                     else min(self._day.range_low, bar.low)
                 )
+                # mirror the range build for ES so the breakout phase can
+                # cross-check both legs without a second pass
+                if es_bar is not None:
+                    self._day.es_range_high = (
+                        es_bar.high if self._day.es_range_high is None
+                        else max(self._day.es_range_high, es_bar.high)
+                    )
+                    self._day.es_range_low = (
+                        es_bar.low if self._day.es_range_low is None
+                        else min(self._day.es_range_low, es_bar.low)
+                    )
                 return None
             # range window has passed
             self._day.range_complete = True
@@ -252,6 +292,23 @@ class ORBStrategy:
             side = "SELL"
         if side is None:
             return None
+
+        # ── Cross-asset ES confirmation gate ──
+        # Require ES1 to be breaking out of ITS opening range in the
+        # same direction. Without an ES bar at this minute (data gap,
+        # holiday) we fail-closed: no ES = no trade. Operators who
+        # don't want this stricture leave require_es_confirmation off.
+        if self.cfg.require_es_confirmation:
+            if (
+                es_bar is None
+                or self._day.es_range_high is None
+                or self._day.es_range_low is None
+            ):
+                return None
+            if side == "BUY" and not (es_bar.high > self._day.es_range_high):
+                return None
+            if side == "SELL" and not (es_bar.low < self._day.es_range_low):
+                return None
 
         # ── Phase 5: build the open trade ──
         risk_usd = equity * self.cfg.risk_per_trade_pct

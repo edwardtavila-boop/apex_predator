@@ -11,7 +11,6 @@ from eta_engine.backtest.models import BacktestConfig
 from eta_engine.core.data_pipeline import BarData
 from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy, _add_minutes
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -284,3 +283,152 @@ def test_emits_orb_regime_tag() -> None:
     out = s.maybe_enter(bar, hist, 10_000.0, cfg)
     assert out is not None
     assert out.regime == "orb_breakout"
+
+
+# ---------------------------------------------------------------------------
+# Cross-asset ES confirmation filter
+# ---------------------------------------------------------------------------
+
+
+def _es_bar(local_h: int, local_m: int, *, high: float, low: float,
+            close: float | None = None, day: int = 15) -> BarData:
+    """Build a synthetic ES1 bar at the same NY-local time as a primary bar."""
+    local_dt = datetime(2026, 1, day, local_h, local_m, tzinfo=_NY)
+    utc_dt = local_dt.astimezone(UTC)
+    c = close if close is not None else (high + low) / 2
+    return BarData(
+        timestamp=utc_dt, symbol="ES", open=(high + low) / 2,
+        high=high, low=low, close=c, volume=5000.0,
+    )
+
+
+def _drive_range_with_es(
+    s: ORBStrategy, *, mnq_high: float, mnq_low: float,
+    es_high: float, es_low: float, day: int = 15,
+) -> None:
+    """Run the three range-window bars through the strategy with paired ES bars.
+
+    Used by every ES-filter test to leave the strategy in 'range_complete=True'
+    state with both MNQ and ES ranges populated.
+    """
+    cfg = _config_for_test()
+    es_by_minute = {
+        (h, m): _es_bar(h, m, high=es_high, low=es_low, day=day)
+        for h, m in [(9, 30), (9, 35), (9, 40), (9, 45), (9, 50)]
+    }
+
+    def _provider(b: BarData) -> BarData | None:
+        local_t = b.timestamp.astimezone(_NY)
+        return es_by_minute.get((local_t.hour, local_t.minute))
+
+    s.attach_es_provider(_provider)
+    for h, m in [(9, 30), (9, 35), (9, 40)]:
+        s.maybe_enter(
+            _bar(h, m, high=mnq_high, low=mnq_low, day=day),
+            [], 10_000.0, cfg,
+        )
+
+
+def test_es_filter_off_means_no_change() -> None:
+    """Default config: ES filter disabled; trade fires regardless of ES."""
+    s = _fixture_strategy(range_minutes=15)
+    cfg = _config_for_test()
+    for h, m in [(9, 30), (9, 35), (9, 40)]:
+        s.maybe_enter(_bar(h, m, high=120.0, low=100.0), [], 10_000.0, cfg)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    out = s.maybe_enter(bar, hist, 10_000.0, cfg)
+    assert out is not None  # filter off → break wins on its own
+
+
+def test_es_confirmation_long_passes_when_es_also_breaks_high() -> None:
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    _drive_range_with_es(s, mnq_high=120.0, mnq_low=100.0,
+                         es_high=4500.0, es_low=4400.0)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+
+    def _provider(b: BarData) -> BarData | None:
+        # ES also breaks above its range high (4500)
+        return _es_bar(9, 45, high=4520.0, low=4495.0, close=4515.0)
+
+    s.attach_es_provider(_provider)
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    out = s.maybe_enter(bar, hist, 10_000.0, cfg)
+    assert out is not None
+    assert out.side == "BUY"
+
+
+def test_es_confirmation_long_blocked_when_es_does_not_break() -> None:
+    """MNQ breaks high, ES stays inside its range → no trade."""
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    _drive_range_with_es(s, mnq_high=120.0, mnq_low=100.0,
+                         es_high=4500.0, es_low=4400.0)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+
+    def _provider(b: BarData) -> BarData | None:
+        # ES still inside range — high 4495 < 4500
+        return _es_bar(9, 45, high=4495.0, low=4470.0, close=4490.0)
+
+    s.attach_es_provider(_provider)
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    out = s.maybe_enter(bar, hist, 10_000.0, cfg)
+    assert out is None
+
+
+def test_es_confirmation_short_passes_when_es_also_breaks_low() -> None:
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    _drive_range_with_es(s, mnq_high=120.0, mnq_low=100.0,
+                         es_high=4500.0, es_low=4400.0)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+
+    def _provider(b: BarData) -> BarData | None:
+        return _es_bar(9, 45, high=4410.0, low=4385.0, close=4390.0)
+
+    s.attach_es_provider(_provider)
+    bar = _bar(9, 45, high=100.0, low=95.0, close=96.0)
+    out = s.maybe_enter(bar, hist, 10_000.0, cfg)
+    assert out is not None
+    assert out.side == "SELL"
+
+
+def test_es_confirmation_blocks_when_provider_returns_none() -> None:
+    """Fail-closed: missing ES bar at trade minute → no trade."""
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    _drive_range_with_es(s, mnq_high=120.0, mnq_low=100.0,
+                         es_high=4500.0, es_low=4400.0)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+    s.attach_es_provider(lambda _b: None)
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    assert s.maybe_enter(bar, hist, 10_000.0, cfg) is None
+
+
+def test_es_confirmation_blocks_when_no_provider_attached() -> None:
+    """Filter on but no provider attached → fail-closed (no trade)."""
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    for h, m in [(9, 30), (9, 35), (9, 40)]:
+        s.maybe_enter(_bar(h, m, high=120.0, low=100.0), [], 10_000.0, cfg)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    assert s.maybe_enter(bar, hist, 10_000.0, cfg) is None
+
+
+def test_es_confirmation_provider_exception_is_isolated() -> None:
+    """A flaky provider should not crash the strategy; fail-closed instead."""
+    s = _fixture_strategy(range_minutes=15, require_es_confirmation=True)
+    cfg = _config_for_test()
+    for h, m in [(9, 30), (9, 35), (9, 40)]:
+        s.maybe_enter(_bar(h, m, high=120.0, low=100.0), [], 10_000.0, cfg)
+    hist = [_bar(8, m, high=120.0, low=100.0) for m in range(0, 30, 5)]
+
+    def _bad(_b: BarData) -> BarData | None:
+        raise RuntimeError("data lib unhappy")
+
+    s.attach_es_provider(_bad)
+    bar = _bar(9, 45, high=125.0, low=120.0, close=124.0)
+    # Should not raise; should fail-closed.
+    assert s.maybe_enter(bar, hist, 10_000.0, cfg) is None

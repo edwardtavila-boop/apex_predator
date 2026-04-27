@@ -121,7 +121,15 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "(mean-reversion) bleeds — Window 0 deep-dive on 5m "
             "showed +6R in choppy regimes, -2.5R in trending_up. "
             "4h timeframe gave the best DSR pass fraction (45%) in "
-            "the 2026-04-27 research grid."
+            "the 2026-04-27 research grid. v2 optimization stack "
+            "(classify_regime_v2 + session gate + ES correlation) "
+            "is wired and tested in strategies.mnq_optimizations "
+            "but is opt-in via env vars — adding all three gates on "
+            "top of regime block dropped sample-per-window below "
+            "the strict gate's min_trades floor in the 2026-04-27 "
+            "ablation. Real edge requires new features (CME-spot "
+            "basis, options gamma exposure, ES decoupling), not "
+            "more gates on the current feature set."
         ),
     ),
     # NQ futures — full E-mini Nasdaq, longer-haul lens

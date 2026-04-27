@@ -64,6 +64,7 @@ class BacktestEngine:
         strategy_id: str = "eta_default",
         scorer: Callable[..., ConfluenceResult] | None = None,
         block_regimes: frozenset[str] | set[str] | None = None,
+        require_ctx_true: tuple[str, ...] | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.config = config
@@ -81,6 +82,13 @@ class BacktestEngine:
         self.block_regimes = (
             frozenset(block_regimes) if block_regimes is not None else None
         )
+        # ctx-flag gate: every key listed here must be truthy in the
+        # ctx dict for _enter() to proceed. Built for the 2026-04-27
+        # MNQ optimization stack (session_ok blocks first/last 30m
+        # of RTH; es_aligned blocks decoupled-from-ES sessions).
+        # Empty tuple / None means "no flag gate" — legacy callers
+        # are unaffected.
+        self.require_ctx_true: tuple[str, ...] = tuple(require_ctx_true or ())
 
     def run(self, bars: Iterable[BarData]) -> BacktestResult:
         equity, curve, trades, hist = self.config.initial_equity, [], [], []
@@ -129,6 +137,13 @@ class BacktestEngine:
         if self.block_regimes is not None:
             current_regime = ctx.get("regime")
             if current_regime is not None and str(current_regime) in self.block_regimes:
+                return None
+        # ctx-flag gate. Each named key must be truthy. Cheap check
+        # before scoring; missing keys evaluate as falsy and block
+        # entry — that's the conservative default (don't trade when
+        # the flag is unset because the data was unavailable).
+        for key in self.require_ctx_true:
+            if not ctx.get(key, False):
                 return None
         results = self.pipeline.compute_all(bar, ctx)
         score = self.scorer(*self.pipeline.to_confluence_inputs(results))

@@ -111,6 +111,30 @@ def _load_csv(path: Path, limit: int | None = None) -> list:
     return bars
 
 
+def _load_es_bars_aligned(target_ts) -> list:  # type: ignore[no-untyped-def]
+    """Best-effort load of ES1 5m bars for the cross-asset correlation gate.
+
+    Returns ``[]`` when the data library has no ES1 5m feed. The
+    correlation gate treats an empty / None list as "skip the gate"
+    so missing ES data downgrades quality but never breaks trading.
+    Cached per-process — the library load is ~1ms but happens on
+    every bar, and the bar list is read-only after the first call.
+    """
+    global _ES_BARS_CACHE
+    try:
+        return _ES_BARS_CACHE  # type: ignore[name-defined]
+    except NameError:
+        pass
+    try:
+        from eta_engine.data.library import default_library
+        ds = default_library().get(symbol="ES1", timeframe="5m")
+        bars = default_library().load_bars(ds) if ds else []
+    except Exception:  # noqa: BLE001
+        bars = []
+    _ES_BARS_CACHE = bars  # type: ignore[name-defined]
+    return bars
+
+
 def _ctx(bar, hist) -> dict:  # noqa: ANN001
     """MNQ-aware ctx_builder — bar-derived features, neutral crypto defaults.
 
@@ -139,6 +163,12 @@ def _ctx(bar, hist) -> dict:  # noqa: ANN001
     px = bar.close
 
     # ── Bar-derived features (honest) ──
+    from eta_engine.strategies.mnq_optimizations import (
+        classify_regime_v2,
+        correlated_with_es,
+        in_session,
+    )
+
     if hist and len(hist) >= 50:
         recent = hist[-20:]
         ema_short = sum(b.close for b in recent) / len(recent)
@@ -152,28 +182,32 @@ def _ctx(bar, hist) -> dict:  # noqa: ANN001
         bias = 1 if slope > 0.0005 else (-1 if slope < -0.0005 else 0)
         # trend_bias raw: [-1, 1] — magnitude scales with slope strength
         trend_bias_raw = max(-1.0, min(1.0, slope * 200.0))
-        # ATR-based vol regime: ratio of recent ATR to longer-term ATR
+        # ATR-based vol regime
         recent_atr = sum(b.high - b.low for b in recent) / len(recent)
         long_atr = (
             sum(b.high - b.low for b in baseline) / len(baseline)
             if baseline else recent_atr
         )
         vol_ratio = recent_atr / long_atr if long_atr > 0.0 else 1.0
-        # regime tag from drift
-        ret = (recent[-1].close - recent[0].close) / recent[0].close if recent[0].close else 0.0
-        if ret > 0.005:
-            regime = "trending_up"
-        elif ret < -0.005:
-            regime = "trending_down"
-        else:
-            regime = "choppy"
     else:
         bias = 0
         trend_bias_raw = 0.0
         recent_atr = bar.high - bar.low
         long_atr = recent_atr
         vol_ratio = 1.0
-        regime = "warmup"
+
+    # Two-axis regime tag (volatility × direction). Replaces the
+    # coarse 3-bucket v1 classifier from the prior runner.
+    regime = classify_regime_v2(hist or [bar])
+
+    # Session gate: blocks first/last 30m of MNQ RTH by default.
+    session_ok = in_session(bar.timestamp)
+
+    # Cross-asset gate: ES1 / MNQ correlation must be ≥ 0.4 over
+    # the recent window. ES bars load lazily; missing feed returns
+    # True so we never block on absent data (best-effort gate).
+    es_bars = _load_es_bars_aligned(bar.timestamp)
+    es_aligned = correlated_with_es(hist or [bar], es_bars)
 
     return {
         # bar-derived
@@ -185,6 +219,8 @@ def _ctx(bar, hist) -> dict:  # noqa: ANN001
         "trend_bias_override": trend_bias_raw,  # consumed by trend feature if it looks
         "vol_regime_override": vol_ratio,
         "regime": regime,
+        "session_ok": session_ok,
+        "es_aligned": es_aligned,
         # Crypto-tuned defaults — see docstring for rationale.
         "funding_history": [
             FundingRate(timestamp=now, symbol=bar.symbol, rate=-0.0008, predicted_rate=-0.0008)
@@ -313,13 +349,23 @@ def main() -> int:
         strict_fold_dsr_gate=True,
         fold_dsr_min_pass_fraction=0.5,
     )
-    # Regime gate: built from the 2026-04-27 Window 0 deep-dive,
-    # which showed the strategy is +EV in "choppy" regimes and
-    # bleeds in "trending_up" / "trending_down". Disable via
-    # MNQ_BLOCK_REGIMES="" (empty) to compare against the
-    # ungated baseline.
-    block_raw = os.environ.get("MNQ_BLOCK_REGIMES", "trending_up,trending_down")
+    # v2 regime gate: with the new classifier, "trending_up/down"
+    # split into low_vol_trend_*  + high_vol_trend_* + panic. Block
+    # them all by default — only low_vol_choppy and high_vol_choppy
+    # are tradeable in MNQ given the Window 0 finding. Override via
+    # MNQ_BLOCK_REGIMES="" to compare against ungated.
+    default_block = (
+        "low_vol_trend_up,low_vol_trend_down,"
+        "high_vol_trend_up,high_vol_trend_down,panic"
+    )
+    block_raw = os.environ.get("MNQ_BLOCK_REGIMES", default_block)
     block_regimes = frozenset(r.strip() for r in block_raw.split(",") if r.strip())
+
+    # ctx-flag gate. session_ok + es_aligned must both be True. To
+    # disable, set MNQ_REQUIRE_CTX_TRUE="" (empty).
+    require_raw = os.environ.get("MNQ_REQUIRE_CTX_TRUE", "session_ok,es_aligned")
+    require_ctx_true = tuple(k.strip() for k in require_raw.split(",") if k.strip())
+
     res = WalkForwardEngine().run(
         bars=bars,
         pipeline=FeaturePipeline.default(),
@@ -328,6 +374,7 @@ def main() -> int:
         ctx_builder=_ctx,
         scorer=score_confluence_mnq,
         block_regimes=block_regimes if block_regimes else None,
+        require_ctx_true=require_ctx_true if require_ctx_true else None,
     )
 
     print("EVOLUTIONARY TRADING ALGO -- MNQ Real-Data Walk-Forward")

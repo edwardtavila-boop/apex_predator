@@ -10,9 +10,9 @@ note saved at `~/.claude/.../memory/eta_full_rebrand_override.md`.
 
 ### Level 2 — Cloudflare assets
 
-* ✅ Tunnel `apex-predator` (id `d8b901a6...`) renamed to `eta-engine`
+* ✅ Tunnel `eta-engine` (id `d8b901a6...`) renamed to `eta-engine`
   * Status: healthy, 2 connectors preserved
-  * 3 ingress rules preserved (ops/app/jarvis on apexpredator.live —
+  * 3 ingress rules preserved (ops/app/jarvis on evolutionarytradingalgo.com —
     will be migrated to evolutionarytradingalgo.com once DNS-edit
     token is provided; see L1 below)
 * ✅ Tunnel `firm-command-center` (id `2342fd00...`) renamed to
@@ -37,7 +37,7 @@ note saved at `~/.claude/.../memory/eta_full_rebrand_override.md`.
 ### Level 1 — Public DNS migration
 
 Token has `Cloudflare Tunnel:Edit` but not `Zone:DNS:Edit`. To execute
-the URL migration from `*.apexpredator.live` to `*.evolutionarytradingalgo.com`:
+the URL migration from `*.evolutionarytradingalgo.com` to `*.evolutionarytradingalgo.com`:
 
 1. Generate fresh API token at https://dash.cloudflare.com/profile/api-tokens
    with permissions:
@@ -54,27 +54,27 @@ the URL migration from `*.apexpredator.live` to `*.evolutionarytradingalgo.com`:
    * Update both tunnels' ingress configs to add the new ETA hostnames
      (dual-routing during transition)
    * Verify each ETA URL resolves + serves correctly
-   * Remove the apexpredator.live ingress entries (cutover)
-   * Optionally delete apexpredator.live DNS records (final sunset)
+   * Remove the evolutionarytradingalgo.com ingress entries (cutover)
+   * Optionally delete evolutionarytradingalgo.com DNS records (final sunset)
 
 ## Level 4 — Code rebrand (staged, multi-session)
 
 ### Real scope (corrected from "4143+ refs" memory note)
 
-A targeted audit found that **most "apex_predator" references are
+A targeted audit found that **most "eta_engine" references are
 strings, not Python imports**:
 
-* No active Python package named `apex_predator` to migrate
-* `firm_command_center/apex_predator/` is just a 1-file state dir
+* No active Python package named `eta_engine` to migrate
+* `firm_command_center/eta_engine/` is just a 1-file state dir
   (`data/runtime_state.json`) actively written by
   `command_center/server/app.py` — renaming requires coordinated
   code change (current write paths are hardcoded)
 * The 4143 figure includes:
   * Docstrings + code comments (low-risk text replace)
-  * Path-string literals (e.g. `"apex_predator/scripts/jarvis_assess.py"`)
-  * Test assertion strings (`"uv sync ... from apex_predator root"`)
-  * Workflow filenames (`.github/workflows/apex_predator.yml`)
-  * Released artifact names (`apex_predator_windows_release.zip`)
+  * Path-string literals (e.g. `"eta_engine/scripts/jarvis_assess.py"`)
+  * Test assertion strings (`"uv sync ... from eta_engine root"`)
+  * Workflow filenames (`.github/workflows/eta_engine.yml`)
+  * Released artifact names (`eta_engine_windows_release.zip`)
   * The `_archive/` trees (which we don't touch)
 
 ### Phase 1 — Safe text replaces (~1-2 hours of focused work)
@@ -87,13 +87,13 @@ Replace strings that are NOT path-load-bearing:
 * Service descriptions (already done in L3)
 
 Skip in Phase 1: anything that reads/writes a path from disk that
-mentions `apex_predator` in the actual filesystem layout.
+mentions `eta_engine` in the actual filesystem layout.
 
 Run regression tests after each module's text-replace batch.
 
 ### Phase 2 — Coordinated path rename (~1-2 days, careful)
 
-The `firm_command_center/apex_predator/` directory rename. This requires:
+The `firm_command_center/eta_engine/` directory rename. This requires:
 1. Create new `firm_command_center/eta_state/` directory
 2. Update all writers (`command_center/server/app.py`,
    `preflight.py`, `remote_ops.py`, `vps_status.py`) to write to
@@ -106,36 +106,36 @@ The `firm_command_center/apex_predator/` directory rename. This requires:
 
 ### Phase 3 — Workflow + artifact rename (~30 min)
 
-* Rename `.github/workflows/apex_predator.yml` →
+* Rename `.github/workflows/eta_engine.yml` →
   `.github/workflows/eta_engine.yml`
 * Update workflow internals (description, output artifacts)
-* Rename released zip: `apex_predator_windows_release.zip` →
+* Rename released zip: `eta_engine_windows_release.zip` →
   `eta_engine_windows_release.zip`
 * Update version manifest
 * CI re-runs the renamed workflow on next push
 
 ### Phase 4 — Memory + doc consolidation
 
-* Update each memory note that mentions apex_predator to use ETA
+* Update each memory note that mentions eta_engine to use ETA
   language (already done in MEMORY.md index)
-* Update CLAUDE.md if it references apex_predator
+* Update CLAUDE.md if it references eta_engine
 * Update README files
 
 ## Risk register
 
 | Risk | Mitigation |
 |---|---|
-| FirmCommandCenter dashboard breaks during apex_predator/ rename | Dual-write back-compat shim (Phase 2 step 4) |
+| FirmCommandCenter dashboard breaks during eta_engine/ rename | Dual-write back-compat shim (Phase 2 step 4) |
 | Strategy IDs in `strategy_baselines.json` invalidated | None — strategy IDs (`mnq_orb_v1`, `btc_sage_daily_etf_v1`, etc.) are **asset-named**, not branding-named. Safe. |
 | Bot IDs in `per_bot_registry.py` invalidated | Same — `bot_id` values like `mnq_futures`, `btc_hybrid`, `eth_compression` are asset/strategy-named. Safe. |
 | Test fixtures with golden-file assertions break | Run pytest after each Phase 1 batch; fix assertion strings inline |
 | GitHub workflow rename breaks deployed CI runs | Phase 3 is a clean cut; old runs preserved in Actions history |
-| `apex_predator_batman/` sister repo references | Acknowledge in docs as legacy; rename in same Phase 3 sweep if user has access to that repo |
+| `eta_engine_batman/` sister repo references | Acknowledge in docs as legacy; rename in same Phase 3 sweep if user has access to that repo |
 
 ## Out of scope (user explicitly noted)
 
 * Strategy IDs / bot IDs (already asset-named, no rename needed)
-* `apexpredator.llc` Cloudflare zone (kept for legal LLC name; ETA
+* `evolutionarytradingalgo.llc` Cloudflare zone (kept for legal LLC name; ETA
   branding sits at company-name level not legal-entity level)
 * Archived dirs under `_archive/` (snapshot of old state, untouched)
 

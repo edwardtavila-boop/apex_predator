@@ -5,7 +5,7 @@
 # opening up on home computer". This script:
 #
 #   1. Verifies prerequisites (git, gh, python, eta_engine repo present)
-#   2. Optionally renames C:\apex_predator\ -> C:\eta_engine\ (post-rebrand)
+#   2. Optionally renames C:\eta_engine\ -> C:\eta_engine\ (post-rebrand)
 #   3. Clones the 3 satellite repos (mnq_backtest, mnq_eta_bot, jarvis_identity)
 #   4. Registers the 16 operator-tooling scheduled tasks (hidden, idempotent)
 #   5. Optionally also registers the persona/fleet daemons via register_tasks.ps1
@@ -70,19 +70,19 @@ foreach ($cmd in $prereqs.Keys) {
 if (-not (Test-Path $EtaEngineDir)) {
     Write-Host ""
     Write-Host "  WARN: $EtaEngineDir does not exist." -ForegroundColor Yellow
-    # Older deploys put it at C:\apex_predator\ -- offer to rename it.
-    if (Test-Path "C:\apex_predator") {
-        Write-Host "  Found C:\apex_predator -- looks like a pre-rebrand install."
+    # Older deploys put it at C:\eta_engine\ -- offer to rename it.
+    if (Test-Path "C:\eta_engine") {
+        Write-Host "  Found C:\eta_engine -- looks like a pre-rebrand install."
         if (-not $DryRun) {
-            $resp = Read-Host "  Rename C:\apex_predator -> C:\eta_engine ? [y/N]"
+            $resp = Read-Host "  Rename C:\eta_engine -> C:\eta_engine ? [y/N]"
             if ($resp -match '^[yY]') {
                 # Stop any process holding files in the old location
                 Get-Process | Where-Object {
-                    try { $_.Path -and $_.Path.StartsWith("C:\apex_predator\") } catch { $false }
+                    try { $_.Path -and $_.Path.StartsWith("C:\eta_engine\") } catch { $false }
                 } | Stop-Process -Force -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 1
-                Rename-Item -LiteralPath "C:\apex_predator" -NewName "eta_engine" -Force
-                Write-Host "  RENAMED C:\apex_predator -> C:\eta_engine" -ForegroundColor Green
+                Rename-Item -LiteralPath "C:\eta_engine" -NewName "eta_engine" -Force
+                Write-Host "  RENAMED C:\eta_engine -> C:\eta_engine" -ForegroundColor Green
             }
         }
     } else {
@@ -208,7 +208,7 @@ Write-Host "  1. Populate .env files in each repo (creds, API keys)"
 Write-Host "  2. If -KeepDisabled was used, enable tasks individually:"
 Write-Host "     Enable-ScheduledTask -TaskName BatmanWorker"
 Write-Host "  3. Verify Resend alerts still work:"
-Write-Host "     curl https://jarvis.apexpredator.live/api/alert/test"
+Write-Host "     curl https://jarvis.evolutionarytradingalgo.com/api/alert/test"
 Write-Host "  4. Disable the corresponding tasks on your home laptop:"
 Write-Host "     Get-ScheduledTask -TaskName 'BatmanWorker','EtaIbkr*','firm_*','mnq_*','MNQ_Eta_*','TheFirm-*','FirmApp-*' | Disable-ScheduledTask"
 Write-Host ""

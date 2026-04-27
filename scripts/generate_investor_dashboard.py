@@ -3,7 +3,7 @@
 
 Generates a static HTML dashboard for inner circle, investors, and
 beta-testers of the ETA Engine. Read-only, share via a public Cloudflare
-hostname (e.g. ``investors.apexpredator.live``).
+hostname (e.g. ``investors.evolutionarytradingalgo.com``).
 
 What it shows
 -------------
@@ -36,7 +36,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 

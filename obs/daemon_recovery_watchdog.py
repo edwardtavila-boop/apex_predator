@@ -1,4 +1,4 @@
-"""Daemon auto-recovery watchdog (Tier-3 #9, 2026-04-27).
+r"""Daemon auto-recovery watchdog (Tier-3 #9, 2026-04-27).
 
 The VPS boot tasks restart processes that EXIT (RestartCount=999 in the
 existing register_tasks.ps1). They do NOT restart processes that are
@@ -26,13 +26,11 @@ Usage (typically via scheduled task running every 60s)::
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger("daemon_recovery_watchdog")
@@ -99,7 +97,7 @@ def heartbeat_paths_for(name: str) -> list[Path]:
     """Common locations a daemon may have written its heartbeat to."""
     return [
         Path(os.environ.get("LOCALAPPDATA", "")) / "eta_engine" / "state" / name,
-        Path(os.environ.get("LOCALAPPDATA", "")) / "apex_predator" / "state" / name,
+        Path(os.environ.get("LOCALAPPDATA", "")) / "eta_engine" / "state" / name,
         Path(__file__).resolve().parents[1] / "state" / name,
     ]
 

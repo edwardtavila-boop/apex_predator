@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -111,7 +110,7 @@ def check_venue_handshakes() -> CheckResult:
 def check_us_person_gate() -> CheckResult:
     """The M2 gate must be active and refuse non-FCM venues for US persons."""
     try:
-        from eta_engine.venues.router import IS_US_PERSON, NON_FCM_VENUES, SmartRouter
+        from eta_engine.venues.router import IS_US_PERSON, NON_FCM_VENUES
 
         if not IS_US_PERSON:
             return CheckResult(
@@ -174,7 +173,7 @@ def check_resend_path() -> CheckResult:
         import urllib.request
         # Hit the VPS test endpoint as a proxy — same dispatcher code path.
         with urllib.request.urlopen(
-            "https://jarvis.apexpredator.live/api/alert/test",
+            "https://jarvis.evolutionarytradingalgo.com/api/alert/test",
             timeout=10,
         ) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -326,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print()
         print("=" * 60)
-        print(f"  ETA Engine live-trading preflight gate")
+        print("  ETA Engine live-trading preflight gate")
         print("=" * 60)
         for r in results:
             mark = "OK  " if r.ok else "FAIL"
@@ -334,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {mark}  {color}{r.name}: {r.detail}")
         print()
         if ok:
-            print(f"  GATE: GREEN -- safe to flip bots to LIVE")
+            print("  GATE: GREEN -- safe to flip bots to LIVE")
         else:
             crit = [r for r in results if not r.ok and r.severity == "critical"]
             print(f"  GATE: RED -- {len(crit)} critical failure(s); DO NOT GO LIVE")

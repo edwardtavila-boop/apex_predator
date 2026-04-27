@@ -1,7 +1,7 @@
 # Research Log — 2026-04-26 — Post-rebrand baseline
 
 **Purpose:** Establish a clean baseline of framework behavior after the
-`apex_predator → eta_engine` rebrand. Verify research workflows still
+`eta_engine → eta_engine` rebrand. Verify research workflows still
 produce expected output and that gating logic remains intact.
 
 This is a **process checkpoint, not an edge claim.** Synthetic demo

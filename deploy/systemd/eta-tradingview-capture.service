@@ -1,0 +1,47 @@
+[Unit]
+Description=TradingView headless-Chrome capture daemon (Evolutionary Trading Algo)
+Documentation=file://__INSTALL_DIR__/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=notify -- the capture daemon's main supervisor calls
+# notify_ready() once Playwright has both opened the browser AND
+# loaded the auth state, then pings WATCHDOG=1 from each tab loop.
+Type=notify
+NotifyAccess=main
+WatchdogSec=180
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+ExecStart=__INSTALL_DIR__/.venv/bin/python -m eta_engine.scripts.run_tradingview_capture \
+  --config       __INSTALL_DIR__/configs/tradingview.yaml \
+  --auth-state   %h/.local/state/eta_engine/tradingview_auth.json \
+  --data-root    %h/apex_data/tradingview \
+  --log-level    INFO
+Restart=always
+RestartSec=30
+WatchdogSignal=SIGTERM
+StandardOutput=append:%h/.local/log/eta_engine/tradingview-capture.log
+StandardError=append:%h/.local/log/eta_engine/tradingview-capture.err
+
+# ------------------------------------------------------------------
+# Hardening
+# ------------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# Chromium needs RW on a few paths under HOME; we surface them
+# explicitly via ReadWritePaths so ProtectHome can stay read-only.
+ProtectHome=read-only
+ReadWritePaths=%h/apex_data/tradingview %h/.local/state/eta_engine %h/.local/log/eta_engine %h/.cache/ms-playwright
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+# Chromium uses inline JIT, so MemoryDenyWriteExecute MUST be off.
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target

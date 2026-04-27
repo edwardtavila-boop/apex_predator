@@ -424,3 +424,55 @@ def eth_daily_preset() -> RegimeGatedConfig:
         allowed_modes=frozenset({"trend_follow", "mean_revert"}),
         require_bias_match_side=False,
     )
+
+
+def sol_daily_preset() -> RegimeGatedConfig:
+    """Preset for SOL on 1h LTF.
+
+    SOL is materially more volatile than ETH (historically ~1.5-2x
+    BTC vol). Trend-distance and ATR cutoffs are widest of the
+    crypto presets. EMAs same span (50/200 days) — the timeframe
+    semantics are universal even when vol scales.
+    """
+    cls = HtfRegimeClassifierConfig(
+        fast_ema=50 * 24,
+        slow_ema=200 * 24,
+        slope_lookback=24 * 5,
+        slope_threshold_pct=0.5,
+        trend_distance_pct=5.0,      # SOL moves even more
+        range_atr_pct_max=3.5,       # widest ATR cutoff
+        atr_period=24 * 7,
+        warmup_bars=200 * 24 + 50,
+    )
+    return RegimeGatedConfig(
+        classifier=cls,
+        allowed_regimes=frozenset({"trending", "ranging"}),
+        allowed_biases=frozenset({"long", "short", "neutral"}),
+        allowed_modes=frozenset({"trend_follow", "mean_revert"}),
+        require_bias_match_side=False,
+    )
+
+
+def nq_intraday_preset() -> RegimeGatedConfig:
+    """Preset for NQ 5m intraday — same Nasdaq-100 mechanic as MNQ.
+
+    Defined as a separate factory (not an alias of MNQ) so future
+    NQ-specific tuning has a clean home.
+    """
+    cls = HtfRegimeClassifierConfig(
+        fast_ema=20,
+        slow_ema=60,
+        slope_lookback=12,
+        slope_threshold_pct=0.10,
+        trend_distance_pct=0.5,
+        range_atr_pct_max=0.30,
+        atr_period=12,
+        warmup_bars=80,
+    )
+    return RegimeGatedConfig(
+        classifier=cls,
+        allowed_regimes=frozenset({"ranging"}),
+        allowed_biases=frozenset({"long", "short", "neutral"}),
+        allowed_modes=frozenset({"mean_revert"}),
+        require_bias_match_side=False,
+    )

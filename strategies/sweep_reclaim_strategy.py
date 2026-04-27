@@ -351,6 +351,34 @@ def mnq_intraday_sweep_preset() -> SweepReclaimConfig:
     )
 
 
+def nq_intraday_sweep_preset() -> SweepReclaimConfig:
+    """Calibrated for NQ 5m bars during RTH.
+
+    Identical mechanic to MNQ (same Nasdaq-100 underlying, same
+    volatility profile per bar). NQ is $20/point vs MNQ's $2/point
+    but the strategy uses ATR-stop sized by ``risk_per_trade_pct *
+    equity / stop_distance`` so contract-size differences are
+    absorbed automatically by the qty calculation.
+
+    Defined as a separate factory (not an alias) so future NQ-
+    specific tuning has a clean home.
+    """
+    return SweepReclaimConfig(
+        level_lookback=30,
+        reclaim_window=3,
+        min_wick_pct=0.40,
+        volume_z_lookback=20,
+        min_volume_z=0.5,
+        atr_period=14,
+        atr_stop_mult=1.0,
+        rr_target=2.0,
+        risk_per_trade_pct=0.005,
+        min_bars_between_trades=6,
+        max_trades_per_day=4,
+        warmup_bars=50,
+    )
+
+
 def btc_daily_sweep_preset() -> SweepReclaimConfig:
     """Calibrated for BTC 1h bars 24/7.
 
@@ -369,6 +397,55 @@ def btc_daily_sweep_preset() -> SweepReclaimConfig:
         atr_stop_mult=1.5,
         rr_target=2.0,
         risk_per_trade_pct=0.005,
+        min_bars_between_trades=12,
+        max_trades_per_day=2,
+        warmup_bars=72,
+    )
+
+
+def eth_daily_sweep_preset() -> SweepReclaimConfig:
+    """Calibrated for ETH 1h bars.
+
+    Same shape as BTC preset but with WIDER stops to absorb ETH's
+    historically ~1.3x BTC vol. Wick threshold marginally lower
+    (0.25 vs BTC's 0.30) — ETH wicks are proportionally larger
+    so the same wick-pct gate would over-filter; volume z-score
+    threshold lowered to 0.2 since ETH volume is more bursty.
+    """
+    return SweepReclaimConfig(
+        level_lookback=48,
+        reclaim_window=3,
+        min_wick_pct=0.25,
+        volume_z_lookback=24,
+        min_volume_z=0.2,
+        atr_period=14,
+        atr_stop_mult=1.8,        # wider for higher vol
+        rr_target=2.0,
+        risk_per_trade_pct=0.005,
+        min_bars_between_trades=12,
+        max_trades_per_day=2,
+        warmup_bars=72,
+    )
+
+
+def sol_daily_sweep_preset() -> SweepReclaimConfig:
+    """Calibrated for SOL 1h bars.
+
+    SOL is materially more volatile than ETH (historically ~1.5-2x
+    BTC vol). Wider ATR-stop, lower wick threshold, looser volume
+    z. RR target raised to 2.5 to compensate for the wider stops
+    so the per-trade reward stays comparable.
+    """
+    return SweepReclaimConfig(
+        level_lookback=48,
+        reclaim_window=3,
+        min_wick_pct=0.20,
+        volume_z_lookback=24,
+        min_volume_z=0.1,
+        atr_period=14,
+        atr_stop_mult=2.2,        # wider still
+        rr_target=2.5,             # bump RR to keep edge per-trade
+        risk_per_trade_pct=0.004,  # smaller risk per trade (higher vol)
         min_bars_between_trades=12,
         max_trades_per_day=2,
         warmup_bars=72,

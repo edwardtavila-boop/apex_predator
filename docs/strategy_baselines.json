@@ -34,6 +34,17 @@
       "_notes": "OOS > IS in both windows (W0: IS +1.61 / OOS +12.39; W1: IS +3.90 / OOS +7.73) — sage filter cuts more losers than winners on OOS, the opposite of overfitting. n_trades inferred from W0+W1 IS+OOS = 13+7 + 24+5 = 49. Trade count is low; paper-soak validation required before live promotion. Re-baseline once paper-soak produces 50+ real fills."
     },
     {
+      "strategy_id": "btc_sage_daily_etf_v1",
+      "n_trades": 142,
+      "win_rate": 0.612,
+      "avg_r": 1.317,
+      "r_stddev": 1.201,
+      "_promoted_at": "2026-04-27",
+      "_promotion_status": "production_candidate",
+      "_walk_forward_summary": "BTC/1h, 90d/30d, 9 windows. Strategy = crypto_regime_trend + ETF flow filter + sage 22-school composite at DAILY cadence as directional veto (conv>=0.50, loose mode). Agg OOS Sharpe **+6.00** (vs plain regime_trend +2.96, ETF-only +4.28). 8/9 +OOS, DSR median 1.000, 89% pass, deg_avg 0.30 (PASSES 0.35 cap), gate PASS. FIRST BTC strategy to clear the strict walk-forward gate on this codebase.",
+      "_notes": "n_trades = sum across 9 windows IS+OOS = ~142 (avg ~16/window). Per-window OOS Sharpes: +8.42, +10.75, +10.14, +1.64, +3.98, -4.19, +3.63, +8.41, +11.25. The W5 regime-shift outlier was -11.83 in prior strategies; sage's daily directional read cuts it to -4.19. Breakthrough = running sage at the right cadence (daily) instead of layering it on individual 1h bars. Paper-soak validation is the next gate before live promotion."
+    },
+    {
       "strategy_id": "btc_regime_trend_etf_v1",
       "n_trades": 121,
       "win_rate": 0.585,

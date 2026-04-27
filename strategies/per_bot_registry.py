@@ -357,11 +357,66 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "research_candidate": True,
         },
     ),
-    # BTC ETF-flow confluence (Tier 4 winner). Adds a single
-    # institutional-flow gate to the +2.96 regime_trend baseline:
-    # long requires positive net daily ETF inflow, short requires
-    # net outflow. Source: Farside Investors aggregate spot-BTC ETF
-    # daily totals.
+    # BTC SAGE-DAILY-GATED champion (FIRST strict-gate PASS on BTC).
+    # Architecture: 1h regime_trend + ETF flow filter + sage's
+    # 22-school DAILY composite as a directional veto. Sage runs at
+    # its NATURAL cadence (daily) — the timeframe match is what
+    # makes this work where prior 1h-sage attempts blew up.
+    # Walk-forward 90d/30d, 9 windows: agg OOS Sharpe **+6.00**
+    # (vs ETF-only +4.28; 40% lift while only sacrificing 8 trades).
+    # 8/9 +OOS, DSR median 1.000, 89% pass, deg_avg 0.30 (passes the
+    # 0.35 cap that everything else failed), gate PASS.
+    StrategyAssignment(
+        bot_id="btc_sage_daily_etf",
+        strategy_id="btc_sage_daily_etf_v1",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",  # unused when strategy_kind=sage_daily_gated
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="sage_daily_gated",
+        rationale=(
+            "PROMOTED 2026-04-27 — first BTC strategy to PASS the "
+            "strict walk-forward gate on this codebase. Architecture: "
+            "1h crypto_regime_trend (regime=100, pull=21, tol=3%, "
+            "atr=2.0, rr=3.0) + Farside ETF flow filter + sage's "
+            "22-school composite at DAILY cadence as directional "
+            "veto (min_conviction=0.50, loose mode). Walk-forward: "
+            "* W0: IS +0.92, OOS **+8.42**, 5 trades "
+            "* W1: IS +1.14, OOS **+10.75**, 8 trades "
+            "* W2: IS +2.80, OOS **+10.14**, 5 trades "
+            "* W3: IS +3.43, OOS +1.64, 4 trades "
+            "* W4: IS +3.46, OOS +3.98, 12 trades "
+            "* W5: IS +3.53, OOS -4.19, 14 trades  (regime-shift "
+            "  outlier, but cut from -11.83 in prior strategies — "
+            "  sage's daily read caught it earlier) "
+            "* W6: IS +2.68, OOS +3.63, 9 trades "
+            "* W7: IS +3.07, OOS **+8.41**, 6 trades "
+            "* W8: IS +3.48, OOS **+11.25**, 8 trades "
+            "agg OOS Sharpe **+6.00** vs plain regime_trend +2.96 "
+            "(2x lift) and ETF-only +4.28 (40% lift). DSR median "
+            "1.000, 89% pass, **deg_avg 0.30 PASSES the 0.35 cap** "
+            "that ETF-only failed by 0.057. The breakthrough came "
+            "from running sage at the right cadence — daily, not 1h. "
+            "Sage's 1h overlay blew up due to small N; sage's daily "
+            "directional read on a 200-bar context window is "
+            "precisely the regime hint needed to throttle 1h trades "
+            "during regime shifts. Paper-soak validation is the "
+            "next gate before live promotion."
+        ),
+        extras={
+            "promotion_status": "production_candidate",
+            "min_daily_conviction": 0.50,
+            "strict_mode": False,
+            "sage_lookback_daily_bars": 200,
+            "etf_csv_path": "C:/mnq_data/history/BTC_ETF_FLOWS.csv",
+        },
+    ),
+    # BTC ETF-flow confluence (prior champion, now demoted to research
+    # candidate since sage-daily-gated supersedes it).
     StrategyAssignment(
         bot_id="btc_regime_trend_etf",
         strategy_id="btc_regime_trend_etf_v1",

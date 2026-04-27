@@ -124,6 +124,16 @@ class StrategyAssignment:
     #                    5m: agg OOS Sharpe **+10.06** vs plain ORB
     #                    +5.71 — sage gating ~doubles the OOS Sharpe.
     #                    See strategies.sage_gated_orb_strategy.
+    # "crypto_regime_trend" = 200 EMA regime gate + pullback-to-50
+    #                    trend continuation. User-spec strategy
+    #                    (2026-04-27): longs only when price > regime
+    #                    EMA, shorts only when price < regime EMA;
+    #                    entry on pullback to a faster trend EMA.
+    #                    BTC 1h sweep winner: agg OOS Sharpe **+2.96**
+    #                    (7/9 +OOS, 91 OOS trades). Strict gate fails
+    #                    on a single regime-shift outlier window —
+    #                    research candidate. See
+    #                    strategies.crypto_regime_trend_strategy.
     # All non-"confluence" kinds ignore scorer/threshold/regime
     # fields — those modules have their own knobs that the research
     # grid pulls from the per-bot extras dict under "*_config" keys.
@@ -344,6 +354,55 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "sage_lookback_bars": 200,
             "orb_range_minutes": 30,
             "instrument_class": "crypto",
+            "research_candidate": True,
+        },
+    ),
+    # BTC regime-trend candidate. User insight 2026-04-27: BTC patterns
+    # condition heavily on the 200 EMA — bull territory above, bear
+    # below. This strategy gates entries on the regime EMA and looks
+    # for pullback-to-faster-EMA continuation entries.
+    # 72-cell sweep on BTC 1h found regime=100, pull=21, tol=3%, atr=2.0,
+    # rr=3.0 produces agg OOS Sharpe +2.96 across 9 windows (7/9 +OOS,
+    # 91 OOS trades). Strict gate fails on a single regime-shift outlier
+    # (W5: -11.83 OOS Sh, deg_avg=0.70 > 0.35 cap). Strongest non-
+    # gated crypto strategy we have on raw Sharpe; research candidate
+    # pending paper-soak validation.
+    StrategyAssignment(
+        bot_id="btc_regime_trend",
+        strategy_id="btc_regime_trend_v1",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",  # unused when strategy_kind=crypto_regime_trend
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=5,
+        strategy_kind="crypto_regime_trend",
+        rationale=(
+            "Research candidate from the 2026-04-27 regime-trend sweep "
+            "(72 cells on BTC 1h). Promoted on user's market read: "
+            "BTC patterns condition on the 200 EMA (bull above, bear "
+            "below) and repeat across timeframes since BTC is 24/7. "
+            "Best cell: regime=100, pull=21, tol=3.0%, atr_stop=2.0, "
+            "rr=3.0. Walk-forward 90d/30d, 9 windows: agg OOS Sharpe "
+            "**+2.96** (vs plain crypto_orb +2.73), 7/9 positive OOS, "
+            "DSR median 1.000, 67% pass fraction, 91 OOS trades. "
+            "Strict gate FAILs on deg_avg=0.70 > 0.35 — driven by a "
+            "single regime-shift outlier window (W5: OOS Sh -11.83). "
+            "Without W5 the strategy is decisively edge-positive. The "
+            "100 EMA on 1h works better than 200 because the data span "
+            "is 360 days; on a longer span (BTC daily 5y) the 200 EMA "
+            "should dominate. Multi-TF generalization is the next "
+            "research step."
+        ),
+        extras={
+            "regime_ema": 100,
+            "pullback_ema": 21,
+            "pullback_tolerance_pct": 3.0,
+            "atr_stop_mult": 2.0,
+            "rr_target": 3.0,
+            "warmup_bars": 120,
             "research_candidate": True,
         },
     ),

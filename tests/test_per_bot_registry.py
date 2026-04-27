@@ -75,7 +75,7 @@ def test_thresholds_in_valid_range() -> None:
     _IGNORES_THRESHOLD = {
         "orb", "drb", "grid", "crypto_orb",
         "crypto_trend", "crypto_meanrev", "crypto_scalp",
-        "sage_consensus", "orb_sage_gated",
+        "sage_consensus", "orb_sage_gated", "crypto_regime_trend",
     }
     for a in ASSIGNMENTS:
         if a.strategy_kind in _IGNORES_THRESHOLD:

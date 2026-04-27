@@ -1269,7 +1269,10 @@ class CryptoSeedBot(BaseBot):
             return None
         # Seed-tier uses a fixed 1% notional of equity per directional trade — stop
         # sizing is managed by the 1.5R exit in evaluate_exit rather than a stop_distance.
-        notional = self.state.equity * (self.config.risk_per_trade_pct / 100.0)
+        # 2026-04-27: switch to effective_risk_per_trade_pct so any future
+        # warm-up policy on crypto_seed (currently none) shrinks notional in
+        # lockstep without re-editing this line.
+        notional = self.state.equity * (self.effective_risk_per_trade_pct() / 100.0)
         if signal.price <= 0.0 or notional <= 0.0:
             return None
         qty = round(notional / signal.price, 6)
@@ -1382,10 +1385,38 @@ class CryptoSeedBot(BaseBot):
     # ── Decision Logic ──
 
     def evaluate_entry(self, bar: dict[str, Any], confluence_score: float) -> bool:
+        # 2026-04-27 devils-advocate: grid / DCA bleeds in trends.
+        # Consult the regime gate before firing — refuses entry when
+        # ADX shows a trending tape or vol_z indicates a regime shift.
+        # Failure inside the gate falls open (the gate already
+        # fail-shuts on missing data per its own contract); the
+        # try/except here is paranoia against an imported-module
+        # exception killing the hot path.
+        try:
+            from eta_engine.strategies.regime_gate import (
+                RegimeGateConfig,
+                is_grid_safe,
+            )
+            cfg_raw: dict[str, Any] = {}
+            try:
+                from eta_engine.strategies.per_bot_registry import get_for_bot
+                a = get_for_bot(getattr(self.config, "name", ""))
+                if a is not None:
+                    cfg_raw = dict(a.extras)
+            except Exception:  # noqa: BLE001 -- registry lookup defensive
+                pass
+            allowed, _reason = is_grid_safe(
+                bar, config=RegimeGateConfig.from_extras(cfg_raw),
+            )
+            if not allowed:
+                return False
+        except Exception:  # noqa: BLE001 -- never crash the entry path
+            pass
         return confluence_score > 7.0 and self.check_risk() and not self._risk_lockout_active()
 
     def evaluate_exit(self, position: Position) -> bool:
-        risk_usd = self.config.risk_per_trade_pct / 100 * self.state.equity
+        # 2026-04-27: warm-up-aware exit threshold; matches evaluate_entry sizing.
+        risk_usd = self.effective_risk_per_trade_pct() / 100 * self.state.equity
         if position.unrealized_pnl <= -risk_usd:
             return True
         return position.unrealized_pnl >= 1.5 * risk_usd

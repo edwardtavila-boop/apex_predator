@@ -61,6 +61,7 @@ VARIANT_BOT_IDS: set[str] = {
     "mnq_futures_sage",  # sage-gated ORB variant; bot dir = bots/mnq/
     "nq_futures_sage",  # sage-gated ORB variant; bot dir = bots/nq/
     "btc_hybrid_sage",  # sage-gated crypto_orb variant; bot dir = bots/btc_hybrid/
+    "btc_regime_trend",  # regime-trend strategy variant; bot dir = bots/btc_hybrid/
 }
 
 

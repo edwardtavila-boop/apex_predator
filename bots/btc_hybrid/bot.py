@@ -2234,7 +2234,11 @@ class BtcHybridBot(BaseBot):
             qty = per_level / max(signal.price, 1.0)
             qty *= self._quality_signal_mult(self._execution_quality)
         else:
-            risk_usd = self.state.equity * (self.config.risk_per_trade_pct / 100.0)
+            # 2026-04-27 devils-advocate half-size mitigation: use the
+            # warm-up-adjusted risk-per-trade so the first 30 days run
+            # at half exposure. After the window the multiplier reverts
+            # to 1.0 automatically; see strategies.warmup_policy.
+            risk_usd = self.state.equity * (self.effective_risk_per_trade_pct() / 100.0)
             stop_distance = signal.meta.get(
                 "stop_distance",
                 signal.price * 0.01,
@@ -2283,7 +2287,11 @@ class BtcHybridBot(BaseBot):
         """Exit on 1R loss or 2R gain (BTC hybrid uses a lower R-multiple
         target than the L3 perps because the grid side generates more
         frequent small wins)."""
-        risk_usd = self.config.risk_per_trade_pct / 100 * self.state.equity
+        # 2026-04-27: use effective_risk_per_trade_pct so the exit
+        # threshold matches the entry-time sizing during the warm-up
+        # window (otherwise the first 30 days would entry at 0.5R and
+        # exit at 1R, distorting the realized R-multiple).
+        risk_usd = self.effective_risk_per_trade_pct() / 100 * self.state.equity
         if position.unrealized_pnl <= -risk_usd:
             return True
         return position.unrealized_pnl >= 2.0 * risk_usd

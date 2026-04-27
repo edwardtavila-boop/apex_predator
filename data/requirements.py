@@ -191,6 +191,20 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
             "scripts/fetch_funding_rates.py (OKX funding)",
         ),
     ),
+    # btc_regime_trend is a regime-classifier variant of btc_hybrid
+    # that only fires in trending regimes (the inverse of crypto_seed's
+    # 2026-04-27 grid-safe gate). Same data needs as plain BTC crypto_orb.
+    BotRequirements(
+        bot_id="btc_regime_trend",
+        requirements=(
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="regime classifier baseline"),
+            DataRequirement("correlation", "ETH", "1h", critical=False,
+                note="ETH-BTC correlation as regime confirmation"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
     BotRequirements(
         bot_id="eth_perp",
         requirements=(

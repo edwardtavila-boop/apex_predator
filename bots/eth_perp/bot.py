@@ -585,7 +585,10 @@ class EthPerpBot(BaseBot):
         """
         if signal.size > 0.0:
             return float(signal.size)
-        risk_usd = self.state.equity * (self.config.risk_per_trade_pct / 100.0)
+        # 2026-04-27 devils-advocate: half-size for first 30 days via
+        # effective_risk_per_trade_pct (auto-reverts to 1.0 multiplier
+        # post-window). See strategies.warmup_policy.
+        risk_usd = self.state.equity * (self.effective_risk_per_trade_pct() / 100.0)
         lev = float(signal.meta.get("leverage", 1.0))
         stop_distance = float(signal.meta.get("stop_distance", signal.price * 0.01))
         if stop_distance <= 0.0 or signal.price <= 0.0:
@@ -639,7 +642,8 @@ class EthPerpBot(BaseBot):
         return lev is not None and self.check_risk()
 
     def evaluate_exit(self, position: Position) -> bool:
-        risk_usd = self.config.risk_per_trade_pct / 100 * self.state.equity
+        # 2026-04-27: warm-up-aware exit threshold; matches the entry sizing.
+        risk_usd = self.effective_risk_per_trade_pct() / 100 * self.state.equity
         if position.unrealized_pnl <= -risk_usd:
             return True
         return position.unrealized_pnl >= 3.0 * risk_usd
@@ -687,7 +691,8 @@ class EthPerpBot(BaseBot):
             return
         risk_usd = compute_risk_usd(
             equity=self.state.equity,
-            risk_per_trade_pct=self.config.risk_per_trade_pct,
+            # 2026-04-27: pass effective (warm-up-adjusted) risk pct.
+            risk_per_trade_pct=self.effective_risk_per_trade_pct(),
         )
         if risk_usd <= 0.0:
             return

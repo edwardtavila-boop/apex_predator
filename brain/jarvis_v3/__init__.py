@@ -110,4 +110,9 @@ __all__ = [
     "risk_budget_allocator",
     "divergence_detector",
     "pair_arbitrage_scanner",
+    # Wave-16 live-readiness validation
+    "walk_forward_harness",
+    "pre_live_gate",
+    "ab_framework",
+    "regression_test_set",
 ]

@@ -188,6 +188,54 @@ def _build_crypto_strategy_factory(  # type: ignore[no-untyped-def]  # noqa: ANN
             ),
         )
         return lambda: CryptoRegimeTrendStrategy(cfg)
+    if kind == "sage_consensus":
+        from eta_engine.strategies.sage_consensus_strategy import (
+            SageConsensusConfig,
+            SageConsensusStrategy,
+        )
+        cfg = SageConsensusConfig(
+            **_safe_kwargs(
+                SageConsensusConfig,
+                _filter_extras(extras, "sage_consensus"),
+            ),
+        )
+        return lambda: SageConsensusStrategy(cfg)
+    if kind == "crypto_macro_confluence":
+        # Macro-feature confluence (ETF flows, LTH, fear/greed, etc.).
+        # Providers are attached at a higher orchestration layer; the
+        # grid runs the strategy in its "no providers" degraded form
+        # so the gate evaluation is honest about what can be measured
+        # without ad-hoc wiring. Strategies with provider-dependent
+        # claims should be re-run via their dedicated walk-forward
+        # scripts before promotion.
+        from eta_engine.strategies.crypto_macro_confluence_strategy import (
+            CryptoMacroConfluenceConfig,
+            CryptoMacroConfluenceStrategy,
+        )
+        cfg = CryptoMacroConfluenceConfig(
+            **_safe_kwargs(
+                CryptoMacroConfluenceConfig,
+                _filter_extras(extras, "crypto_macro_confluence"),
+            ),
+        )
+        return lambda: CryptoMacroConfluenceStrategy(cfg)
+    if kind == "sage_daily_gated":
+        # Composition strategy: embeds CryptoMacroConfluenceStrategy
+        # plus a daily-sage verdict provider. Without the provider
+        # attached the gate doesn't fire; the grid's evaluation is the
+        # "no veto" baseline. Real promotion uses the dedicated
+        # run_sage_walk_forward script that wires the provider.
+        from eta_engine.strategies.sage_daily_gated_strategy import (
+            SageDailyGatedConfig,
+            SageDailyGatedStrategy,
+        )
+        cfg = SageDailyGatedConfig(
+            **_safe_kwargs(
+                SageDailyGatedConfig,
+                _filter_extras(extras, "sage_daily_gated"),
+            ),
+        )
+        return lambda: SageDailyGatedStrategy(cfg)
     if kind == "grid":
         from eta_engine.strategies.grid_trading_strategy import (
             GridConfig,
@@ -309,9 +357,82 @@ def run_cell(cell: ResearchCell) -> CellResult:
             ctx_builder=lambda b, h: {},
             strategy_factory=lambda: DRBStrategy(drb_cfg),
         )
+    elif cell.strategy_kind == "ensemble_voting":
+        # Ensemble vote across named sub-strategies. Voters list comes
+        # from extras["voters"]; each voter is built via the same
+        # crypto factory (so "crypto_regime_trend", "regime_trend_etf",
+        # "sage_daily_gated" etc. all work as voter names — assuming
+        # they exist as factory keys). Without provider wiring the
+        # macro/sage voters degrade to their no-provider baselines;
+        # the dedicated ensemble walk-forward script is the production
+        # path. Grid evaluation = "what does the vote logic produce
+        # without provider context."
+        from eta_engine.strategies.ensemble_voting_strategy import (
+            EnsembleVotingConfig,
+            EnsembleVotingStrategy,
+        )
+        voter_names = cell.extras.get("voters") or []
+        # Aliases for voter names that use a different name in the
+        # ensemble extras than in the factory dispatch.
+        _alias = {
+            "regime_trend": "crypto_regime_trend",
+            "regime_trend_etf": "crypto_macro_confluence",
+        }
+        sub_strategies: list = []
+        for name in voter_names:
+            kind = _alias.get(name, name)
+            try:
+                sub_factory = _build_crypto_strategy_factory(kind, cell.extras)
+            except ValueError:
+                # Unknown voter — skip rather than crash. Logged so
+                # the gap is visible at grid time.
+                print(f"      [ensemble] unknown voter {name!r} (mapped to {kind!r}); skipped")
+                continue
+            sub_strategies.append((name, sub_factory()))
+        if not sub_strategies:
+            return CellResult(
+                cell=cell, n_windows=0, n_positive_oos=0,
+                agg_is_sharpe=0.0, agg_oos_sharpe=0.0,
+                avg_oos_degradation=0.0, deflated_sharpe=0.0,
+                fold_dsr_median=0.0, fold_dsr_pass_fraction=0.0,
+                pass_gate=False,
+                note="NO_VOTERS: ensemble_voting needs extras['voters']",
+            )
+        ens_cfg_kwargs = _safe_kwargs(
+            EnsembleVotingConfig,
+            _filter_extras(cell.extras, "ensemble_voting"),
+        )
+        # extras["min_agreement_count"] is the canonical name even
+        # without an "ensemble_voting_" prefix; honor it explicitly.
+        min_agree = cell.extras.get("min_agreement_count")
+        if min_agree is not None:
+            ens_cfg_kwargs.setdefault("min_agreement_count", min_agree)
+        ens_cfg = EnsembleVotingConfig(**ens_cfg_kwargs)
+        # EnsembleVotingStrategy isn't safe to share across windows —
+        # voters carry per-bar state. Build per-window via a closure
+        # that reconstructs both the voters and the ensemble.
+        def _ensemble_factory():  # type: ignore[no-untyped-def]  # noqa: ANN202
+            voters = []
+            for name in voter_names:
+                kind = _alias.get(name, name)
+                try:
+                    f = _build_crypto_strategy_factory(kind, cell.extras)
+                except ValueError:
+                    continue
+                voters.append((name, f()))
+            return EnsembleVotingStrategy(voters, ens_cfg)
+        res = WalkForwardEngine().run(
+            bars=bars,
+            pipeline=FeaturePipeline.default(),
+            config=wf,
+            base_backtest_config=base_cfg,
+            ctx_builder=lambda b, h: {},
+            strategy_factory=_ensemble_factory,
+        )
     elif cell.strategy_kind in (
         "crypto_orb", "crypto_trend", "crypto_meanrev", "crypto_scalp",
-        "crypto_regime_trend", "grid",
+        "crypto_regime_trend", "crypto_macro_confluence", "sage_consensus",
+        "sage_daily_gated", "grid",
     ):
         # Crypto-specific strategy variants. All share the same
         # maybe_enter(bar, hist, equity, config) -> _Open|None contract

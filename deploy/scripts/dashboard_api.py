@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,8 @@ from fastapi import Cookie, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
+
+_BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 # State/log dirs: Windows defaults; overridable via env
 if os.name == "nt":
@@ -489,6 +492,8 @@ def jarvis_governor() -> dict:
 def jarvis_edge_leaderboard(bot: str | None = None, limit: int = 5) -> dict:
     """Top + bottom schools by expectancy. Optional ?bot=<id> for per-bot."""
     from eta_engine.deploy.scripts.dashboard_state import read_json_safe
+    if bot is not None and not _BOT_ID_RE.match(bot):
+        raise HTTPException(status_code=400, detail={"error_code": "invalid_bot_id"})
     edge_path = _state_dir() / "sage" / "edge_tracker.json"
     if bot:
         edge_path = _state_dir() / "sage" / f"edge_tracker_{bot}.json"

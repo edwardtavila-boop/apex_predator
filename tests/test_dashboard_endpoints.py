@@ -102,6 +102,16 @@ def test_edge_leaderboard_with_data(client, tmp_path, monkeypatch) -> None:
     assert any(s["school"] == "fibonacci" for s in body["bottom"])
 
 
+def test_edge_leaderboard_rejects_bad_bot_id(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    r = client.get("/api/jarvis/edge_leaderboard?bot=..%2F..%2Fetc%2Fpasswd")
+    assert r.status_code == 400
+    # And a few other bad shapes
+    # empty string is borderline; ok if you want to allow
+    assert client.get("/api/jarvis/edge_leaderboard?bot=").status_code in (400, 200)
+    assert client.get("/api/jarvis/edge_leaderboard?bot=foo/bar").status_code == 400
+
+
 def test_model_tier_cold_start(client, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/model_tier")

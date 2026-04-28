@@ -87,3 +87,6 @@ docs/preflight_dryrun_report.json
 
 # Operational baselines — schema lives in docs/strategy_baselines.example.json
 docs/strategy_baselines.json
+
+# Stage-2 decommission: legacy command_center (VPS-only, untracked)
+command_center/

@@ -1,0 +1,99 @@
+/* eta_engine/deploy/status_page/theme.css
+   Wave-7 dashboard theme. Tailwind handles the bulk; this file adds
+   panel base styles + dark-mode tokens + small utilities. */
+
+:root {
+  --panel-bg: #18181b;        /* zinc-900 */
+  --panel-border: #3f3f46;    /* zinc-700 */
+  --panel-text: #f4f4f5;      /* zinc-100 */
+  --accent-good: #10b981;     /* emerald-500 */
+  --accent-warn: #f59e0b;     /* amber-500 */
+  --accent-bad:  #ef4444;     /* red-500 */
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 100px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel.loading::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right,
+              transparent, var(--accent-good), transparent);
+  animation: panel-loading 1.4s linear infinite;
+}
+
+@keyframes panel-loading {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.panel.error {
+  border-color: var(--accent-bad);
+}
+
+.panel.error::before {
+  content: "✕ error";
+  position: absolute;
+  top: 4px; right: 8px;
+  font-size: 10px;
+  color: var(--accent-bad);
+}
+
+.panel.stale::after {
+  content: "⚠ stale";
+  position: absolute;
+  top: 4px; right: 8px;
+  font-size: 10px;
+  color: var(--accent-warn);
+}
+
+.panel-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;       /* zinc-500 */
+  margin-bottom: 8px;
+}
+
+.panel-refresh {
+  position: absolute;
+  bottom: 4px; right: 8px;
+  font-size: 10px;
+  color: #52525b;       /* zinc-600 */
+}
+
+.tab-btn[aria-selected="true"] {
+  border-color: var(--accent-good);
+  color: var(--accent-good);
+}
+
+/* SSE status dot colors */
+.sse-connected { background-color: var(--accent-good); }
+.sse-reconnecting { background-color: var(--accent-warn); }
+.sse-down { background-color: var(--accent-bad); }
+
+/* Toast styles */
+.toast {
+  background: var(--panel-bg);
+  border-left: 3px solid var(--accent-warn);
+  padding: 8px 12px;
+  border-radius: 4px;
+  pointer-events: auto;
+  animation: toast-in 0.3s ease;
+}
+.toast.error { border-left-color: var(--accent-bad); }
+.toast.success { border-left-color: var(--accent-good); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

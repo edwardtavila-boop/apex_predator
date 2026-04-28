@@ -131,14 +131,40 @@ class TestStatusPage:
     def test_index_has_expected_anchors(self):
         path = Path(__file__).resolve().parent.parent / "deploy" / "status_page" / "index.html"
         html = path.read_text(encoding="utf-8")
-        # Must polls our API
-        assert "jarvis.evolutionarytradingalgo.live" in html
-        # Must render the 4 main cards
-        for anchor in ("m-health", "m-stress", "m-quota", "m-retros", "tasks-grid"):
-            assert anchor in html
+        # Wave-7 vanilla shell: top bar, login modal, tab nav, panel containers
+        for anchor in (
+            "login-modal",
+            "step-up-modal",
+            "top-bar",
+            "top-sse-status",
+            "view-jarvis",
+            "view-fleet",
+            "fl-fill-tape",
+            "toast-container",
+        ):
+            assert anchor in html, f"missing shell anchor: {anchor}"
+        # JS modules wired
+        for module in ("/js/panels.js", "/js/auth.js", "/js/live.js",
+                       "/js/command_center.js", "/js/bot_fleet.js"):
+            assert module in html, f"missing JS module: {module}"
+        # Theme css linked
+        assert "/theme.css" in html
         # No hardcoded secrets or debug leftovers
         assert "localhost" not in html.lower() or "const API" in html
         assert "console.log" not in html
+
+    def test_theme_css_exists(self):
+        path = Path(__file__).resolve().parent.parent / "deploy" / "status_page" / "theme.css"
+        assert path.exists()
+        css = path.read_text(encoding="utf-8")
+        # Must define core panel + dark-mode tokens
+        assert "--panel-bg" in css
+        assert ".panel" in css
+        assert ".panel.loading" in css
+        assert ".panel.error" in css
+        assert ".panel.stale" in css
+        assert ".sse-connected" in css
+        assert ".toast" in css
 
 
 # ---------------------------------------------------------------------------

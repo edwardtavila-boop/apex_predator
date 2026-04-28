@@ -7,6 +7,7 @@ import socket
 from pathlib import Path  # noqa: TC003
 
 import pytest
+
 from eta_engine.obs.watchdog import (
     WatchdogPinger,
     notify_ready,
@@ -15,6 +16,12 @@ from eta_engine.obs.watchdog import (
     notify_watchdog,
     sd_notify,
     watchdog_interval_seconds,
+)
+
+# Tests that open a real AF_UNIX socket are Linux/macOS-only.
+_requires_unix_sockets = pytest.mark.skipif(
+    not hasattr(socket, "AF_UNIX"),
+    reason="Unix domain sockets (AF_UNIX) not available on this platform",
 )
 
 # ---------------------------------------------------------------------------
@@ -39,6 +46,7 @@ def _udp_listener(path: Path) -> tuple[socket.socket, list[bytes]]:
     return s, received
 
 
+@_requires_unix_sockets
 def test_sd_notify_writes_to_socket(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -59,6 +67,7 @@ def test_sd_notify_swallows_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
     assert sd_notify("READY=1") is False
 
 
+@_requires_unix_sockets
 def test_notify_ready_writes_ready(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sock_path = tmp_path / "n.sock"
     s, _ = _udp_listener(sock_path)
@@ -70,6 +79,7 @@ def test_notify_ready_writes_ready(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         s.close()
 
 
+@_requires_unix_sockets
 def test_notify_stopping_writes_stopping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sock_path = tmp_path / "n.sock"
     s, _ = _udp_listener(sock_path)
@@ -81,6 +91,7 @@ def test_notify_stopping_writes_stopping(tmp_path: Path, monkeypatch: pytest.Mon
         s.close()
 
 
+@_requires_unix_sockets
 def test_notify_watchdog_writes_watchdog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sock_path = tmp_path / "n.sock"
     s, _ = _udp_listener(sock_path)
@@ -92,6 +103,7 @@ def test_notify_watchdog_writes_watchdog(tmp_path: Path, monkeypatch: pytest.Mon
         s.close()
 
 
+@_requires_unix_sockets
 def test_notify_status_writes_status_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sock_path = tmp_path / "n.sock"
     s, _ = _udp_listener(sock_path)
@@ -145,6 +157,7 @@ async def test_pinger_no_op_when_no_interval(monkeypatch: pytest.MonkeyPatch) ->
     # No exception, no socket activity -- success.
 
 
+@_requires_unix_sockets
 @pytest.mark.asyncio
 async def test_pinger_sends_immediate_then_periodic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

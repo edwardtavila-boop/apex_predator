@@ -180,7 +180,7 @@ class LocalLLMGateway:
                     )
                 payload = r.json()
                 return _parse_openai_response(payload, self._model, elapsed_ms)
-            except (httpx.ConnectError, httpx.ReadTimeout) as e:
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
                 last_exc = e
                 if attempt < self._max_retries:
                     await asyncio.sleep(0.25 * (2 ** attempt))

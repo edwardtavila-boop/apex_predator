@@ -183,6 +183,45 @@ class BaseBot(abc.ABC):
         """
         self._eta_logger = logger
 
+    def warmup_risk_multiplier(self) -> float:
+        """Return the active warm-up multiplier for this bot today.
+
+        Reads ``extras["warmup_policy"]`` from the bot's registry
+        assignment (keyed by ``self.config.name``). Returns 1.0 when
+        no policy is set, when the warm-up window has elapsed, or
+        when the policy is malformed. See
+        :mod:`eta_engine.strategies.warmup_policy` for the schema.
+
+        Devils-advocate's 2026-04-27 mitigation: half-size all new
+        perp baselines for the first 30 trading days. Any bot
+        wanting to honour that recommendation should size off
+        :meth:`effective_risk_per_trade_pct` rather than reading
+        ``self.config.risk_per_trade_pct`` directly.
+        """
+        try:
+            from eta_engine.strategies.warmup_policy import (
+                warmup_risk_multiplier_for_bot,
+            )
+            bot_id = getattr(self.config, "name", None)
+            if bot_id is None:
+                return 1.0
+            return warmup_risk_multiplier_for_bot(bot_id)
+        except Exception:  # noqa: BLE001 -- never crash the hot loop
+            return 1.0
+
+    def effective_risk_per_trade_pct(self) -> float:
+        """``risk_per_trade_pct`` × current warm-up multiplier.
+
+        Bots that opt into the devils-advocate half-size warm-up
+        policy should use this in their inline sizing logic
+        (``self.config.equity * self.effective_risk_per_trade_pct() / 100``)
+        rather than reading ``self.config.risk_per_trade_pct``
+        directly. After the warm-up window the multiplier auto-
+        reverts to 1.0, so opting in is one-line and reverts itself.
+        """
+        base = float(getattr(self.config, "risk_per_trade_pct", 0.0))
+        return base * self.warmup_risk_multiplier()
+
     def attach_fleet_risk_gate(
         self,
         gate: Any,  # noqa: ANN401 -- duck-typed FleetRiskGate
@@ -382,16 +421,25 @@ class BaseBot(abc.ABC):
         gate = getattr(self, "_fleet_risk_gate", None)
         if gate is not None:
             try:
-                # Convert R-multiple to USD using risk-per-trade $.
-                # Falls back gracefully if the bot's config doesn't
-                # carry both required fields (some duck-typed test
-                # configs only set name/symbol).
+                # Convert R-multiple to USD using the bot's
+                # warm-up-adjusted risk-per-trade. Bots that opt
+                # into the devils-advocate first-30-days half-size
+                # policy via ``extras["warmup_policy"]`` see a
+                # smaller risk_usd here, so realized PnL aggregates
+                # consistently with the position size that was
+                # actually live. ``getattr`` for the helper so duck-
+                # typed test stubs that bypass BaseBot.__init__
+                # don't crash.
                 cfg = self.config
-                risk_pct = float(getattr(cfg, "risk_per_trade_pct", 1.0))
+                eff_risk_pct = (
+                    self.effective_risk_per_trade_pct()
+                    if hasattr(self, "effective_risk_per_trade_pct")
+                    else float(getattr(cfg, "risk_per_trade_pct", 1.0))
+                )
                 start_usd = float(getattr(cfg, "starting_capital_usd", 0.0))
                 # risk_per_trade_pct is in *percent* (e.g. 1.0 = 1%),
                 # not a fraction — divide by 100 to get USD risk.
-                risk_usd = (risk_pct / 100.0) * start_usd
+                risk_usd = (eff_risk_pct / 100.0) * start_usd
                 if risk_usd > 0.0:
                     delta_usd = float(r_multiple) * risk_usd
                     bot_id = getattr(self, "_fleet_risk_bot_id", None) or getattr(cfg, "name", "unknown")

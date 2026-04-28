@@ -78,6 +78,9 @@ def sd_notify(state: str) -> bool:
     # socket; strip it and prepend NUL per AF_UNIX abstract-socket convention.
     if sock_path.startswith("@"):
         sock_path = "\0" + sock_path[1:]
+    if not hasattr(socket, "AF_UNIX"):
+        # Windows without Unix socket support — treat as no-op.
+        return False
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
             s.sendto(state.encode("utf-8"), sock_path)

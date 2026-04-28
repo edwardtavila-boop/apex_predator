@@ -20,6 +20,7 @@ copy of this logic for legacy reasons; new bots should prefer this
 module. The two implementations are intentionally kept in sync via
 the test suite.
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,6 +37,7 @@ from eta_engine.brain.jarvis_admin import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from eta_engine.brain.jarvis_admin import ActionRequest
     from eta_engine.brain.jarvis_context import JarvisContext
     from eta_engine.brain.model_policy import ModelTier, TaskCategory
     from eta_engine.obs.decision_journal import Actor, DecisionJournal, Outcome
@@ -102,12 +104,27 @@ def ask_jarvis(
         **payload,
     )
     ctx = provide_ctx() if provide_ctx is not None else None
+
+    # Wave-12 opt-in: route through the JarvisFull intelligence layer
+    # (memory_rag, causal, world_model, firm_board_debate, premortem,
+    # ood, operator_coach, risk_budget, narrative). When the env var
+    # ``ETA_USE_JARVIS_FULL=1`` is unset, this is a no-op and we fall
+    # through to the JarvisAdmin-only path below (zero behavior change).
+    full_result = _maybe_consult_jarvis_full(
+        jarvis=jarvis, req=req, ctx=ctx, subsystem=subsystem,
+        log_name=log_name,
+    )
+    if full_result is not None:
+        return full_result
+
     try:
         resp = jarvis.request_approval(req, ctx=ctx)
     except Exception as exc:  # noqa: BLE001 - fail-closed on unexpected errors
         logger.error(
             "%s jarvis.request_approval raised %s: %s -- failing closed",
-            log_name or subsystem.value, type(exc).__name__, exc,
+            log_name or subsystem.value,
+            type(exc).__name__,
+            exc,
         )
         return False, None, "jarvis_error"
     allowed = resp.verdict in _ALLOWED_VERDICTS
@@ -115,16 +132,117 @@ def ask_jarvis(
     if not allowed:
         logger.info(
             "%s jarvis refused %s: %s (%s)",
-            prefix, action.value, resp.reason, resp.reason_code,
+            prefix,
+            action.value,
+            resp.reason,
+            resp.reason_code,
         )
     elif resp.verdict is Verdict.CONDITIONAL:
         logger.info(
             "%s jarvis conditional %s: size_cap=%.3f (%s)",
-            prefix, action.value,
+            prefix,
+            action.value,
             resp.size_cap_mult if resp.size_cap_mult is not None else 1.0,
             resp.reason_code,
         )
     return allowed, resp.size_cap_mult, resp.reason_code
+
+
+# ─── Wave-12 opt-in: full intelligence layer ──────────────────────
+
+
+_JARVIS_FULL_CACHE: dict[int, Any] = {}
+
+
+def _is_jarvis_full_enabled() -> bool:
+    """True iff the operator opted into the wave-12 intelligence stack."""
+    import os
+    return os.getenv("ETA_USE_JARVIS_FULL", "0") in (
+        "1", "true", "TRUE", "yes", "on",
+    )
+
+
+def _maybe_consult_jarvis_full(
+    *,
+    jarvis: JarvisAdmin,
+    req: ActionRequest,
+    ctx: JarvisContext | None,
+    subsystem: SubsystemId,
+    log_name: str,
+) -> tuple[bool, float | None, str] | None:
+    """Route the request through ``JarvisFull.consult()`` if enabled.
+
+    Returns the same shape as ``ask_jarvis`` -- ``(allowed,
+    size_cap_mult, reason_code)`` -- or ``None`` if the operator
+    hasn't opted in (caller falls through to the default admin path).
+    """
+    if not _is_jarvis_full_enabled():
+        return None
+
+    # Lazy import + per-admin-instance cache so we don't bootstrap
+    # JarvisFull more than once per JarvisAdmin
+    full = _JARVIS_FULL_CACHE.get(id(jarvis))
+    if full is None:
+        try:
+            from eta_engine.brain.jarvis_v3.jarvis_full import JarvisFull
+            from eta_engine.brain.jarvis_v3.memory_hierarchy import (
+                HierarchicalMemory,
+            )
+            mem = HierarchicalMemory()
+            full = JarvisFull.bootstrap(admin=jarvis, memory=mem)
+            _JARVIS_FULL_CACHE[id(jarvis)] = full
+        except Exception as exc:  # noqa: BLE001 -- never break the bot
+            logger.warning(
+                "%s jarvis_full bootstrap failed (%s); falling back to admin",
+                log_name or subsystem.value, exc,
+            )
+            return None
+
+    # Build narrative best-effort from req payload
+    payload = getattr(req, "payload", {}) or {}
+    parts: list[str] = []
+    for k in ("regime", "session", "direction", "sentiment", "sage_score"):
+        v = payload.get(k)
+        if v is not None and v != "":
+            parts.append(f"{k}={v}")
+    narrative = "; ".join(parts) if parts else ""
+
+    try:
+        verdict = full.consult(
+            req=req, ctx=ctx,
+            current_narrative=narrative,
+            bot_id=log_name or subsystem.value,
+        )
+    except Exception as exc:  # noqa: BLE001 -- never break the bot
+        logger.warning(
+            "%s jarvis_full.consult failed (%s); falling back to admin",
+            log_name or subsystem.value, exc,
+        )
+        return None
+
+    allowed = not verdict.is_blocked()
+    size_mult = (
+        verdict.final_size_multiplier
+        if allowed and verdict.final_size_multiplier > 0
+        else None
+    )
+    reason_code = (
+        verdict.consolidated.base_reason
+        or verdict.consolidated.final_verdict
+    )
+    prefix = log_name or subsystem.value
+    if not allowed:
+        logger.info(
+            "%s jarvis-full BLOCKED: %s | ood=%.2f kp=%.2f",
+            prefix, verdict.narrative_terse,
+            verdict.ood_score, verdict.premortem_kill_prob,
+        )
+    elif size_mult is not None and size_mult < 0.99:
+        logger.info(
+            "%s jarvis-full size-attenuated to %.0f%%: %s",
+            prefix, 100 * size_mult, verdict.narrative_terse,
+        )
+    return allowed, size_mult, reason_code
 
 
 def record_gate_event(
@@ -148,6 +266,7 @@ def record_gate_event(
     # Local imports so this module stays importable in environments
     # that haven't wired the obs subpackage yet.
     from eta_engine.obs.decision_journal import Outcome as _Outcome
+
     final_outcome = outcome if outcome is not None else _Outcome.NOTED
     try:
         journal.record(
@@ -160,7 +279,8 @@ def record_gate_event(
     except Exception as exc:  # noqa: BLE001 - journal errors never kill trading
         logger.warning(
             "%s journal write failed: %s",
-            log_name or actor.value, exc,
+            log_name or actor.value,
+            exc,
         )
 
 
@@ -182,6 +302,7 @@ def pick_llm_tier(
     """
     # Local import to avoid pulling model_policy at module load time.
     from eta_engine.brain.model_policy import ModelTier as _ModelTier
+
     try:
         resp = jarvis.select_llm_tier(
             subsystem=subsystem,
@@ -191,7 +312,9 @@ def pick_llm_tier(
     except Exception as exc:  # noqa: BLE001 - default to SONNET on any error
         logger.warning(
             "%s select_llm_tier raised %s: %s -- defaulting to SONNET",
-            subsystem.value, type(exc).__name__, exc,
+            subsystem.value,
+            type(exc).__name__,
+            exc,
         )
         return _ModelTier.SONNET
     # Prefer the typed selected_model field; fall back to SONNET on

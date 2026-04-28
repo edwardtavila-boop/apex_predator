@@ -1,0 +1,20 @@
+{
+  "_doc": "Example baselines file consumed by scripts/drift_check_all.py. Copy to strategy_baselines.json (gitignored at deploy time) and replace the example values with the actual promotion-time stats for each strategy. Re-baseline whenever a strategy is intentionally re-tuned and re-promoted.",
+  "_schema_version": "1",
+  "_fields": {
+    "strategy_id": "Must match the strategy_id passed to BacktestEngine and recorded in TRADE_ENGINE journal events.",
+    "n_trades": "Number of trades the baseline was computed from. Larger is more reliable; >100 is the floor for drift-monitor confidence.",
+    "win_rate": "Promotion-time win rate, 0.0-1.0.",
+    "avg_r": "Promotion-time mean per-trade R (can be negative if the strategy is mean-reversion playing for >50% win rate at sub-1R).",
+    "r_stddev": "Promotion-time per-trade R standard deviation. Drives the drift-monitor z-score on avg_r."
+  },
+  "strategies": [
+    {
+      "strategy_id": "mnq_demo",
+      "n_trades": 50,
+      "win_rate": 0.44,
+      "avg_r": 0.10,
+      "r_stddev": 1.25
+    }
+  ]
+}

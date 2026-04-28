@@ -1,530 +1,127 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Evolutionary Trading Algo · Status</title>
-  <style>
-    :root {
-      --bg:       #08080f;
-      --surface:  rgba(255,255,255,0.03);
-      --border:   rgba(255,255,255,0.06);
-      --text:     #e5e5e7;
-      --muted:    #7e7e85;
-      --green:    #a6e3a1;
-      --yellow:   #f9e2af;
-      --red:      #f38ba8;
-      --blue:     #89b4fa;
-      --purple:   #cba6f7;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      min-height: 100vh;
-      padding: 2rem 1rem;
-      background-image:
-        radial-gradient(at 20% 10%, rgba(137,180,250,0.08), transparent 50%),
-        radial-gradient(at 80% 90%, rgba(203,166,247,0.06), transparent 50%);
-    }
-    .mono { font-family: 'JetBrains Mono', 'Consolas', monospace; }
-    header {
-      max-width: 1100px; margin: 0 auto 2rem; display: flex;
-      align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
-    }
-    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
-    .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
-    .live-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      display: inline-block; margin-right: 0.5rem;
-      background: var(--green); box-shadow: 0 0 12px var(--green);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-    main { max-width: 1100px; margin: 0 auto; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 1.25rem;
-      backdrop-filter: blur(12px);
-      transition: transform 0.2s, border-color 0.2s;
-    }
-    .card:hover { transform: translateY(-2px); border-color: rgba(137,180,250,0.25); }
-    .card h3 {
-      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
-      color: var(--muted); text-transform: uppercase; margin-bottom: 1rem;
-    }
-    .metric {
-      display: flex; justify-content: space-between; align-items: baseline;
-      padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.02);
-    }
-    .metric:last-child { border-bottom: none; }
-    .metric-label { color: var(--muted); font-size: 0.8rem; }
-    .metric-value { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; font-weight: 500; }
-    .badge {
-      display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px;
-      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .badge.green  { background: rgba(166,227,161,0.15); color: var(--green); border: 1px solid rgba(166,227,161,0.3); }
-    .badge.yellow { background: rgba(249,226,175,0.15); color: var(--yellow); border: 1px solid rgba(249,226,175,0.3); }
-    .badge.red    { background: rgba(243,139,168,0.15); color: var(--red); border: 1px solid rgba(243,139,168,0.3); }
-    .badge.blue   { background: rgba(137,180,250,0.15); color: var(--blue); border: 1px solid rgba(137,180,250,0.3); }
-    .badge.purple { background: rgba(203,166,247,0.15); color: var(--purple); border: 1px solid rgba(203,166,247,0.3); }
-    .error { color: var(--red); font-size: 0.85rem; }
-    footer { max-width: 1100px; margin: 2rem auto 0; text-align: center; color: var(--muted); font-size: 0.75rem; }
-    footer a { color: var(--blue); text-decoration: none; }
-    .tasks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    @media (max-width: 768px) { .tasks-grid { grid-template-columns: 1fr; } }
-  </style>
+  <title>Evolutionary Trading Algo | Command Center</title>
+  <meta name="theme-color" content="#020406" />
+  <link rel="stylesheet" href="/theme.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body>
-  <header>
-    <div>
-      <h1>🐾 Evolutionary Trading Algo</h1>
-      <div class="subtitle mono">
-        <span class="live-dot"></span>
-        <span id="status-text">Loading…</span>
-        · updated <span id="updated-at" class="mono">—</span>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col">
+
+  <!-- Login modal (hidden by default; shown by auth.js when unauthenticated) -->
+  <div id="login-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur hidden items-center justify-center">
+    <form id="login-form" class="bg-zinc-900 border border-zinc-700 rounded p-6 w-96 space-y-3">
+      <h2 class="text-lg font-semibold">JARVIS Command Center</h2>
+      <input id="login-username" type="text" placeholder="username"
+             class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2" autocomplete="username" />
+      <input id="login-password" type="password" placeholder="password"
+             class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2" autocomplete="current-password" />
+      <div id="login-error" class="text-red-400 text-sm hidden"></div>
+      <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 rounded py-2 font-medium">
+        Sign in
+      </button>
+    </form>
+  </div>
+
+  <!-- Step-up modal -->
+  <div id="step-up-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur hidden items-center justify-center">
+    <form id="step-up-form" class="bg-zinc-900 border border-amber-700 rounded p-6 w-96 space-y-3">
+      <h2 class="text-lg font-semibold text-amber-400">Step-Up Required</h2>
+      <p class="text-sm text-zinc-400" id="step-up-reason">Sensitive action requires PIN.</p>
+      <input id="step-up-pin" type="password" inputmode="numeric" placeholder="PIN"
+             class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2" />
+      <div id="step-up-error" class="text-red-400 text-sm hidden"></div>
+      <div class="flex gap-2">
+        <button type="button" id="step-up-cancel" class="flex-1 bg-zinc-700 rounded py-2">Cancel</button>
+        <button type="submit" class="flex-1 bg-amber-600 hover:bg-amber-500 rounded py-2 font-medium">Authorize</button>
       </div>
-    </div>
-    <div>
-      <span class="badge blue" id="regime-badge">REGIME —</span>
-    </div>
+    </form>
+  </div>
+
+  <!-- Top bar -->
+  <header id="top-bar" class="border-b border-zinc-800 bg-zinc-900 px-4 py-2 flex items-center gap-4 text-sm">
+    <div class="font-bold text-emerald-400">ETA</div>
+    <div id="top-kill-switch" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500"></span><span>kill</span></div>
+    <div id="top-v22-toggle" class="flex items-center gap-1"></div>
+    <div id="top-stress" class="flex items-center gap-1"></div>
+    <div id="top-fleet-equity" class="flex items-center gap-1"></div>
+    <div id="top-alerts" class="flex items-center gap-1"></div>
+    <div class="flex-1"></div>
+    <div id="top-sse-status" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500"></span><span>sse</span></div>
+    <div id="top-user-chip" class="flex items-center gap-2"></div>
+    <button id="top-logout" class="text-zinc-400 hover:text-red-400 text-xs">logout</button>
   </header>
 
-  <main id="app">
-    <div class="card" id="systems-banner" style="grid-column: 1 / -1; padding: 0.75rem 1rem; margin-bottom: 0.5rem;">
-      <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-        <span class="mono" style="font-weight: 700;">ALL SYSTEMS:</span>
-        <span id="systems-overall" class="badge blue">loading…</span>
-        <span id="systems-chips" class="mono" style="font-size: 0.8em; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline;"></span>
+  <!-- Toast container (top-right) -->
+  <div id="toast-container" class="fixed top-12 right-4 z-40 space-y-2 w-80 pointer-events-none"></div>
+
+  <!-- Tab nav -->
+  <nav class="border-b border-zinc-800 bg-zinc-900 px-4 flex gap-1 text-sm">
+    <button data-tab="jarvis" class="tab-btn px-4 py-2 border-b-2 border-emerald-500 text-emerald-400">
+      JARVIS Command Center
+    </button>
+    <button data-tab="fleet" class="tab-btn px-4 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-100">
+      Bot Fleet
+    </button>
+  </nav>
+
+  <!-- Main content -->
+  <main class="flex-1 overflow-y-auto p-4 pb-24">
+
+    <!-- JARVIS view (visible by default) -->
+    <section id="view-jarvis" class="grid grid-cols-3 gap-4">
+      <div data-panel-id="cc-verdict-stream" class="panel col-span-2 row-span-2"></div>
+      <div data-panel-id="cc-stress-mood" class="panel"></div>
+      <div data-panel-id="cc-v22-toggle" class="panel"></div>
+      <div data-panel-id="cc-sage-explain" class="panel col-span-2"></div>
+      <div data-panel-id="cc-sage-health" class="panel"></div>
+      <div data-panel-id="cc-disagreement-heatmap" class="panel col-span-2"></div>
+      <div data-panel-id="cc-edge-leaderboard" class="panel"></div>
+      <div data-panel-id="cc-policy-diff" class="panel col-span-2"></div>
+      <div data-panel-id="cc-model-tier" class="panel"></div>
+      <div data-panel-id="cc-kaizen-latest" class="panel col-span-3"></div>
+    </section>
+
+    <!-- Fleet view (hidden until tab click) -->
+    <section id="view-fleet" class="hidden space-y-4">
+      <div data-panel-id="fl-roster" class="panel"></div>
+      <div class="grid grid-cols-2 gap-4">
+        <div data-panel-id="fl-drilldown" class="panel"></div>
+        <div data-panel-id="fl-equity-curve" class="panel"></div>
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Health</h3>
-      <div class="metric"><span class="metric-label">Status</span><span class="metric-value" id="m-health">—</span></div>
-      <div class="metric"><span class="metric-label">Regime</span><span class="metric-value" id="m-regime">—</span></div>
-      <div class="metric"><span class="metric-label">Session</span><span class="metric-value" id="m-session">—</span></div>
-      <div class="metric"><span class="metric-label">Suggestion</span><span class="metric-value" id="m-suggestion">—</span></div>
-    </div>
-
-    <div class="card">
-      <h3>Stress</h3>
-      <div class="metric"><span class="metric-label">Composite</span><span class="metric-value" id="m-stress">—</span></div>
-      <div class="metric"><span class="metric-label">Binding</span><span class="metric-value" id="m-binding">—</span></div>
-      <div class="metric"><span class="metric-label">Horizon now</span><span class="metric-value" id="m-h-now">—</span></div>
-      <div class="metric"><span class="metric-label">Horizon 1h</span><span class="metric-value" id="m-h-1h">—</span></div>
-    </div>
-
-    <div class="card">
-      <h3>Budget / Avengers</h3>
-      <div class="metric"><span class="metric-label">Quota state</span><span class="metric-value" id="m-quota">—</span></div>
-      <div class="metric"><span class="metric-label">Hourly burn</span><span class="metric-value" id="m-hourly">—</span></div>
-      <div class="metric"><span class="metric-label">Daily burn</span><span class="metric-value" id="m-daily">—</span></div>
-      <div class="metric"><span class="metric-label">Cache hit rate</span><span class="metric-value" id="m-cache">—</span></div>
-      <div class="metric"><span class="metric-label">Distiller version</span><span class="metric-value" id="m-distill">—</span></div>
-    </div>
-
-    <div class="card">
-      <h3>Kaizen</h3>
-      <div class="metric"><span class="metric-label">Retrospectives</span><span class="metric-value" id="m-retros">—</span></div>
-      <div class="metric"><span class="metric-label">Tickets open</span><span class="metric-value" id="m-tickets-open">—</span></div>
-      <div class="metric"><span class="metric-label">Tickets shipped</span><span class="metric-value" id="m-tickets-shipped">—</span></div>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>Scheduled Tasks (Avengers Fleet)</h3>
-      <div class="tasks-grid" id="tasks-grid">Loading…</div>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>Crew — Peak Manuals</h3>
-      <div id="personas-grid" class="tasks-grid">Loading…</div>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>JARVIS Decision Log
-        <span class="mono" id="jarvis-summary" style="font-size: 0.75em; opacity: 0.7; margin-left: 12px;"></span>
-      </h3>
-      <div id="jarvis-decisions" class="mono" style="font-size: 0.85em; max-height: 320px; overflow-y: auto;">Loading…</div>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>BTC Broker-Paper Fleet
-        <span class="mono" id="btc-fleet-summary" style="font-size: 0.75em; opacity: 0.7; margin-left: 12px;"></span>
-      </h3>
-      <div id="btc-lanes" class="mono" style="font-size: 0.85em;">Loading…</div>
-      <details style="margin-top: 1rem;">
-        <summary style="cursor: pointer; opacity: 0.8;">Recent paper trades (ledger tail)</summary>
-        <div id="btc-trades" class="mono" style="font-size: 0.8em; max-height: 200px; overflow-y: auto; margin-top: 0.5rem;">Loading…</div>
-      </details>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>MNQ Live Supervisor
-        <span class="mono" id="mnq-supervisor-summary" style="font-size: 0.75em; opacity: 0.7; margin-left: 12px;"></span>
-      </h3>
-      <div id="mnq-supervisor" class="mono" style="font-size: 0.85em;">Loading…</div>
-      <details style="margin-top: 1rem;">
-        <summary style="cursor: pointer; opacity: 0.8;">Recent MNQ journal events</summary>
-        <div id="mnq-events" class="mono" style="font-size: 0.8em; max-height: 200px; overflow-y: auto; margin-top: 0.5rem;">Loading…</div>
-      </details>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;" id="error-card" hidden>
-      <h3 class="error">⚠ Connection issue</h3>
-      <div class="metric mono error" id="error-text"></div>
-    </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div data-panel-id="fl-drawdown" class="panel"></div>
+        <div data-panel-id="fl-sage-effect" class="panel"></div>
+        <div data-panel-id="fl-correlation" class="panel"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div data-panel-id="fl-edge-per-bot" class="panel"></div>
+        <div data-panel-id="fl-position-reconciler" class="panel"></div>
+      </div>
+      <div data-panel-id="fl-risk-ladder" class="panel"></div>
+      <div data-panel-id="fl-controls" class="panel"></div>
+      <div data-panel-id="fl-health-badges" class="panel"></div>
+    </section>
   </main>
 
-  <footer>
-    <span class="mono">jarvis.evolutionarytradingalgo.live</span>
-    · refresh 15s
-    · <a href="https://jarvis.evolutionarytradingalgo.live/api/dashboard" target="_blank">raw API</a>
+  <!-- Live fill tape (fixed bottom) -->
+  <footer id="fl-fill-tape" class="fixed bottom-0 left-0 right-0 border-t border-zinc-800 bg-zinc-900 px-4 py-2 h-20 overflow-hidden">
+    <div class="text-xs text-zinc-500 mb-1">live fills</div>
+    <div id="fl-fill-tape-rows" class="flex gap-2 overflow-x-auto text-xs font-mono whitespace-nowrap"></div>
   </footer>
 
-  <script>
-    // Same-origin when served from /status, cross-origin for preview
-    const API = location.host.endsWith('evolutionarytradingalgo.live')
-      ? ''                                     // same-origin
-      : 'https://jarvis.evolutionarytradingalgo.live';    // local preview
-
-    function setBadge(el, text, color) {
-      el.className = `badge ${color}`;
-      el.textContent = text;
-    }
-
-    async function fetchJson(path) {
-      const r = await fetch(`${API}${path}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error(`${path} -> ${r.status}`);
-      return r.json();
-    }
-
-    function fmtPct(x) { return `${(x * 100).toFixed(0)}%`; }
-    function fmtNum(x, d = 2) { return Number(x).toFixed(d); }
-
-    async function tick() {
-      try {
-        const [hb, db, kz, tasks] = await Promise.all([
-          fetchJson('/api/heartbeat'),
-          fetchJson('/api/dashboard'),
-          fetchJson('/api/kaizen'),
-          fetchJson('/api/tasks'),
-        ]);
-
-        // Header
-        document.getElementById('status-text').textContent = 'LIVE';
-        document.getElementById('updated-at').textContent =
-          new Date().toLocaleTimeString();
-        const regimeBadge = document.getElementById('regime-badge');
-        const regime = (db.regime || 'UNKNOWN').toUpperCase();
-        const regimeColor = regime === 'CRISIS' ? 'red' :
-          (regime.startsWith('RISK_OFF') ? 'yellow' :
-          (regime.startsWith('RISK_ON') ? 'green' : 'blue'));
-        setBadge(regimeBadge, regime, regimeColor);
-
-        // Health card
-        const healthCol = db.health === 'GREEN' ? 'green'
-          : db.health === 'YELLOW' ? 'yellow'
-          : db.health === 'RED' ? 'red' : 'blue';
-        document.getElementById('m-health').innerHTML =
-          `<span class="badge ${healthCol}">${db.health || 'UNKNOWN'}</span>`;
-        document.getElementById('m-regime').textContent = db.regime || 'UNKNOWN';
-        document.getElementById('m-session').textContent = db.session_phase || 'UNKNOWN';
-        document.getElementById('m-suggestion').textContent = db.suggestion || 'UNKNOWN';
-
-        // Stress card
-        const stress = db.stress || {};
-        document.getElementById('m-stress').textContent = fmtPct(stress.composite || 0);
-        document.getElementById('m-binding').textContent = stress.binding || 'none';
-        const h = db.horizons || {};
-        document.getElementById('m-h-now').textContent = fmtPct(h.now || 0);
-        document.getElementById('m-h-1h').textContent = fmtPct(h.next_1h || 0);
-
-        // Budget card
-        const quotaCol = hb.quota_state === 'OK' ? 'green'
-          : hb.quota_state === 'WARN' ? 'yellow'
-          : hb.quota_state === 'DOWNSHIFT' ? 'yellow'
-          : hb.quota_state === 'FREEZE' ? 'red' : 'blue';
-        document.getElementById('m-quota').innerHTML =
-          `<span class="badge ${quotaCol}">${hb.quota_state || '—'}</span>`;
-        document.getElementById('m-hourly').textContent = fmtPct(hb.hourly_pct || 0);
-        document.getElementById('m-daily').textContent = fmtPct(hb.daily_pct || 0);
-        document.getElementById('m-cache').textContent = fmtPct(hb.cache_hit_rate || 0);
-        document.getElementById('m-distill').textContent =
-          `v${hb.distiller_version || 0} ${hb.distiller_trained ? '(trained)' : '(cold)'}`;
-
-        // Kaizen card
-        document.getElementById('m-retros').textContent = kz.retrospectives || 0;
-        document.getElementById('m-tickets-open').textContent = kz.tickets_open || 0;
-        document.getElementById('m-tickets-shipped').textContent = kz.tickets_shipped || 0;
-
-        // Tasks grid
-        const ownerColor = {
-          ROBIN: 'blue', ALFRED: 'purple', BATMAN: 'red',
-        };
-        document.getElementById('tasks-grid').innerHTML =
-          (tasks.tasks || []).map(t =>
-            `<div class="metric">
-              <span><span class="badge ${ownerColor[t.owner] || 'blue'}">${t.owner}</span>
-                <span class="metric-label" style="margin-left: 0.5rem;">${t.name}</span></span>
-              <span class="metric-value" style="font-size: 0.75rem;">${t.cadence}</span>
-            </div>`
-          ).join('');
-
-        // Personas — peak manuals
-        try {
-          const personasResp = await fetchJson('/api/personas');
-          const tierColor = {
-            opus: 'red', sonnet: 'purple', haiku: 'blue',
-            deterministic: 'green',
-          };
-          document.getElementById('personas-grid').innerHTML =
-            (personasResp.personas || []).map(p => {
-              const m = p.manual;
-              const col = tierColor[m.model_tier] || 'blue';
-              const strengthCount = (m.strengths || []).length;
-              const skillCount = (p.skills || []).length;
-              const mcpCount = (p.mcps || []).length;
-              return `
-                <div style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                  <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <span>
-                      <span class="badge ${col}">${m.persona}</span>
-                      <span class="metric-label" style="margin-left: 0.5rem;">${m.model_tier}</span>
-                    </span>
-                    <span class="metric-value" style="font-size: 0.7rem;">
-                      ${strengthCount}★  ${skillCount}⚡  ${mcpCount}🔗
-                    </span>
-                  </div>
-                  <div style="color: var(--muted); font-size: 0.72rem; margin-top: 0.3rem; line-height: 1.4;">
-                    ${(m.identity || '').slice(0, 180)}${m.identity && m.identity.length > 180 ? '…' : ''}
-                  </div>
-                </div>`;
-            }).join('');
-        } catch (_e) {
-          document.getElementById('personas-grid').textContent =
-            '(training module not deployed yet)';
-        }
-
-        // JARVIS Decision Log
-        try {
-          const [jDecisions, jSummary] = await Promise.all([
-            fetchJson('/api/jarvis/decisions?n=20'),
-            fetchJson('/api/jarvis/summary?window=500'),
-          ]);
-
-          // Summary badge
-          const totals = jSummary.by_verdict || {};
-          const approved = totals.APPROVED || 0;
-          const conditional = totals.CONDITIONAL || 0;
-          const denied = totals.DENIED || 0;
-          const deferred = totals.DEFERRED || 0;
-          document.getElementById('jarvis-summary').innerHTML =
-            `${jSummary.total} decisions · ` +
-            `<span style="color: #4ade80;">${approved} approved</span> · ` +
-            `<span style="color: #fbbf24;">${conditional} conditional</span> · ` +
-            `<span style="color: #f87171;">${denied} denied</span> · ` +
-            `<span style="color: #94a3b8;">${deferred} deferred</span>`;
-
-          const verdictColor = {
-            APPROVED: 'green', CONDITIONAL: 'purple',
-            DENIED: 'red', DEFERRED: 'blue',
-          };
-
-          const decisionsEl = document.getElementById('jarvis-decisions');
-          if (!jDecisions.decisions || jDecisions.decisions.length === 0) {
-            decisionsEl.textContent = jDecisions.note || '(no decisions yet)';
-          } else {
-            decisionsEl.innerHTML = jDecisions.decisions.map(d => {
-              const col = verdictColor[d.verdict] || 'blue';
-              const ts = d.ts ? new Date(d.ts).toLocaleTimeString() : '?';
-              const cap = d.size_cap_mult !== null && d.size_cap_mult !== undefined
-                ? ` cap=${Number(d.size_cap_mult).toFixed(2)}`
-                : '';
-              const stress = d.stress_composite !== null && d.stress_composite !== undefined
-                ? ` stress=${Number(d.stress_composite).toFixed(2)}`
-                : '';
-              return `
-                <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; gap: 0.6rem; align-items: baseline;">
-                  <span style="opacity: 0.6; width: 5rem;">${ts}</span>
-                  <span class="badge ${col}" style="min-width: 5rem; text-align: center;">${d.verdict || '?'}</span>
-                  <span style="opacity: 0.8; min-width: 9rem;">${d.subsystem || '?'}</span>
-                  <span style="opacity: 0.7; min-width: 7rem;">${d.action || '?'}</span>
-                  <span style="color: var(--muted); flex: 1;">${d.reason_code || ''}${cap}${stress}</span>
-                </div>`;
-            }).join('');
-          }
-        } catch (_e) {
-          document.getElementById('jarvis-decisions').textContent =
-            '(no jarvis audit log yet)';
-          document.getElementById('jarvis-summary').textContent = '';
-        }
-
-        // BTC broker-paper fleet
-        try {
-          const [lanes, trades, brokers] = await Promise.all([
-            fetchJson('/api/btc/lanes'),
-            fetchJson('/api/btc/trades?n=15'),
-            fetchJson('/api/brokers'),
-          ]);
-
-          // Summary ribbon
-          const ibkr_ready = brokers.brokers?.ibkr?.ready;
-          const tasty_ready = brokers.brokers?.tastytrade?.ready;
-          const active = brokers.active_brokers || [];
-          document.getElementById('btc-fleet-summary').innerHTML =
-            `<span style="color: ${ibkr_ready ? '#4ade80' : '#f87171'};">ibkr ${ibkr_ready ? '✓' : '✗'}</span> · ` +
-            `<span style="color: ${tasty_ready ? '#4ade80' : '#f87171'};">tastytrade ${tasty_ready ? '✓' : '✗'}</span> · ` +
-            `${lanes.lane_count || 0} lane(s) · ` +
-            `${active.length} active broker${active.length === 1 ? '' : 's'}`;
-
-          // Lane rows
-          const lanesEl = document.getElementById('btc-lanes');
-          if (!lanes.lanes || lanes.lanes.length === 0) {
-            lanesEl.textContent = lanes.note || '(no lane state yet)';
-          } else {
-            const stateColor = {
-              ACTIVE: 'green', ARMED: 'purple', RECONCILE_ONLY: 'blue',
-              ERROR: 'red',
-            };
-            lanesEl.innerHTML = lanes.lanes.map(l => {
-              const col = stateColor[l.execution_state] || 'blue';
-              const submitted = l.submitted_orders ?? 0;
-              const reconciled = l.reconciled_orders ?? 0;
-              const terminal = l.terminal_orders ?? 0;
-              const order = l.active_order_id
-                ? `<span style="color: #a78bfa;">${l.active_order_id}</span> @ ${l.active_order_status}`
-                : '<span style="opacity: 0.5;">no active order</span>';
-              return `
-                <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); display: grid; grid-template-columns: 1.6fr 1fr 1fr 2fr 1.5fr; gap: 0.6rem; align-items: baseline;">
-                  <span style="font-weight: 600;">${l.worker_id || '?'}</span>
-                  <span class="badge ${col}" style="text-align: center;">${l.execution_state || '?'}</span>
-                  <span style="opacity: 0.7;">${l.broker || '?'}/${l.lane || '?'}</span>
-                  <span>${order}</span>
-                  <span style="opacity: 0.6; text-align: right;">sub:${submitted} rec:${reconciled} term:${terminal}</span>
-                </div>`;
-            }).join('');
-          }
-
-          // Trades tail
-          const tradesEl = document.getElementById('btc-trades');
-          if (!trades.trades || trades.trades.length === 0) {
-            tradesEl.textContent = trades.note || '(no paper trades yet)';
-          } else {
-            tradesEl.innerHTML = trades.trades.map(t => {
-              const ts = t.ts_utc ? new Date(t.ts_utc).toLocaleTimeString() : '?';
-              const event = t.event || t.status || '?';
-              const oid = t.order_id || '';
-              return `
-                <div style="padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.6rem;">
-                  <span style="opacity: 0.6; width: 5rem;">${ts}</span>
-                  <span style="min-width: 10rem; opacity: 0.8;">${t.worker_id || ''}</span>
-                  <span style="min-width: 5rem;">${event}</span>
-                  <span style="color: var(--muted);">${oid}</span>
-                </div>`;
-            }).join('');
-          }
-        } catch (_e) {
-          document.getElementById('btc-lanes').textContent =
-            '(btc fleet endpoints unavailable)';
-          document.getElementById('btc-trades').textContent = '';
-          document.getElementById('btc-fleet-summary').textContent = '';
-        }
-
-        // MNQ Live Supervisor
-        try {
-          const mnq = await fetchJson('/api/mnq/supervisor');
-          const supEl = document.getElementById('mnq-supervisor');
-          const eventsEl = document.getElementById('mnq-events');
-          const summaryEl = document.getElementById('mnq-supervisor-summary');
-
-          if (!mnq.state) {
-            supEl.textContent = mnq.note || '(supervisor not running)';
-            eventsEl.textContent = '';
-            summaryEl.textContent = '';
-          } else {
-            const s = mnq.state;
-            const paused = s.paused;
-            const badgeColor = paused ? 'red' : (s.router_name === 'log_only' ? 'blue' : 'green');
-            const badgeText = paused ? 'PAUSED' : (s.router_name === 'log_only' ? 'LOG-ONLY' : 'ARMED');
-
-            summaryEl.innerHTML =
-              `<span class="badge ${badgeColor}">${badgeText}</span> · ` +
-              `bars:${s.bars_consumed || 0} · ` +
-              `routed:${s.signals_routed || 0} · ` +
-              `blocked:${s.signals_blocked || 0} · ` +
-              `jarvis_audit:${s.jarvis_audit_tail_len || 0}`;
-
-            supEl.innerHTML = `
-              <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem;">
-                <span style="opacity: 0.6;">symbol</span><span>${s.symbol || '?'} ${s.tradovate_symbol ? `(${s.tradovate_symbol})` : ''}</span>
-                <span style="opacity: 0.6;">router</span><span>${s.router_name || '?'}</span>
-                <span style="opacity: 0.6;">started</span><span>${s.started_at_utc ? new Date(s.started_at_utc).toLocaleString() : '-'}</span>
-                <span style="opacity: 0.6;">last heartbeat</span><span>${s.last_heartbeat_utc ? new Date(s.last_heartbeat_utc).toLocaleString() : '-'}</span>
-                <span style="opacity: 0.6;">last bar ts</span><span>${s.last_bar_ts || '-'}</span>
-                <span style="opacity: 0.6;">last event</span><span>${s.last_event || '-'}</span>
-              </div>`;
-
-            const outcomeColor = {
-              EXECUTED: 'green', BLOCKED: 'red', FAILED: 'red', NOTED: 'blue',
-            };
-            if (!mnq.recent_events || mnq.recent_events.length === 0) {
-              eventsEl.textContent = '(no journal events yet)';
-            } else {
-              eventsEl.innerHTML = mnq.recent_events.map(ev => {
-                const ts = ev.ts ? new Date(ev.ts).toLocaleTimeString() : '?';
-                const col = outcomeColor[ev.outcome] || 'blue';
-                return `
-                  <div style="padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 0.5rem;">
-                    <span style="opacity: 0.6; width: 5rem;">${ts}</span>
-                    <span class="badge ${col}" style="min-width: 5rem; text-align: center;">${ev.outcome || '?'}</span>
-                    <span style="min-width: 11rem; opacity: 0.85;">${ev.intent || '?'}</span>
-                    <span style="color: var(--muted); flex: 1;">${ev.rationale || ''}</span>
-                  </div>`;
-              }).join('');
-            }
-          }
-        } catch (_e) {
-          document.getElementById('mnq-supervisor').textContent =
-            '(mnq supervisor endpoint unavailable)';
-          document.getElementById('mnq-events').textContent = '';
-          document.getElementById('mnq-supervisor-summary').textContent = '';
-        }
-
-        // Top banner: all-systems rollup
-        try {
-          const sys = await fetchJson('/api/systems');
-          const overallColor = {
-            GREEN: 'green', YELLOW: 'purple', RED: 'red',
-          }[sys.overall] || 'blue';
-          setBadge(
-            document.getElementById('systems-overall'), sys.overall, overallColor,
-          );
-          const chipColor = {
-            GREEN: 'green', YELLOW: 'purple', RED: 'red',
-          };
-          document.getElementById('systems-chips').innerHTML =
-            Object.entries(sys.systems || {}).map(([name, info]) => {
-              const col = chipColor[info.status] || 'blue';
-              return `<span><span class="badge ${col}">${name}</span> <span style="opacity: 0.7;">${info.detail || ''}</span></span>`;
-            }).join(' · ');
-        } catch (_e) {
-          document.getElementById('systems-chips').textContent = '(systems endpoint unavailable)';
-        }
-
-        document.getElementById('error-card').hidden = true;
-      } catch (e) {
-        document.getElementById('status-text').textContent = 'ERROR';
-        document.getElementById('error-card').hidden = false;
-        document.getElementById('error-text').textContent = e.message;
-      }
-    }
-
-    tick();
-    setInterval(tick, 15_000);
+  <!-- JS modules (load order matters) -->
+  <script type="module" src="/js/panels.js"></script>
+  <script type="module" src="/js/auth.js"></script>
+  <script type="module" src="/js/live.js"></script>
+  <script type="module" src="/js/command_center.js"></script>
+  <script type="module" src="/js/bot_fleet.js"></script>
+  <script type="module">
+    import { initTabs } from '/js/panels.js';
+    initTabs();
   </script>
 </body>
 </html>

@@ -33,7 +33,7 @@ def load_config() -> dict:
         return json.load(f)
 
 
-class ApexPredator:
+class EtaEngine:
     """Master runtime orchestrator for the 6-bot fleet."""
 
     def __init__(self, mode: str, bots: list[str], unpause: bool = False) -> None:
@@ -116,7 +116,7 @@ def main() -> int:
     all_bots = ["mnq", "nq", "crypto_seed", "eth_perp", "sol_perp", "xrp_perp"]
     bots = all_bots if args.bots == "all" else args.bots.split(",")
 
-    app = ApexPredator(mode=args.mode, bots=bots, unpause=args.unpause)
+    app = EtaEngine(mode=args.mode, bots=bots, unpause=args.unpause)
 
     # Runtime safety gate: live mode MUST pass preflight or we abort.
     if args.mode == "live":

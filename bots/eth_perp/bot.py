@@ -44,6 +44,7 @@ mode" -- JARVIS gates every order. In this mode:
   route on LONG/SHORT entries. Refused -> no order. CONDITIONAL ->
   coin qty scaled by ``size_cap_mult``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -95,9 +96,16 @@ _ADX_TRANSITION_ETH: float = 18.0
 
 logger = logging.getLogger(__name__)
 ETH_CONFIG = BotConfig(
-    name="ETH-Perp", symbol="ETHUSDT", tier=Tier.CASINO, baseline_usd=3000.0,
-    starting_capital_usd=3000.0, max_leverage=75.0, risk_per_trade_pct=3.0,
-    daily_loss_cap_pct=6.0, max_dd_kill_pct=20.0, margin_mode=MarginMode.ISOLATED,
+    name="ETH-Perp",
+    symbol="ETHUSDT",
+    tier=Tier.CASINO,
+    baseline_usd=3000.0,
+    starting_capital_usd=3000.0,
+    max_leverage=75.0,
+    risk_per_trade_pct=3.0,
+    daily_loss_cap_pct=6.0,
+    max_dd_kill_pct=20.0,
+    margin_mode=MarginMode.ISOLATED,
 )
 _LEV_TIERS: list[tuple[float, float]] = [(9.0, 75.0), (7.0, 20.0), (5.0, 10.0)]
 _LEV_MIN_CONFLUENCE: float = 5.0
@@ -154,17 +162,11 @@ class EthPerpBot(BaseBot):
         self._venue_symbol = venue_symbol or self.config.symbol
         self._strategy_adapter = strategy_adapter
         self._auto_wire_ai_strategies = auto_wire_ai_strategies
-        self._ai_strategy_config: dict[str, Any] = (
-            dict(ai_strategy_config) if ai_strategy_config else {}
-        )
+        self._ai_strategy_config: dict[str, Any] = dict(ai_strategy_config) if ai_strategy_config else {}
         self._retrospective_manager = retrospective_manager
         self._auto_wire_retrospective = auto_wire_retrospective
-        self._retrospective_config: dict[str, Any] = (
-            dict(retrospective_config) if retrospective_config else {}
-        )
-        self._default_retrospective_strategy = (
-            default_retrospective_strategy
-        )
+        self._retrospective_config: dict[str, Any] = dict(retrospective_config) if retrospective_config else {}
+        self._default_retrospective_strategy = default_retrospective_strategy
         # v0.1.50: symbol -> ActiveEntry. See MnqBot for semantics.
         self._active_entries: dict[str, ActiveEntry] = {}
 
@@ -226,6 +228,7 @@ class EthPerpBot(BaseBot):
         """Ask JARVIS which model tier to use for a given task."""
         if self._jarvis is None:
             from eta_engine.brain.model_policy import ModelTier as _ModelTier
+
             return _ModelTier.SONNET
         return pick_llm_tier(
             self._jarvis,
@@ -306,42 +309,39 @@ class EthPerpBot(BaseBot):
             from eta_engine.strategies.live_adapter import (
                 build_live_adapter,
             )
+
             # ETH perp symbol is ETHUSDT; the strategy layer keys off
             # the asset prefix (ETH). The factory will upper-case it.
-            adapter_asset = self.config.symbol.replace("USDT", "") or (
-                self.config.symbol
-            )
+            adapter_asset = self.config.symbol.replace("USDT", "") or (self.config.symbol)
             self._strategy_adapter = build_live_adapter(
-                adapter_asset, **self._ai_strategy_config,
+                adapter_asset,
+                **self._ai_strategy_config,
             )
             logger.info(
-                "%s auto-wired AI-Optimized strategy adapter "
-                "(asset=%s, scheduler=on)",
-                self.config.name, adapter_asset,
+                "%s auto-wired AI-Optimized strategy adapter (asset=%s, scheduler=on)",
+                self.config.name,
+                adapter_asset,
             )
         # Auto-wire the v0.1.48 retrospective loop if requested.
-        if (
-            self._auto_wire_retrospective
-            and self._retrospective_manager is None
-        ):
+        if self._auto_wire_retrospective and self._retrospective_manager is None:
             from eta_engine.strategies.retrospective_wiring import (
                 RetrospectiveManager,
             )
+
             self._retrospective_manager = RetrospectiveManager(
                 starting_equity=self.config.starting_capital_usd,
                 **self._retrospective_config,
             )
             logger.info(
-                "%s auto-wired RetrospectiveManager "
-                "(starting_equity=$%.2f)",
+                "%s auto-wired RetrospectiveManager (starting_equity=$%.2f)",
                 self.config.name,
                 self.config.starting_capital_usd,
             )
         logger.info(
-            "%s starting | capital=$%.2f symbol=%s router=%s jarvis=%s "
-            "retrospective=%s",
+            "%s starting | capital=$%.2f symbol=%s router=%s jarvis=%s retrospective=%s",
             self.config.name,
-            self.config.starting_capital_usd, self._venue_symbol,
+            self.config.starting_capital_usd,
+            self._venue_symbol,
             "yes" if self._router is not None else "no",
             "yes" if self._jarvis is not None else "no",
             "yes" if self._retrospective_manager is not None else "no",
@@ -356,8 +356,7 @@ class EthPerpBot(BaseBot):
         )
 
     async def stop(self) -> None:
-        logger.info("%s stopping | equity=$%.2f",
-                    self.config.name, self.state.equity)
+        logger.info("%s stopping | equity=$%.2f", self.config.name, self.state.equity)
         self._record_event(
             intent=f"{self.config.symbol.lower()}_stop",
             rationale="lifecycle.stop",
@@ -416,6 +415,8 @@ class EthPerpBot(BaseBot):
     # ── Market Events ──
 
     async def on_bar(self, bar: dict[str, Any]) -> None:
+        # Wave-6 sage plumbing (2026-04-27): rolling sage-bar buffer.
+        self.observe_bar_for_sage(bar)
         if not self.check_risk():
             return
         regime = self._infer_regime(bar)
@@ -425,11 +426,15 @@ class EthPerpBot(BaseBot):
             router_signal = self._strategy_adapter.push_bar(bar)
             if router_signal is not None:
                 router_signal = self._prepare_signal_for_routing(
-                    router_signal, bar, regime,
+                    router_signal,
+                    bar,
+                    regime,
                 )
                 atr = bar.get("atr_14", bar["close"] * 0.02)
                 lev = self.effective_leverage(
-                    router_signal.confidence, bar["close"], atr,
+                    router_signal.confidence,
+                    bar["close"],
+                    atr,
                 )
                 if lev is not None:
                     router_signal.meta["leverage"] = round(lev, 1)
@@ -467,12 +472,17 @@ class EthPerpBot(BaseBot):
         lev = signal.meta.get("leverage", "?")
         logger.info(
             "%s signal: %s @ %.4f conf=%.1f lev=%sx",
-            self.config.name, signal.type.value, signal.price, signal.confidence, lev,
+            self.config.name,
+            signal.type.value,
+            signal.price,
+            signal.confidence,
+            lev,
         )
 
         _is_entry = signal.type in (SignalType.LONG, SignalType.SHORT)
         cap: float | None = None
         if _is_entry:
+            sage_bars = self.recent_sage_bars()
             allowed, cap, code = self._ask_jarvis(
                 ActionType.ORDER_PLACE,
                 rationale=f"{signal.type.value} {self.config.symbol}",
@@ -481,6 +491,8 @@ class EthPerpBot(BaseBot):
                 price=signal.price,
                 confidence=signal.confidence,
                 leverage=float(lev) if isinstance(lev, int | float) else 1.0,
+                sage_bars=sage_bars,
+                entry_price=signal.price,
             )
             if not allowed:
                 self._record_event(
@@ -496,9 +508,12 @@ class EthPerpBot(BaseBot):
             # a 0.5 cap halves both size and leverage -- dollar risk
             # drops 2x, not 4x.
             if cap is not None and cap < 1.0:
-                effective_lev = float(
-                    signal.meta.get("leverage", 1.0),
-                ) * cap
+                effective_lev = (
+                    float(
+                        signal.meta.get("leverage", 1.0),
+                    )
+                    * cap
+                )
                 signal.meta["leverage"] = round(max(effective_lev, 1.0), 2)
 
         if self._router is None:
@@ -570,7 +585,10 @@ class EthPerpBot(BaseBot):
         """
         if signal.size > 0.0:
             return float(signal.size)
-        risk_usd = self.state.equity * (self.config.risk_per_trade_pct / 100.0)
+        # 2026-04-27 devils-advocate: half-size for first 30 days via
+        # effective_risk_per_trade_pct (auto-reverts to 1.0 multiplier
+        # post-window). See strategies.warmup_policy.
+        risk_usd = self.state.equity * (self.effective_risk_per_trade_pct() / 100.0)
         lev = float(signal.meta.get("leverage", 1.0))
         stop_distance = float(signal.meta.get("stop_distance", signal.price * 0.01))
         if stop_distance <= 0.0 or signal.price <= 0.0:
@@ -624,7 +642,8 @@ class EthPerpBot(BaseBot):
         return lev is not None and self.check_risk()
 
     def evaluate_exit(self, position: Position) -> bool:
-        risk_usd = self.config.risk_per_trade_pct / 100 * self.state.equity
+        # 2026-04-27: warm-up-aware exit threshold; matches the entry sizing.
+        risk_usd = self.effective_risk_per_trade_pct() / 100 * self.state.equity
         if position.unrealized_pnl <= -risk_usd:
             return True
         return position.unrealized_pnl >= 3.0 * risk_usd
@@ -650,7 +669,9 @@ class EthPerpBot(BaseBot):
     # ── Retrospective entry tracking (v0.1.50) ──
 
     def _track_entry_from_signal(
-        self, signal: Signal, regime: RegimeType,
+        self,
+        signal: Signal,
+        regime: RegimeType,
     ) -> None:
         """Stash the entry context for later pnl_r computation.
 
@@ -665,19 +686,19 @@ class EthPerpBot(BaseBot):
             is_entry_signal_type,
             map_regime,
         )
+
         if not is_entry_signal_type(signal.type):
             return
         risk_usd = compute_risk_usd(
             equity=self.state.equity,
-            risk_per_trade_pct=self.config.risk_per_trade_pct,
+            # 2026-04-27: pass effective (warm-up-adjusted) risk pct.
+            risk_per_trade_pct=self.effective_risk_per_trade_pct(),
         )
         if risk_usd <= 0.0:
             return
-        strat = (
-            self._default_retrospective_strategy
-            or default_strategy_for_symbol(self.config.symbol)
-        )
+        strat = self._default_retrospective_strategy or default_strategy_for_symbol(self.config.symbol)
         from datetime import UTC, datetime
+
         self._active_entries[signal.symbol] = ActiveEntry(
             symbol=signal.symbol,
             risk_usd=risk_usd,
@@ -699,6 +720,7 @@ class EthPerpBot(BaseBot):
         """
         self.update_state(fill)
         from eta_engine.bots.retrospective_adapter import is_close_fill
+
         if not is_close_fill(fill):
             return None
         active = self._active_entries.pop(fill.symbol, None)
@@ -712,14 +734,16 @@ class EthPerpBot(BaseBot):
             regime = None
         if risk_usd <= 0.0:
             logger.debug(
-                "%s record_fill: no risk-at-entry for %s; "
-                "skipping retrospective auto-invoke",
-                self.config.name, fill.symbol,
+                "%s record_fill: no risk-at-entry for %s; skipping retrospective auto-invoke",
+                self.config.name,
+                fill.symbol,
             )
             return None
         pnl_r = fill.realized_pnl / risk_usd
         return self.record_trade_outcome(
-            pnl_r=pnl_r, strategy=strategy, regime=regime,
+            pnl_r=pnl_r,
+            strategy=strategy,
+            regime=regime,
         )
 
     # ── Retrospective wiring (v0.1.49) ──
@@ -739,6 +763,7 @@ class EthPerpBot(BaseBot):
         if self._retrospective_manager is None:
             return
         from eta_engine.bots.retrospective_adapter import map_regime
+
         try:
             self._retrospective_manager.on_bar(
                 regime=map_regime(regime),
@@ -747,7 +772,8 @@ class EthPerpBot(BaseBot):
         except Exception as e:  # noqa: BLE001 - never crash the loop
             logger.warning(
                 "%s retrospective on_bar failed: %s",
-                self.config.name, e,
+                self.config.name,
+                e,
             )
 
     def record_trade_outcome(
@@ -769,11 +795,8 @@ class EthPerpBot(BaseBot):
             default_strategy_for_symbol,
         )
         from eta_engine.strategies.adaptive_sizing import RegimeLabel
-        strat = (
-            strategy
-            or self._default_retrospective_strategy
-            or default_strategy_for_symbol(self.config.symbol)
-        )
+
+        strat = strategy or self._default_retrospective_strategy or default_strategy_for_symbol(self.config.symbol)
         reg = regime or RegimeLabel.TRANSITION
         outcome = build_trade_outcome(
             strategy=strat,
@@ -786,6 +809,7 @@ class EthPerpBot(BaseBot):
         except Exception as e:  # noqa: BLE001 - never crash the loop
             logger.warning(
                 "%s retrospective record_trade failed: %s",
-                self.config.name, e,
+                self.config.name,
+                e,
             )
             return None

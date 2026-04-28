@@ -7,16 +7,22 @@ One interface. Multiple venues. Zero excuses.
 
 from __future__ import annotations
 
+import datetime as _datetime_runtime  # noqa: F401  -- pydantic v2 forward-ref resolution
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from datetime import datetime
+else:
+    datetime = _datetime_runtime.datetime
 
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
+
 
 class BarData(BaseModel):
     """OHLCV bar."""
@@ -63,9 +69,7 @@ class FundingRate(BaseModel):
     timestamp: datetime
     symbol: str
     rate: float = Field(description="Current funding rate (decimal)")
-    predicted_rate: float | None = Field(
-        default=None, description="Predicted next funding rate"
-    )
+    predicted_rate: float | None = Field(default=None, description="Predicted next funding rate")
     next_funding_time: datetime | None = None
 
 

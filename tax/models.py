@@ -6,13 +6,19 @@ Pydantic v2 models for taxable events, reports, and tiered account types.
 
 from __future__ import annotations
 
-from datetime import datetime
-from enum import Enum
+import datetime as _datetime_runtime  # noqa: F401  -- pydantic v2 forward-ref resolution
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+if TYPE_CHECKING:
+    from datetime import datetime
+else:
+    datetime = _datetime_runtime.datetime
 
-class EventType(str, Enum):
+
+class EventType(StrEnum):
     TRADE_CLOSE = "TRADE_CLOSE"
     STAKING_RECEIPT = "STAKING_RECEIPT"
     AIRDROP = "AIRDROP"
@@ -21,12 +27,12 @@ class EventType(str, Enum):
     TRANSFER = "TRANSFER"
 
 
-class AccountTier(str, Enum):
+class AccountTier(StrEnum):
     US = "US"
     OFFSHORE = "OFFSHORE"
 
 
-class InstrumentType(str, Enum):
+class InstrumentType(StrEnum):
     FUTURES_1256 = "FUTURES_1256"
     CRYPTO_SPOT = "CRYPTO_SPOT"
     CRYPTO_PERP = "CRYPTO_PERP"
@@ -75,8 +81,5 @@ class TaxReport(BaseModel):
 
     def total_taxable(self) -> float:
         return (
-            self.total_short_term_gain
-            + self.total_long_term_gain
-            + self.total_section_1256
-            + self.total_staking_income
+            self.total_short_term_gain + self.total_long_term_gain + self.total_section_1256 + self.total_staking_income
         )

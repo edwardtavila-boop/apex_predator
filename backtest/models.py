@@ -6,15 +6,20 @@ Pydantic v2 models for backtest trades, results, and config.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal
+import datetime as _datetime_runtime  # noqa: F401  -- pydantic v2 forward-ref resolution
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
+if TYPE_CHECKING:
+    from datetime import datetime
+else:
+    datetime = _datetime_runtime.datetime
 
 # ---------------------------------------------------------------------------
 # Trade
 # ---------------------------------------------------------------------------
+
 
 class Trade(BaseModel):
     """A single completed trade from a backtest run."""
@@ -34,11 +39,28 @@ class Trade(BaseModel):
         ge=0.0,
         description="Peak unrealized drawdown (USD) during trade life",
     )
+    regime: str | None = Field(
+        default=None,
+        description=(
+            "Regime label active at trade entry (e.g. 'trending_up', 'choppy'). "
+            "Populated by the regime classifier when available; None for legacy "
+            "or synthetic trades."
+        ),
+    )
+    exit_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why the trade closed: 'target_hit', 'stop_hit', 'trail_stop', "
+            "'time_stop', 'session_close', 'kill_switch', etc. Surfaces the "
+            "exit-mix breakdown without needing trade-by-trade replay."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
+
 
 class BacktestResult(BaseModel):
     """Aggregate output of a single backtest run."""
@@ -61,6 +83,7 @@ class BacktestResult(BaseModel):
 # Config
 # ---------------------------------------------------------------------------
 
+
 class BacktestConfig(BaseModel):
     """Configuration for a single backtest run."""
 
@@ -74,3 +97,19 @@ class BacktestConfig(BaseModel):
     stop_r_multiple: float = Field(default=2.0, gt=0.0)
     target_r_multiple: float = Field(default=3.0, gt=0.0)
     atr_stop_mult: float = Field(default=2.0, gt=0.0)
+
+
+# ---------------------------------------------------------------------------
+# Forward-ref resolution
+# ---------------------------------------------------------------------------
+# `from __future__ import annotations` makes every annotation a string;
+# pydantic v2 resolves these lazily on first model_validate() call. If a
+# different module triggers validation before this module's runtime alias
+# (`datetime = _datetime_runtime.datetime`) is in the resolution scope,
+# you get "Trade is not fully defined" mid-suite. Forcing model_rebuild()
+# at import time pins the resolution and keeps tests independent of import
+# order.
+
+Trade.model_rebuild()
+BacktestResult.model_rebuild()
+BacktestConfig.model_rebuild()

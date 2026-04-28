@@ -29,6 +29,7 @@ Public API
   * ``DecisionJournal`` -- append/read wrapper over a Path
   * ``default_journal()`` -- singleton tied to docs/decision_journal.jsonl
 """
+
 from __future__ import annotations
 
 import json
@@ -101,6 +102,16 @@ class JournalEvent(BaseModel):
         description="External references: trade_id, order_id, tx_id, spec_id, ...",
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Lever 2 (kaizen scaffolding, 2026-04-26): policy version this event
+    # was produced under. 0 = pre-policy-versioning (legacy rows). When
+    # JARVIS evolves a new policy version through the kaizen+promotion
+    # gate, this field lets the replay engine compare v17-vs-v18 behavior
+    # over the same event stream.
+    policy_version: int = Field(
+        default=0,
+        ge=0,
+        description="JARVIS policy version under which this event was produced.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -116,17 +127,32 @@ class DecisionJournal:
     rows and the bot portfolio is single-process).
     """
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, supabase_mirror: bool = True) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # When True, every append also fire-and-forget POSTs to Supabase
+        # public.decision_journal (silently no-op if env vars unset).
+        # Local JSONL stays authoritative regardless of mirror state.
+        self._supabase_mirror = supabase_mirror
 
     # -- write ---------------------------------------------------------------
 
     def append(self, event: JournalEvent) -> JournalEvent:
-        """Write one event. Returns the same event for chaining."""
+        """Write one event. Returns the same event for chaining.
+
+        Local JSONL append is always synchronous and atomic. If
+        ``supabase_mirror=True`` (default), the event is also forwarded
+        to Supabase ``public.decision_journal`` via the
+        ``obs.supabase_sink`` module — best effort, errors swallowed.
+        """
         line = event.model_dump_json()
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(line + "\n")
+        if self._supabase_mirror:
+            # Local import keeps the sink module optional and avoids
+            # circular references at startup.
+            from eta_engine.obs import supabase_sink
+            supabase_sink.post_event(event)
         return event
 
     def record(
@@ -209,10 +235,7 @@ class DecisionJournal:
 
     def override_rate(self) -> float:
         """Fraction of RISK_GATE/KILL_SWITCH events that were OVERRIDDEN."""
-        gated = [
-            e for e in self._iter_events()
-            if e.actor in (Actor.RISK_GATE, Actor.KILL_SWITCH)
-        ]
+        gated = [e for e in self._iter_events() if e.actor in (Actor.RISK_GATE, Actor.KILL_SWITCH)]
         if not gated:
             return 0.0
         overridden = sum(1 for e in gated if e.outcome == Outcome.OVERRIDDEN)

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from eta_engine.scripts import live_tiny_preflight_dryrun as mod
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture()
@@ -21,34 +24,44 @@ def fake_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     # paper_run_report with Tier-A passing
     (tmp_path / "docs" / "paper_run_report.json").write_text(
-        json.dumps({
-            "per_bot": [
-                {"bot": "mnq", "gate_pass": True},
-                {"bot": "nq", "gate_pass": True},
-                {"bot": "eth_perp", "gate_pass": False},
-            ],
-        }),
+        json.dumps(
+            {
+                "per_bot": [
+                    {"bot": "mnq", "gate_pass": True},
+                    {"bot": "nq", "gate_pass": True},
+                    {"bot": "eth_perp", "gate_pass": False},
+                ],
+            }
+        ),
     )
     # roadmap_state
-    (tmp_path / "roadmap_state.json").write_text(json.dumps({
-        "current_phase": "P9_ROLLOUT",
-        "overall_progress_pct": 72,
-        "shared_artifacts": {
-            "firm_board_latest": {
-                "spec_id": "APEX_PAPER_RESULTS_v1",
-                "final_verdict": "GO",
-            },
-        },
-    }))
+    (tmp_path / "roadmap_state.json").write_text(
+        json.dumps(
+            {
+                "current_phase": "P9_ROLLOUT",
+                "overall_progress_pct": 72,
+                "shared_artifacts": {
+                    "firm_board_latest": {
+                        "spec_id": "APEX_PAPER_RESULTS_v1",
+                        "final_verdict": "GO",
+                    },
+                },
+            }
+        )
+    )
     # firm_spec_paper_promotion_v1 with healthy risk envelope
-    (tmp_path / "docs" / "firm_spec_paper_promotion_v1.json").write_text(json.dumps({
-        "risk_management": {
-            "per_trade_risk_pct": 3.0,
-            "daily_loss_cap_pct": 6.0,
-            "max_drawdown_kill_pct": 20.0,
-            "paper_capital_allocations": {"mnq": 5000, "nq": 12000},
-        },
-    }))
+    (tmp_path / "docs" / "firm_spec_paper_promotion_v1.json").write_text(
+        json.dumps(
+            {
+                "risk_management": {
+                    "per_trade_risk_pct": 3.0,
+                    "daily_loss_cap_pct": 6.0,
+                    "max_drawdown_kill_pct": 20.0,
+                    "paper_capital_allocations": {"mnq": 5000, "nq": 12000},
+                },
+            }
+        )
+    )
     return tmp_path
 
 
@@ -72,12 +85,14 @@ def test_gate_paper_run_tier_a_pass(fake_root: Path):
 
 def test_gate_paper_run_tier_a_fail_if_any_tier_a_fails(fake_root: Path):
     (fake_root / "docs" / "paper_run_report.json").write_text(
-        json.dumps({
-            "per_bot": [
-                {"bot": "mnq", "gate_pass": True},
-                {"bot": "nq", "gate_pass": False},
-            ],
-        }),
+        json.dumps(
+            {
+                "per_bot": [
+                    {"bot": "mnq", "gate_pass": True},
+                    {"bot": "nq", "gate_pass": False},
+                ],
+            }
+        ),
     )
     g = mod._gate_paper_run()
     assert g.status == "FAIL"
@@ -111,10 +126,14 @@ def test_gate_roadmap_state_fail_on_wrong_phase(fake_root: Path):
 
 
 def test_gate_tradovate_creds_reads_env(fake_root: Path, monkeypatch: pytest.MonkeyPatch):
+    # Post-dormancy mandate (2026-04-24): Tradovate is DORMANT, so
+    # missing creds resolve to SKIP rather than FAIL. The gate is
+    # ``required=False`` so the missing-creds path no longer blocks
+    # the live-tiny staging flow.
     monkeypatch.delenv("TRADOVATE_CLIENT_ID", raising=False)
     monkeypatch.delenv("TRADOVATE_CLIENT_SECRET", raising=False)
     g = mod._gate_tradovate_creds()
-    assert g.status == "FAIL"
+    assert g.status == "SKIP"
     monkeypatch.setenv("TRADOVATE_CLIENT_ID", "x")
     monkeypatch.setenv("TRADOVATE_CLIENT_SECRET", "y")
     g = mod._gate_tradovate_creds()
@@ -165,12 +184,22 @@ def test_inject_failures_flips_gate_state(fake_root: Path):
 
 
 def test_gate_venue_health_pass_with_all_configs(fake_root: Path):
+    # Post-dormancy mandate (2026-04-24): active futures venues are
+    # IBKR + Tastytrade; Tradovate yaml is no longer required. The
+    # gate derives required configs from
+    # ``venues.router.ACTIVE_FUTURES_VENUES`` so the test mirrors that.
     cfg = fake_root / "configs"
-    for fname in ("tradovate.yaml", "bybit.yaml", "alerts.yaml", "kill_switch.yaml"):
+    for fname in (
+        "ibkr.yaml",
+        "tastytrade.yaml",
+        "bybit.yaml",
+        "alerts.yaml",
+        "kill_switch.yaml",
+    ):
         (cfg / fname).write_text(f"# stub {fname}\n")
     g = mod._gate_venue_health()
     assert g.status == "PASS"
-    assert "4/4" in g.detail
+    assert "5/5" in g.detail
 
 
 def test_gate_venue_health_fail_if_any_config_missing(fake_root: Path):
@@ -185,12 +214,16 @@ def test_gate_venue_health_fail_if_any_config_missing(fake_root: Path):
 
 def test_gate_decisions_locked_pass(fake_root: Path):
     p = fake_root / "docs" / "decisions_v1.json"
-    p.write_text(json.dumps({
-        "spec_id": "APEX_DECISIONS_v1",
-        "tier_1_live_tiny_blockers": {"x": 1},
-        "tier_2_tier_b_blockers": {"x": 1},
-        "tier_3_operational_cadence": {"x": 1},
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "spec_id": "APEX_DECISIONS_v1",
+                "tier_1_live_tiny_blockers": {"x": 1},
+                "tier_2_tier_b_blockers": {"x": 1},
+                "tier_3_operational_cadence": {"x": 1},
+            }
+        )
+    )
     g = mod._gate_decisions_locked()
     assert g.status == "PASS"
     assert "APEX_DECISIONS_v1" in g.detail
@@ -199,11 +232,15 @@ def test_gate_decisions_locked_pass(fake_root: Path):
 def test_gate_decisions_locked_fail_on_missing_section(fake_root: Path):
     p = fake_root / "docs" / "decisions_v1.json"
     # missing tier_3
-    p.write_text(json.dumps({
-        "spec_id": "APEX_DECISIONS_v1",
-        "tier_1_live_tiny_blockers": {},
-        "tier_2_tier_b_blockers": {},
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "spec_id": "APEX_DECISIONS_v1",
+                "tier_1_live_tiny_blockers": {},
+                "tier_2_tier_b_blockers": {},
+            }
+        )
+    )
     g = mod._gate_decisions_locked()
     assert g.status == "FAIL"
 
@@ -215,17 +252,21 @@ def test_gate_decisions_locked_fail_if_missing_file(fake_root: Path):
 
 def test_gate_env_template_pass(fake_root: Path):
     p = fake_root / ".env.example"
-    p.write_text("\n".join([
-        "TRADOVATE_CLIENT_ID=",
-        "TRADOVATE_CLIENT_SECRET=",
-        "TRADOVATE_USERNAME=",
-        "TRADOVATE_PASSWORD=",
-        "TRADOVATE_DEVICE_ID=",
-        "BYBIT_API_KEY=",
-        "BYBIT_API_SECRET=",
-        "PUSHOVER_USER=",
-        "PUSHOVER_TOKEN=",
-    ]))
+    p.write_text(
+        "\n".join(
+            [
+                "TRADOVATE_CLIENT_ID=",
+                "TRADOVATE_CLIENT_SECRET=",
+                "TRADOVATE_USERNAME=",
+                "TRADOVATE_PASSWORD=",
+                "TRADOVATE_DEVICE_ID=",
+                "BYBIT_API_KEY=",
+                "BYBIT_API_SECRET=",
+                "PUSHOVER_USER=",
+                "PUSHOVER_TOKEN=",
+            ]
+        )
+    )
     g = mod._gate_env_template()
     assert g.status == "PASS"
 
@@ -263,7 +304,8 @@ def test_gate_runtime_wired_passes_with_real_tree():
 
 
 def test_gate_runtime_wired_fails_when_module_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(mod, "ROOT", tmp_path)
     # Only create one of the three — expect FAIL.

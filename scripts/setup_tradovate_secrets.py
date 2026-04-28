@@ -20,12 +20,13 @@ Where to find each value
 TRADOVATE_USERNAME    Your Tradovate login email.
 TRADOVATE_PASSWORD    Your Tradovate account password (same as web login).
 TRADOVATE_APP_ID      Free-form name you registered the API app under
-                      (e.g. "ApexPredator"). Default is "ApexPredator".
+                      (e.g. "EtaEngine"). Default is "EtaEngine".
 TRADOVATE_APP_SECRET  Secret issued when your CID was registered. Found
                       in Tradovate > Trader > Apps > [your app] > Secret.
 TRADOVATE_CID         Numeric Client ID for the registered app. Same
                       location as APP_SECRET.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,7 +52,7 @@ from eta_engine.core.secrets import (  # noqa: E402
 _FIELDS: list[tuple[str, str, bool, str]] = [
     (TRADOVATE_USERNAME, "Tradovate username (email)", False, ""),
     (TRADOVATE_PASSWORD, "Tradovate account password", True, ""),
-    (TRADOVATE_APP_ID, "Tradovate app ID (free-form name)", False, "ApexPredator"),
+    (TRADOVATE_APP_ID, "Tradovate app ID (free-form name)", False, "EtaEngine"),
     (TRADOVATE_APP_SECRET, "Tradovate APP SECRET (from Trader > Apps)", True, ""),
     (TRADOVATE_CID, "Tradovate CID (numeric Client ID)", False, ""),
 ]
@@ -98,6 +99,7 @@ def _store(key: str, value: str) -> None:
 def _delete(key: str) -> None:
     try:
         import keyring  # noqa: PLC0415
+
         keyring.delete_password("eta_engine", key)
     except Exception:  # noqa: BLE001
         pass  # Not present is fine.
@@ -159,10 +161,8 @@ def cmd_interactive() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Setup Tradovate OAuth2 secrets")
     group = ap.add_mutually_exclusive_group()
-    group.add_argument("--check", action="store_true",
-                       help="Just report which secrets are present; no prompts.")
-    group.add_argument("--reset", action="store_true",
-                       help="Delete existing Tradovate secrets from keyring.")
+    group.add_argument("--check", action="store_true", help="Just report which secrets are present; no prompts.")
+    group.add_argument("--reset", action="store_true", help="Delete existing Tradovate secrets from keyring.")
     args = ap.parse_args()
 
     if args.check:

@@ -7,9 +7,12 @@ Pure-math performance stats. No pandas, no numpy required.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
-from eta_engine.backtest.models import Trade
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from eta_engine.backtest.models import Trade
 
 
 def _mean(xs: Iterable[float]) -> float:
@@ -32,7 +35,16 @@ def _stdev(xs: Iterable[float]) -> float:
 def compute_sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     """Annualized Sharpe ratio assuming 252 trading days.
 
-    Returns 0.0 if stdev is zero or sample too small.
+    Returns 0.0 if stdev is zero, sample too small, or the sample has
+    only floating-point-noise dispersion around a constant value.
+
+    The constant-noise guard catches a real bug surfaced 2026-04-27:
+    three identical -1pct returns produced sd=1.3e-17 (FP rounding,
+    not a real signal), which made Sharpe blow up to -1.2e+16 and
+    poisoned the walk-forward aggregate. The threshold compares the
+    sample stdev to abs(mean) — if the spread is ~1e-12 the size of
+    the level itself, the series is effectively constant and Sharpe
+    is mathematically undefined.
     """
     if len(returns) < 2:
         return 0.0
@@ -40,6 +52,26 @@ def compute_sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     mu = _mean(excess)
     sd = _stdev(excess)
     if sd == 0.0:
+        return 0.0
+    # Constant-returns guard. abs(mu) of the sample is the natural
+    # scale; if sd is much smaller than the mean magnitude, the
+    # dispersion is either FP-rounding noise (~1e-17) OR deterministic
+    # strategy outcomes (every winner hits the same rr_target = same
+    # +R, so n_wins identical-R returns produce sd/mean ratios down
+    # to ~1e-5). Both cases produce meaningless Sharpe ratios.
+    #
+    # Threshold 1e-3 means: if the cross-trade dispersion is below
+    # 0.1pct of the mean return magnitude, treat the series as
+    # effectively constant. Honest strategy returns have far more
+    # cross-trade variance than this — slippage, partial fills,
+    # variable target distances, etc. Anything tighter is the kind
+    # of degenerate return distribution that breaks Sharpe by design.
+    #
+    # Originally caught the FP-noise case (sd=1.3e-17, ratio ~1e-15)
+    # 2026-04-27. Tightened on the same day after the ETH crypto_orb
+    # sweep surfaced a deterministic-R case (sd=1.7e-7, ratio 1.15e-5)
+    # producing Sharpe=1.4e+6 from 4 trades all hitting +1.5R.
+    if abs(mu) > 0.0 and sd / abs(mu) < 1e-3:
         return 0.0
     return round(mu / sd * math.sqrt(252), 4)
 
@@ -53,10 +85,7 @@ def compute_sortino(returns: list[float]) -> float:
     if len(returns) < 2:
         return 0.0
     downside = [r for r in returns if r < 0.0]
-    if downside:
-        dd = _stdev(downside)
-    else:
-        dd = _stdev(returns)
+    dd = _stdev(downside) if downside else _stdev(returns)
     if dd == 0.0:
         return 0.0
     return round(_mean(returns) / dd * math.sqrt(252), 4)

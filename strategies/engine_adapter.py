@@ -21,6 +21,7 @@ The adapter is **import-light**. It does not touch pydantic, torch,
 web3, or any network primitives so it can run in the hot trading
 loop without GIL or allocation surprises.
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -259,11 +260,69 @@ class RouterAdapter:
     #: ``gate``, ``n_windows``, ``harness_config``, ``is_fraction`` --
     #: anything :func:`qualify_strategies` accepts.
     scheduler_kwargs: Mapping[str, object] | None = None
+    #: Optional :class:`SessionGate` that the bot attaches at start so
+    #: the adapter's session-aware decisions (entry windows, EOD
+    #: flatten) read from the same gate the bot uses. ``None`` keeps
+    #: the adapter session-agnostic; bots without an EOD policy never
+    #: set this.
+    session_gate: Any | None = None
+    #: Optional ``bot_id`` identifying the registry entry that owns
+    #: this adapter (e.g. ``"mnq_futures"``). When set, ``push_bar``
+    #: queries :func:`per_bot_registry.is_bot_active` BEFORE running
+    #: the dispatcher and short-circuits to ``None`` if the bot is
+    #: marked deactivated via ``extras["deactivated"]=True``. This is
+    #: the canonical kill-switch chokepoint flagged by risk-sage on
+    #: 2026-04-27 — the prior approach (raising
+    #: ``confluence_threshold`` to an unreachable value) is a
+    #: tripwire, not a kill-switch, because a config reload could
+    #: silently re-arm the bot. ``None`` (default) keeps the adapter
+    #: registry-agnostic for backtests and unit tests that don't
+    #: route through the registry.
+    bot_id: str | None = None
 
     # private
     _bars: deque[Bar] = field(init=False, repr=False)
     _last_decision: RouterDecision | None = field(default=None, init=False, repr=False)
     _ts_counter: int = field(default=0, init=False, repr=False)
+
+    def should_flatten_eod(self, bar: dict[str, Any]) -> tuple[bool, str]:
+        """Ask the wired :class:`SessionGate` whether to flatten now.
+
+        Returns ``(should_flatten, reason)`` -- ``reason`` is one of
+        ``REASON_EOD_PENDING`` / ``REASON_EOD_NOT_DUE`` from
+        :mod:`eta_engine.core.session_gate` when the gate is active,
+        or the sentinel ``"no_eod_policy"`` when no gate is wired.
+
+        The fire-once latch lives on the BOT (``bot._eod_flatten_fired``)
+        not the adapter -- the adapter is a stateless query layer here,
+        so a bot can ask repeatedly and decide for itself when to act.
+        """
+        gate = self.session_gate
+        if gate is None:
+            return False, "no_eod_policy"
+        eod_check = getattr(gate, "should_flatten_eod", None)
+        if eod_check is None:
+            return False, "no_eod_policy"
+        # Convert the bar's epoch-millisecond ``ts`` to a UTC datetime
+        # the gate expects. Fall back gracefully when ``ts`` is absent
+        # or malformed -- the hot loop must never crash on a bad bar.
+        from datetime import UTC
+        from datetime import datetime as _dt
+
+        ts_raw = bar.get("ts") or bar.get("timestamp")
+        try:
+            now = _dt.fromtimestamp(float(ts_raw) / 1000.0, tz=UTC)
+        except (TypeError, ValueError):
+            return False, "eod_check_skipped_bad_ts"
+        try:
+            verdict = eod_check(now)
+        except Exception:  # noqa: BLE001 -- never crash the hot loop
+            return False, "eod_check_raised"
+        if isinstance(verdict, tuple) and len(verdict) == 2:
+            should, reason = verdict
+        else:
+            should, reason = bool(verdict), "eod_window"
+        return bool(should), str(reason)
 
     def __post_init__(self) -> None:
         if self.max_bars < 2:
@@ -321,6 +380,25 @@ class RouterAdapter:
         eligibility in that case.
         """
         self._append_bar_dict(bar_dict)
+        # Registry kill-switch chokepoint — risk-sage 2026-04-27.
+        # Short-circuit BEFORE dispatch so a deactivated bot never
+        # produces an actionable signal, regardless of what the
+        # router would have decided. Cheap dict lookup; cost is
+        # negligible vs the per-bar dispatch path.
+        if self.bot_id is not None:
+            try:
+                from eta_engine.strategies.per_bot_registry import is_bot_active
+
+                if not is_bot_active(self.bot_id):
+                    self._last_decision = None
+                    return None
+            except Exception:  # noqa: BLE001 -- never crash the hot loop
+                # If the registry import or lookup fails, default to
+                # ALLOWING the bot to fire. Failing-closed here would
+                # make a transient registry import error look like a
+                # global kill-switch event, which is worse than
+                # treating the registry as unavailable.
+                pass
         self._tick_scheduler_safely()
         ctx = context_from_dict(
             bar_dict,
@@ -358,11 +436,11 @@ class RouterAdapter:
         if self.allowlist_scheduler is None:
             return
         try:
-            kwargs = (
-                dict(self.scheduler_kwargs) if self.scheduler_kwargs else {}
-            )
+            kwargs = dict(self.scheduler_kwargs) if self.scheduler_kwargs else {}
             self.allowlist_scheduler.tick(
-                self.asset, list(self._bars), **kwargs,
+                self.asset,
+                list(self._bars),
+                **kwargs,
             )
         except Exception:  # noqa: BLE001  -- never crash the hot loop
             return
@@ -379,9 +457,7 @@ class RouterAdapter:
         """
         if self.allowlist_scheduler is None:
             return self.eligibility
-        scheduler_map = (
-            self.allowlist_scheduler.cache.as_eligibility_map()
-        )
+        scheduler_map = self.allowlist_scheduler.cache.as_eligibility_map()
         if not scheduler_map:
             return self.eligibility
         if not self.eligibility:

@@ -35,6 +35,7 @@ What's NOT enforced
 * Tolerance defaults -- separately covered by
   ``test_broker_equity_reconciler.py``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,31 +68,33 @@ async def test_amain_dry_run_wires_broker_equity_into_runtime_log(
     # appears -- not because the wire-up is broken but because there
     # are no ticks. Seed -> force a real tick path.
     state_path.write_text(
-        json.dumps({
-            "shared_artifacts": {
-                "apex_go_state": {"tier_a_mnq_live": True},
-            },
-        }),
+        json.dumps(
+            {
+                "shared_artifacts": {
+                    "apex_go_state": {"tier_a_mnq_live": True},
+                },
+            }
+        ),
         encoding="utf-8",
     )
 
-    rc = await _amain([
-        "--max-bars", "1",
-        "--tick-interval", "0",
-        "--state-path", str(state_path),
-        "--log-path", str(log_path),
-    ])
-
-    assert rc == 0, f"_amain returned rc={rc}, expected 0"
-    assert log_path.exists(), (
-        f"runtime log was never written -- did _amain even tick? "
-        f"(checked {log_path})"
+    rc = await _amain(
+        [
+            "--max-bars",
+            "1",
+            "--tick-interval",
+            "0",
+            "--state-path",
+            str(state_path),
+            "--log-path",
+            str(log_path),
+        ]
     )
 
-    lines = [
-        ln for ln in log_path.read_text(encoding="utf-8").splitlines()
-        if ln.strip()
-    ]
+    assert rc == 0, f"_amain returned rc={rc}, expected 0"
+    assert log_path.exists(), f"runtime log was never written -- did _amain even tick? (checked {log_path})"
+
+    lines = [ln for ln in log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert lines, "runtime log is empty -- _amain ticked zero times"
 
     # Find at least one tick entry with a broker_equity block.
@@ -110,8 +113,7 @@ async def test_amain_dry_run_wires_broker_equity_into_runtime_log(
         # snuck in via float('inf') in a stat field. H5 regression pin.
         if any(tok in raw for tok in ("Infinity", "NaN", "-Infinity")):
             pytest.fail(
-                f"runtime log contains non-RFC-8259 tokens "
-                f"(H5 regression): {raw[:200]!r}",
+                f"runtime log contains non-RFC-8259 tokens (H5 regression): {raw[:200]!r}",
             )
         if entry.get("kind") == "tick":
             meta = entry.get("meta") or {}
@@ -128,70 +130,80 @@ async def test_amain_dry_run_wires_broker_equity_into_runtime_log(
 
     # Verify the broker_equity block has the expected R1 fields.
     be = tick_with_be.get("meta", {}).get(
-        "broker_equity", tick_with_be.get("broker_equity"),
+        "broker_equity",
+        tick_with_be.get("broker_equity"),
     )
-    assert isinstance(be, dict), (
-        f"broker_equity block is not a dict: {be!r}"
-    )
+    assert isinstance(be, dict), f"broker_equity block is not a dict: {be!r}"
     # In dry-run with NullBrokerEquityAdapter, reason must be no_broker_data.
     # The exact field set depends on what runtime chose to project, but
     # 'reason' is the canonical classification key per
     # BrokerEquityReconciler.ReconcileResult.as_dict.
     reason = be.get("reason")
     assert reason in {"no_broker_data", "within_tolerance"}, (
-        f"broker_equity.reason={reason!r}; expected no_broker_data "
-        f"(NullBrokerEquityAdapter is wired in dry-run mode)"
+        f"broker_equity.reason={reason!r}; expected no_broker_data (NullBrokerEquityAdapter is wired in dry-run mode)"
     )
 
 
-def test_amain_dry_run_smoke_via_subprocess(tmp_path: Path) -> None:
-    """Same intent as above, but via subprocess so the boot-banner
-    print path also exercises. The banner gained a ``broker_equity``
-    line in v0.1.64 (B1 fix); if that line goes missing, the operator
-    has no way to confirm the reconciler is wired.
+@pytest.mark.asyncio
+async def test_amain_dry_run_emits_broker_equity_in_boot_banner(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """In-process counterpart of the boot-banner pin.
 
-    Seeds ``apex_go_state.tier_a_mnq_live = True`` so the runtime ticks
-    a real bot (otherwise zero-equity trips the kill-switch latch and
-    the boot is refused before the banner prints).
+    Originally implemented as a subprocess run of ``run_eta_live``,
+    but that path proved fragile under the parallel-pytest contention
+    that sibling sessions create -- the subprocess startup budget
+    (initially 60s, bumped to 180s) kept getting starved and the
+    test timed out for reasons unrelated to the banner contract it
+    is meant to pin. v0.1.71 refactored this to call ``_amain``
+    directly via asyncio and capture stdout via pytest's ``capsys``.
+    The contract is identical: ``broker_equity :`` must appear in
+    the banner; absence indicates B1 banner regression (operator
+    has no way to confirm from boot output that the reconciler
+    is wired).
+
+    Seeds ``apex_go_state.tier_a_mnq_live = True`` so the runtime
+    ticks a real bot (otherwise zero-equity trips the kill-switch
+    latch and the boot is refused before the banner prints).
     """
-    import subprocess
+    sys.path.insert(0, str(ROOT.parent))
+    from eta_engine.scripts.run_eta_live import _amain
 
     log_path = tmp_path / "rt2.jsonl"
     state_path = tmp_path / "s2.json"
     state_path.write_text(
-        json.dumps({
-            "shared_artifacts": {
-                "apex_go_state": {"tier_a_mnq_live": True},
-            },
-        }),
+        json.dumps(
+            {
+                "shared_artifacts": {
+                    "apex_go_state": {"tier_a_mnq_live": True},
+                },
+            }
+        ),
         encoding="utf-8",
     )
 
-    proc = subprocess.run(
+    rc = await _amain(
         [
-            sys.executable, "-m", "eta_engine.scripts.run_eta_live",
-            "--max-bars", "1",
-            "--tick-interval", "0",
-            "--state-path", str(state_path),
-            "--log-path", str(log_path),
-        ],
-        cwd=ROOT.parent,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+            "--max-bars",
+            "1",
+            "--tick-interval",
+            "0",
+            "--state-path",
+            str(state_path),
+            "--log-path",
+            str(log_path),
+        ]
     )
+    assert rc == 0, f"_amain returned rc={rc}, expected 0"
 
-    assert proc.returncode == 0, (
-        f"_amain subprocess exited rc={proc.returncode}\n"
-        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-    )
+    captured = capsys.readouterr()
     # Boot banner pin: the broker_equity line appears in stdout.
-    assert "broker_equity :" in proc.stdout, (
+    assert "broker_equity :" in captured.out, (
         "boot banner does not contain 'broker_equity :' line. "
         "B1 banner regression: operator cannot tell from boot output "
         "whether the reconciler is wired or which adapter is bound. "
-        f"\nstdout:\n{proc.stdout}"
+        f"\nstdout:\n{captured.out}"
     )
 
 

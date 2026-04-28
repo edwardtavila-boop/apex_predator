@@ -34,7 +34,7 @@ from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 _BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -826,6 +826,36 @@ def bot_kill(bot_id: str, session: dict = Depends(require_step_up)) -> dict:  # 
     latch_path.write_text(json.dumps(latches, indent=2), encoding="utf-8")
     _write_control_signal(bot_id, "kill", session["user"])
     return {"ok": True, "action": "kill", "bot_id": bot_id, "latch_state": "tripped"}
+
+
+# ─── Live SSE stream (Wave-7, 2026-04-27) ─────────────────────────
+@app.get("/api/live/stream")
+async def live_stream(_: dict = Depends(require_session)) -> StreamingResponse:  # noqa: B008
+    """SSE stream: 'verdict' events from today's audit JSONL,
+    'fill' events from blotter fills JSONL.
+
+    Re-resolves today's audit path on each iteration so midnight
+    rotation is transparent.
+    """
+    from datetime import UTC
+    from datetime import datetime as _dt
+    from typing import TYPE_CHECKING
+
+    from eta_engine.deploy.scripts.dashboard_sse import stream_audit_and_fills
+
+    if TYPE_CHECKING:
+        from collections.abc import AsyncIterator
+
+    async def gen() -> AsyncIterator[str]:
+        # Re-resolve today's audit path inside the generator so a
+        # rollover at midnight gets picked up.
+        today = _dt.now(UTC).strftime("%Y-%m-%d")
+        audit_path = _state_dir() / "jarvis_audit" / f"{today}.jsonl"
+        fills_path = _state_dir() / "blotter" / "fills.jsonl"
+        async for event in stream_audit_and_fills(audit_path, fills_path):
+            yield event
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ─── Cross-policy verdict diff (Tier-4 #17, 2026-04-27) ────────────

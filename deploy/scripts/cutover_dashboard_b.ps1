@@ -7,6 +7,10 @@
 # ============================================================
 $ErrorActionPreference = "Stop"
 $EtaEngineDir = $PSScriptRoot | Split-Path -Parent | Split-Path -Parent
+if (-not (Test-Path (Join-Path $EtaEngineDir ".git"))) {
+    Write-Host "[FAIL ] EtaEngineDir resolved to '$EtaEngineDir' — not the repo root. Aborting." -ForegroundColor Red
+    exit 1
+}
 $Python = Join-Path $EtaEngineDir ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) { $Python = "python" }
 
@@ -15,12 +19,15 @@ function Write-OK   { param($m) Write-Host "[ OK  ] $m" -ForegroundColor Green }
 function Write-Fail { param($m) Write-Host "[FAIL ] $m" -ForegroundColor Red }
 function Die        { param($m) Write-Fail $m; exit 1 }
 
+Write-Log "Using Python: $Python"
+
 # ------------------------------------------------------------------
 # 1. Git pull
 # ------------------------------------------------------------------
 Write-Log "Step 1: git pull..."
 $pull = & git -C $EtaEngineDir pull --ff-only 2>&1 | Out-String
 Write-Log $pull.Trim()
+if ($LASTEXITCODE -ne 0) { Die "git pull failed (exit $LASTEXITCODE)" }
 $sha = & git -C $EtaEngineDir rev-parse --short HEAD
 Write-OK "HEAD is now $sha"
 
@@ -79,7 +86,11 @@ Write-OK "task $taskName registered"
 Write-Log "Step 4: starting $taskName..."
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 4
-Write-OK "task started"
+$taskState = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
+if ($taskState -notin @("Running","Ready")) {
+    Die "Task '$taskName' is in state '$taskState' after start — check task registration (user account / password)"
+}
+Write-OK "task started (state: $taskState)"
 
 # ------------------------------------------------------------------
 # 5. Health-check loop (30 s)
@@ -123,7 +134,7 @@ $receipt = @{
     git_sha     = $sha
     port        = 8420
     task        = $taskName
-    confirmed_bots = if ($n) { $n } else { "unknown" }
+    confirmed_bots = if ($null -ne $n) { $n } else { "unknown" }
     status      = "success"
 } | ConvertTo-Json
 Set-Content -Path (Join-Path $stateDir "cutover_dashboard_b.json") -Value $receipt -Encoding UTF8

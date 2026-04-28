@@ -30,7 +30,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fastapi import Cookie, FastAPI, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
@@ -620,6 +620,67 @@ def positions_reconciler() -> dict:
     """Latest position reconciler snapshot."""
     from eta_engine.deploy.scripts.dashboard_state import read_json_safe
     return read_json_safe(_state_dir() / "safety" / "position_reconciler_latest.json")
+
+
+class SageModulationToggleRequest(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/equity")
+def equity_curve() -> dict:
+    """Today + 30-day equity curve for the fleet."""
+    from eta_engine.deploy.scripts.dashboard_state import read_json_safe
+    return read_json_safe(_state_dir() / "blotter" / "equity_curve.json")
+
+
+@app.get("/api/preflight")
+def preflight_throttle_map() -> dict:
+    """Live correlation throttle map (which symbol pairs are throttled)."""
+    from eta_engine.deploy.scripts.dashboard_state import read_json_safe
+    data = read_json_safe(_state_dir() / "safety" / "preflight_correlation_latest.json")
+    if "_warning" in data:
+        return {"throttles": []}
+    return data
+
+
+@app.get("/api/jarvis/sage_modulation_stats")
+def sage_modulation_stats() -> dict:
+    """Per-bot count of v22 agree-loosen / disagree-tighten / defer in last 24h."""
+    from eta_engine.deploy.scripts.dashboard_state import read_json_safe
+    data = read_json_safe(_state_dir() / "sage" / "modulation_stats_24h.json")
+    if "_warning" in data:
+        return {"per_bot": {}, "_warning": "no_data"}
+    return data
+
+
+@app.get("/api/jarvis/sage_modulation_toggle")
+def get_sage_modulation_toggle() -> dict:
+    """Current state of the V22_SAGE_MODULATION feature flag."""
+    enabled = os.environ.get("ETA_FF_V22_SAGE_MODULATION", "false").strip().lower() in (
+        "1", "true", "yes", "on", "y",
+    )
+    return {"enabled": enabled, "flag_name": "ETA_FF_V22_SAGE_MODULATION"}
+
+
+@app.post("/api/jarvis/sage_modulation_toggle")
+def post_sage_modulation_toggle(
+    req: SageModulationToggleRequest,
+    _: dict = Depends(require_step_up),  # noqa: B008 -- FastAPI dependency-injection idiom
+) -> dict:
+    """Flip ETA_FF_V22_SAGE_MODULATION (process env + persistent state file)."""
+    val = "true" if req.enabled else "false"
+    os.environ["ETA_FF_V22_SAGE_MODULATION"] = val
+    flag_path = _state_dir() / "feature_flags.json"
+    flag_path.parent.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if flag_path.exists():
+        try:
+            existing = json.loads(flag_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = {}
+    existing["ETA_FF_V22_SAGE_MODULATION"] = val
+    flag_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    return {"enabled": req.enabled}
 
 
 # ─── Cross-policy verdict diff (Tier-4 #17, 2026-04-27) ────────────

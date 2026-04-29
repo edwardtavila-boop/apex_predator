@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT.parent))
 
 from eta_engine.scripts.calibrate_broker_drift_tolerance import (  # noqa: E402
+    DEFAULT_LOG,
     DriftSamples,
     _percentile,
     _summarize,
@@ -34,6 +35,7 @@ from eta_engine.scripts.calibrate_broker_drift_tolerance import (  # noqa: E402
     main,
     recommend,
 )
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_LOG_PATH  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Pure-math helpers
@@ -232,6 +234,9 @@ class TestRecommend:
 
 
 class TestMain:
+    def test_default_log_points_to_canonical_runtime_path(self):
+        assert DEFAULT_LOG == ETA_RUNTIME_LOG_PATH
+
     def test_missing_log_returns_2(self, tmp_path: Path):
         rc = main(["--log", str(tmp_path / "does_not_exist.jsonl")])
         assert rc == 2

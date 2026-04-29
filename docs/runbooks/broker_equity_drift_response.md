@@ -16,7 +16,7 @@ the v0.1.64 R1 Red Team review).
 ## TL;DR
 
 1. **Open the alert payload.** The `reason` field is the classification.
-2. **Open `docs/runtime_log.jsonl` and tail the last 60 entries.** Look at
+2. **Open `logs/eta_engine/runtime_log.jsonl` and tail the last 60 entries.** Look at
    the `broker_equity` block in each tick.
 3. **Decide:**
    - `broker_below_logical` (cushion over-stated) — this is the dangerous
@@ -70,7 +70,7 @@ Make a note of:
 
 ```powershell
 # Last 60 tick entries
-Get-Content docs/runtime_log.jsonl -Tail 60 |
+Get-Content logs/eta_engine/runtime_log.jsonl -Tail 60 |
   ConvertFrom-Json |
   Select-Object ts, kind, @{Name='be'; Expression={$_.meta.broker_equity}} |
   Format-Table -AutoSize
@@ -79,7 +79,7 @@ Get-Content docs/runtime_log.jsonl -Tail 60 |
 Or with grep (Git Bash / WSL):
 
 ```bash
-tail -60 docs/runtime_log.jsonl | \
+tail -60 logs/eta_engine/runtime_log.jsonl | \
   jq -c '{ts, kind, be: .meta.broker_equity}' | \
   grep -i "broker_below\|broker_above"
 ```
@@ -185,13 +185,13 @@ Drift detection is OFF for the tick. Causes:
 
 ```bash
 # Tail the live runtime log filtered to broker_equity blocks
-tail -f docs/runtime_log.jsonl | jq -c '.meta.broker_equity'
+tail -f logs/eta_engine/runtime_log.jsonl | jq -c '.meta.broker_equity'
 
 # Re-audit alert event registry (ensures every dispatcher.send is routed)
 python scripts/_audit_alert_events.py
 
 # Audit alerts log for the last N broker_equity_drift dispatches
-grep '"event": "broker_equity_drift"' docs/alerts_log.jsonl | tail -20
+grep '"event": "broker_equity_drift"' logs/eta_engine/alerts_log.jsonl | tail -20
 
 # Check current adapter wiring (boot banner replay -- dry-run)
 python -m eta_engine.scripts.run_eta_live \

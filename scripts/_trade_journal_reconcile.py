@@ -4,7 +4,7 @@ Catches the silent-failure modes that no single component is responsible
 for noticing:
 
 1. **Orphaned runtime sessions** -- a ``runtime_start`` event in
-   ``docs/alerts_log.jsonl`` with no matching ``runtime_stop`` /
+   ``logs/eta_engine/alerts_log.jsonl`` with no matching ``runtime_stop`` /
    ``runtime_resume`` within the window AND no fresh ``runtime_start``
    following it. Either the bot crashed without writing a stop, or the
    alert pipeline is broken.
@@ -52,8 +52,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH, default_alerts_log_path
+
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ALERTS = ROOT / "docs" / "alerts_log.jsonl"
+DEFAULT_ALERTS = ETA_RUNTIME_ALERTS_LOG_PATH
 DEFAULT_BTC = ROOT / "docs" / "btc_live" / "btc_live_decisions.jsonl"
 
 
@@ -204,7 +206,12 @@ def _aggregate(results: list[tuple[str, str, str]]) -> tuple[str, int]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    p.add_argument("--alerts", type=Path, default=DEFAULT_ALERTS)
+    p.add_argument(
+        "--alerts",
+        type=Path,
+        default=None,
+        help=f"alerts JSONL path (default: {DEFAULT_ALERTS}, with legacy docs fallback)",
+    )
     p.add_argument("--btc", type=Path, default=DEFAULT_BTC)
     p.add_argument("--hours", type=float, default=24.0, help="lookback window")
     p.add_argument("--kill-storm-pct", type=float, default=25.0)
@@ -217,14 +224,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    if not args.alerts.exists():
-        print(f"reconcile: data-missing -- {args.alerts} not found")
+    alerts_path = args.alerts or default_alerts_log_path()
+    if not alerts_path.exists():
+        print(f"reconcile: data-missing -- {alerts_path} not found")
         return 9
 
     now_ts = args.now_utc if args.now_utc is not None else datetime.now(UTC).timestamp()
     window_start = now_ts - args.hours * 3600.0
 
-    alerts_all = _load_jsonl(args.alerts)
+    alerts_all = _load_jsonl(alerts_path)
     alerts_window = _alerts_in_window(alerts_all, window_start)
     btc_all = _load_jsonl(args.btc)
     btc_window = _btc_in_window(btc_all, window_start)

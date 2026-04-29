@@ -211,7 +211,7 @@ python -m eta_engine.scripts.run_eta_live --live-tiny --tier-a-only --paper-asse
 
 - [ ] First 5 minutes: no trades placed, just bar ingestion + feature pipeline. If trades fire in <5 min, suspect misconfig — abort.
 - [ ] Confirm first heartbeat Telegram (within 60s of start).
-- [ ] Watch `docs/alerts_log.jsonl` — a `runtime_start` event must appear with `payload.live=True`.
+- [ ] Watch `logs/eta_engine/alerts_log.jsonl` — a `runtime_start` event must appear with `payload.live=True`.
 - [ ] First order (if any) must appear in the **active broker's** account UI (IBKR Trader Workstation / Client Portal web for IBKR primary; Tastytrade web for the fallback) within 2s of local submission. If no UI ack, local clock drift or transport break — hit kill switch.
 - [ ] After first filled trade: run `python eta_engine/scripts/_trade_journal_reconcile.py --hours 1` — expect GREEN.
 - [ ] After 30 min: hit Ctrl-C (graceful stop). Confirm `runtime_stop` event appears in alerts_log.
@@ -242,7 +242,7 @@ sudo systemctl status apex-live
 1. `python eta_engine/scripts/_trade_journal_reconcile.py --hours 24` → must exit GREEN.
 2. `python eta_engine/scripts/_kill_switch_drift.py --hours 24` → must exit GREEN.
 3. Active broker account UI (IBKR Client Portal / Tastytrade web): compare realized PnL to internal journal. Discrepancy > $10 = stop. The R1 broker-equity drift detector should also catch this each tick (see `broker_equity` sub-key in `runtime_log.jsonl`).
-4. `docs/alerts_log.jsonl` tail: no `kill_switch` events with severity CRITICAL.
+4. `logs/eta_engine/alerts_log.jsonl` tail: no `kill_switch` events with severity CRITICAL.
 
 ### 48-hour exit criteria
 
@@ -307,7 +307,7 @@ pkill -f run_eta_live
 ```
 
 After ANY emergency stop:
-1. Snapshot `docs/alerts_log.jsonl` to `docs/incidents/<date>.jsonl`.
+1. Snapshot `logs/eta_engine/alerts_log.jsonl` to `docs/incidents/<date>.jsonl`.
 2. Run `python eta_engine/scripts/_trade_journal_reconcile.py --hours 24 > docs/incidents/<date>_reconcile.txt`.
 3. Append kill reason + root cause to `docs/kill_log.json`.
 4. Do NOT resume for at least 1 session (4h market hours). Use the pause to debug.

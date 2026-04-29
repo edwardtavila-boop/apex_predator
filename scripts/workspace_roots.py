@@ -28,6 +28,8 @@ ETA_RUNTIME_LOG_DIR = ROOT_LOGS_DIR / "eta_engine"
 ETA_RUNTIME_DECISION_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "decision_journal.jsonl"
 ETA_RUNTIME_ALERTS_LOG_PATH = ETA_RUNTIME_LOG_DIR / "alerts_log.jsonl"
 ETA_RUNTIME_LOG_PATH = ETA_RUNTIME_LOG_DIR / "runtime_log.jsonl"
+ETA_LEGACY_DOCS_ALERTS_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "alerts_log.jsonl"
+ETA_LEGACY_DOCS_RUNTIME_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "runtime_log.jsonl"
 
 
 def ensure_dir(path: Path) -> Path:
@@ -40,3 +42,21 @@ def ensure_parent(path: Path) -> Path:
     """Create the parent directory for a file path and return the path."""
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def default_alerts_log_path() -> Path:
+    """Prefer the canonical runtime alert log, with legacy docs fallback.
+
+    Read-only diagnostics use this so older snapshots remain inspectable
+    while live runtime writes stay out of tracked docs.
+    """
+    if ETA_RUNTIME_ALERTS_LOG_PATH.exists() or not ETA_LEGACY_DOCS_ALERTS_LOG_PATH.exists():
+        return ETA_RUNTIME_ALERTS_LOG_PATH
+    return ETA_LEGACY_DOCS_ALERTS_LOG_PATH
+
+
+def default_runtime_log_path() -> Path:
+    """Prefer the canonical runtime log, with legacy docs fallback."""
+    if ETA_RUNTIME_LOG_PATH.exists() or not ETA_LEGACY_DOCS_RUNTIME_LOG_PATH.exists():
+        return ETA_RUNTIME_LOG_PATH
+    return ETA_LEGACY_DOCS_RUNTIME_LOG_PATH

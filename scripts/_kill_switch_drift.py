@@ -1,6 +1,6 @@
 """Stuck-killswitch detector for eta_engine.
 
-Reads ``docs/alerts_log.jsonl`` and detects the silent-failure mode
+Reads ``logs/eta_engine/alerts_log.jsonl`` and detects the silent-failure mode
 where a kill-switch fired hours/days ago and trading never resumed.
 Without this, a stuck killswitch silently zeros every ``risk_mult``
 forever and the operator only finds out from the absence of trades.
@@ -48,8 +48,13 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOG = ROOT / "docs" / "alerts_log.jsonl"
+from eta_engine.scripts.workspace_roots import (
+    ETA_LEGACY_DOCS_ALERTS_LOG_PATH,
+    ETA_RUNTIME_ALERTS_LOG_PATH,
+    default_alerts_log_path,
+)
+
+DEFAULT_LOG = ETA_RUNTIME_ALERTS_LOG_PATH
 
 KILL_EVENTS = {"kill_switch"}
 RESUME_EVENTS = {"runtime_start", "runtime_resume", "kill_clear", "rearm"}
@@ -96,8 +101,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--log",
         type=Path,
-        default=DEFAULT_LOG,
-        help=f"path to alerts log (default: {DEFAULT_LOG})",
+        default=None,
+        help=(
+            f"path to alerts log (default: {ETA_RUNTIME_ALERTS_LOG_PATH}; "
+            f"fallback: {ETA_LEGACY_DOCS_ALERTS_LOG_PATH})"
+        ),
     )
     p.add_argument(
         "--now-utc",
@@ -107,9 +115,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    records = _load_records(args.log)
+    log_path = args.log or default_alerts_log_path()
+    records = _load_records(log_path)
     if not records:
-        print(f"kill-switch-drift: GREEN -- no alerts log entries at {args.log}")
+        print(f"kill-switch-drift: GREEN -- no alerts log entries at {log_path}")
         return 0
 
     latest_kill = _latest_with_event(records, KILL_EVENTS)

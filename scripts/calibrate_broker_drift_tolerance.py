@@ -1,6 +1,6 @@
 """H1 closure: tolerance calibrator for ``BrokerEquityReconciler``.
 
-Reads ``docs/runtime_log.jsonl``, extracts every tick's ``broker_equity``
+Reads ``logs/eta_engine/runtime_log.jsonl``, extracts every tick's ``broker_equity``
 block, and emits a recommended set of asymmetric tolerance parameters
 based on the observed drift histogram.
 
@@ -50,7 +50,7 @@ machine-readable dict for piping into a config-update script.
 
 Usage
 -----
-    # Default: read docs/runtime_log.jsonl, human report
+    # Default: read logs/eta_engine/runtime_log.jsonl, human report
     python scripts/calibrate_broker_drift_tolerance.py
 
     # JSON output for downstream tooling
@@ -79,8 +79,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_LOG = ROOT / "docs" / "runtime_log.jsonl"
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_LOG_PATH, default_runtime_log_path
+
+DEFAULT_LOG = ETA_RUNTIME_LOG_PATH
 
 
 @dataclass(frozen=True)
@@ -280,8 +281,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--log",
         type=Path,
-        default=DEFAULT_LOG,
-        help=f"Path to runtime_log.jsonl (default: {DEFAULT_LOG})",
+        default=None,
+        help=f"Path to runtime_log.jsonl (default: {DEFAULT_LOG}, with legacy docs fallback)",
     )
     p.add_argument(
         "--percentile",
@@ -302,8 +303,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    if not args.log.exists():
-        print(f"ERROR: log file not found: {args.log}", file=sys.stderr)
+    log_path = args.log or default_runtime_log_path()
+
+    if not log_path.exists():
+        print(f"ERROR: log file not found: {log_path}", file=sys.stderr)
         return 2
     if not (0.0 < args.percentile < 1.0):
         print(
@@ -318,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    below, above = collect(args.log)
+    below, above = collect(log_path)
     rec = recommend(
         below,
         above,
@@ -328,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if below.n == 0 and above.n == 0:
         print(
-            f"ERROR: no broker_equity tick samples found in {args.log}. "
+            f"ERROR: no broker_equity tick samples found in {log_path}. "
             "Run paper trading with the reconciler wired (see "
             "docs/runbooks/broker_equity_drift_response.md) before "
             "calibrating.",
@@ -340,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    "log_path": str(args.log),
+                    "log_path": str(log_path),
                     "percentile": args.percentile,
                     "above_slack": args.above_slack,
                     "samples": {

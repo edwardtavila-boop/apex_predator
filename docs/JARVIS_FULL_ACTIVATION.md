@@ -64,6 +64,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - Runtime and alert-log defaults now write to `logs/eta_engine/runtime_log.jsonl`
   and `logs/eta_engine/alerts_log.jsonl`; cross-regime verification tests use
   explicit temp output so full gates do not churn tracked docs snapshots.
+- Alert-log and runtime-log readers now prefer `logs/eta_engine/*.jsonl` with
+  legacy `docs/*.jsonl` fallbacks, so diagnostics inspect live runtime truth
+  without losing access to older snapshots.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

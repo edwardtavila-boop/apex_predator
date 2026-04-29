@@ -88,7 +88,7 @@ duplicate risk.
 ### Graceful (preferred)
 ```bash
 # in the live terminal:
-Ctrl-C  →  wait for "runtime_stop" alert in docs/alerts_log.jsonl
+Ctrl-C  →  wait for "runtime_stop" alert in logs/eta_engine/alerts_log.jsonl
 ```
 
 ### Hung supervisor (escalation)
@@ -106,7 +106,7 @@ pkill -f run_eta_live
 2. Orders tab → **Cancel All Working**.
 3. Positions tab → **Flatten All** (market).
 4. Immediately: `python eta_engine/scripts/_trade_journal_reconcile.py --hours 1`.
-5. Snapshot `docs/alerts_log.jsonl` → `docs/incidents/YYYYMMDD.jsonl`.
+5. Snapshot `logs/eta_engine/alerts_log.jsonl` → `docs/incidents/YYYYMMDD.jsonl`.
 6. Append root-cause entry to `docs/kill_log.json`.
 
 ---
@@ -121,7 +121,7 @@ A session is a **failure** and must be reviewed before the next one if ANY:
 - More than 2 operator-manual intervention events during the session.
 
 Reviews use the `firm-tracker` skill or a manual read of the day's
-`alerts_log.jsonl` + journal.
+`logs/eta_engine/alerts_log.jsonl` + journal.
 
 ---
 
@@ -246,7 +246,7 @@ signal-to-fill total) but degrades materially at +2 or more bars.
 
 - Order supervisor MUST cancel any pending bracket that has not filled by
   the open of bar N+2 from the signal bar. Do not chase.
-- Log every `FILL_AGE_EXCEEDED` event to `alerts_log.jsonl` (level=WARNING).
+- Log every `FILL_AGE_EXCEEDED` event to `logs/eta_engine/alerts_log.jsonl` (level=WARNING).
 - `session_scorecard_mnq.py` reports YELLOW if `over_1_bar ≥ 3` trades in a
   session, RED if `over_2_bars ≥ 2`.
 - Pre-flight network RTT check against the active broker (IBKR Client

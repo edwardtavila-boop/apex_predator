@@ -44,17 +44,23 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eta_engine.scripts.workspace_roots import default_alerts_log_path
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BACKUP_DIR = ROOT / "docs" / "_backups"
 
-CRITICAL_FILES = [
-    ROOT / "docs" / "alerts_log.jsonl",
+_STATIC_CRITICAL_FILES = [
     ROOT / "docs" / "decisions_v1.json",
     ROOT / "docs" / "kill_log.json",
     ROOT / "docs" / "sharpe_baseline.json",
     ROOT / "docs" / "cross_regime" / "cross_regime_validation.json",
     ROOT / "docs" / "cross_regime" / "regime_exclusions.json",
 ]
+
+
+def critical_files() -> list[Path]:
+    """Return active state files, preferring canonical runtime alert logs."""
+    return [default_alerts_log_path(), *_STATIC_CRITICAL_FILES]
 
 
 def _utc_stamp() -> str:
@@ -145,7 +151,7 @@ def _evaluate(backup_dir: Path, min_snaps: int, max_stale_h: float) -> tuple[str
     issues: list[str] = []
     now_ts = datetime.now(UTC).timestamp()
     severity = 0  # 0=GREEN, 1=YELLOW, 2=RED
-    for src in CRITICAL_FILES:
+    for src in critical_files():
         snaps = _existing_snapshots(backup_dir, src.name)
         viable = []
         for s in snaps:
@@ -193,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     fresh_count = 0
     pruned_count = 0
     if not args.no_snapshot:
-        for src in CRITICAL_FILES:
+        for src in critical_files():
             dest, msg = _snapshot_one(src, args.backup_dir)
             if dest is None:
                 print(f"backup-state: skipping {src.name} -- {msg}")
@@ -204,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     overall, issues = _evaluate(args.backup_dir, args.min_snapshots, args.max_stale_h)
     print(
         f"backup-state: {overall} -- snapshotted={fresh_count}, "
-        f"pruned={pruned_count}, files-tracked={len(CRITICAL_FILES)}",
+        f"pruned={pruned_count}, files-tracked={len(critical_files())}",
     )
     if issues:
         for line in issues:

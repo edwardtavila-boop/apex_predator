@@ -1,7 +1,7 @@
 """
 EVOLUTIONARY TRADING ALGO  //  scripts.run_eth_sage_daily_walk_forward
 =======================================================================
-Walk-forward harness for ETH sage-daily-gated crypto_regime_trend.
+Walk-forward harness for ETH sage-daily-gated crypto_regime_trend / crypto_orb.
 
 The BTC breakthrough (`btc_sage_daily_etf_v1`, agg OOS Sh +6.00,
 gate PASS) used this composition:
@@ -13,14 +13,16 @@ gate PASS) used this composition:
 
 This script tests whether the sage-daily-gate alone (without the
 ETH-ETF flow data, which we don't have cached) lifts ETH's
-crypto_regime_trend baseline. The hypothesis from the BTC research
-log is that sage-daily contributed +1.32 of the +3.04 lift (ETF
-contributed the other +1.32). If the hypothesis holds, ETH should
-see +1-2 OOS Sharpe over plain regime_trend.
+crypto_regime_trend baseline or the stronger crypto_orb base. The
+hypothesis from the BTC research log is that sage-daily contributed
++1.32 of the +3.04 lift (ETF contributed the other +1.32). If the
+hypothesis holds, ETH should see +1-2 OOS Sharpe over plain
+regime_trend.
 
 Composition
 -----------
-``GenericSageDailyGateStrategy(CryptoRegimeTrendStrategy(...))``
+``GenericSageDailyGateStrategy(CryptoRegimeTrendStrategy(...))`` or
+``GenericSageDailyGateStrategy(crypto_orb_strategy(...))``
 + a daily-sage-verdict provider that pre-computes verdicts on
 ETH daily bars once at startup.
 
@@ -245,13 +247,15 @@ def main() -> int:
         wrapped.attach_daily_verdict_provider(provider)
         return wrapped
 
-    label = (
+    base_label = (
         "crypto_regime_trend(regime=100, pull=21, atr=2.0, rr=3.0)"
-        + (
-            f" + sage_daily_gate(conv>={args.min_conviction:.2f}, "
-            f"{'strict' if args.strict else 'loose'})"
-            if provider is not None else " [BASELINE-ONLY]"
-        )
+        if args.base == "regime_trend"
+        else "crypto_orb(range=120m, atr=3.0, rr=2.5, ema=100, max/day=2)"
+    )
+    label = base_label + (
+        f" + sage_daily_gate(conv>={args.min_conviction:.2f}, "
+        f"{'strict' if args.strict else 'loose'})"
+        if provider is not None else " [BASELINE-ONLY]"
     )
     print(f"[wf] strategy: {label}")
 

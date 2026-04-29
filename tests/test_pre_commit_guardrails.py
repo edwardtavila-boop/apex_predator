@@ -26,10 +26,14 @@ def test_pre_commit_normalizes_windows_staged_paths() -> None:
     forbidden = _pre_commit_check._forbidden_staged_files_from_lines(
         [
             "docs\\decision_journal.jsonl",
+            "docs\\live_data\\live_ticks_btc.jsonl",
         ]
     )
 
-    assert forbidden == ["docs/decision_journal.jsonl"]
+    assert forbidden == [
+        "docs/decision_journal.jsonl",
+        "docs/live_data/live_ticks_btc.jsonl",
+    ]
 
 
 def test_pre_commit_allows_source_files() -> None:

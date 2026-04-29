@@ -61,6 +61,9 @@ FORBIDDEN_STAGED_PATHS = frozenset(
         "docs/drift_watchdog.jsonl",
     }
 )
+FORBIDDEN_STAGED_PREFIXES = (
+    "docs/live_data/",
+)
 
 
 def _run(cmd: list[str], *, cwd: Path) -> int:
@@ -92,7 +95,12 @@ def _staged_python_files(*, root: Path) -> list[str]:
 def _forbidden_staged_files_from_lines(lines: list[str]) -> list[str]:
     """Return staged paths that are runtime artifacts and must not be committed."""
     normalized = [line.replace("\\", "/") for line in lines]
-    return [line for line in normalized if line in FORBIDDEN_STAGED_PATHS]
+    return [
+        line
+        for line in normalized
+        if line in FORBIDDEN_STAGED_PATHS
+        or any(line.startswith(prefix) for prefix in FORBIDDEN_STAGED_PREFIXES)
+    ]
 
 
 def _forbidden_staged_check(*, root: Path) -> int:

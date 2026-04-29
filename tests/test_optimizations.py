@@ -214,6 +214,14 @@ class TestStatusPage:
         assert "data-label=\"Bot\"" in bot_fleet
         assert "data-label=\"Day PnL\"" in bot_fleet
         assert "data-label=\"Last Trade\"" in bot_fleet
+        assert "data-label=\"Readiness\"" in bot_fleet
+        assert "formatBotStrategyReadiness" in bot_fleet
+        assert "strategy-readiness-chip" in bot_fleet
+        assert ".strategy-readiness-chip[data-readiness-state=\"blocked\"]" in css
+        assert ".strategy-readiness-action" in css
+        assert "readiness_next_action" in bot_fleet
+        assert "can_paper_trade" in bot_fleet
+        assert "launch_lane" in bot_fleet
         assert "mobile-card-table" in bot_fleet
         assert "mobile-chart-shell" in bot_fleet
         assert "data-quality" in bot_fleet

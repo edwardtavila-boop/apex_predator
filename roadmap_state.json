@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-29T21:05:17.6713823Z",
+  "last_updated": "2026-04-29T21:10:36.1537666Z",
   "overall_progress_pct": 100,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -11,6 +11,20 @@
     "eta_engine_python_files": 389,
     "eta_engine_tests_passing": 5168,
     "eta_engine_tests_failing": 0,
+    "eta_engine_bot_readiness_fleet_ui": {
+      "timestamp_utc": "2026-04-29T21:10:36.1537666Z",
+      "surface": "V1 Fleet roster renders per-bot strategy readiness chips from /api/bot-fleet",
+      "fields": [
+        "strategy_readiness",
+        "launch_lane",
+        "can_paper_trade",
+        "can_live_trade",
+        "readiness_next_action"
+      ],
+      "tests": [
+        "tests/test_optimizations.py::TestStatusPage::test_status_page_mobile_fleet_and_equity_contracts"
+      ]
+    },
     "eta_engine_verify_all": "17/17 PASS",
     "eta_engine_staking_wired": {
       "web3_client": "staking/web3_client.py \u2014 lazy `from web3 import Web3`; ERC20_ABI_MIN (balanceOf/decimals/symbol); read_balance() with graceful None fallback (no RPC / no wallet / web3 missing / RPC exception); build_contract_call() structured payload for audit",

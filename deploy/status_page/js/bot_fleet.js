@@ -35,6 +35,44 @@ function ensureLiveBotSelection(bots) {
   return String(firstLiveBot.name);
 }
 
+function titleCaseLane(lane) {
+  return String(lane || 'unknown')
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || 'Unknown';
+}
+
+function formatBotStrategyReadiness(bot) {
+  const strategy = bot?.strategy_readiness && typeof bot.strategy_readiness === 'object'
+    ? bot.strategy_readiness
+    : {};
+  const launch_lane = String(bot?.launch_lane || strategy.launch_lane || 'unknown');
+  const can_paper_trade = Boolean(bot?.can_paper_trade ?? strategy.can_paper_trade ?? false);
+  const can_live_trade = Boolean(bot?.can_live_trade ?? strategy.can_live_trade ?? false);
+  const readiness_next_action = String(
+    bot?.readiness_next_action || strategy.next_action || strategy.next_promotion_step || ''
+  ).trim();
+  const labels = {
+    blocked_data: ['blocked', 'Data blocked'],
+    deactivated: ['blocked', 'Deactivated'],
+    live_preflight: ['preflight', 'Live preflight'],
+    non_edge: ['blocked', 'No edge'],
+    paper_soak: ['paper', 'Paper soak'],
+    research: ['research', 'Research'],
+    shadow_only: ['shadow', 'Shadow only'],
+  };
+  let [state, label] = labels[launch_lane] || ['unknown', titleCaseLane(launch_lane)];
+  if (can_live_trade) [state, label] = ['live', 'Live ready'];
+  else if (can_paper_trade && state !== 'preflight') [state, label] = ['paper', 'Paper ready'];
+  return {
+    label,
+    state,
+    laneLabel: titleCaseLane(launch_lane),
+    nextAction: readiness_next_action,
+  };
+}
+
 // --- 1. Roster table ---
 class RosterPanel extends Panel {
   constructor() {
@@ -105,7 +143,7 @@ class RosterPanel extends Panel {
     const version = [data.dashboard_version, data.release_stage].filter(Boolean).join(' ');
     const liveLine = `server ${srvTs} | fills 1h ${live.fills_1h ?? 0} | fills 24h ${live.fills_24h ?? 0} | last fill ${formatTime(live.last_fill_ts)}`;
     this.body.innerHTML = `<div class="dashboard-freshness-line text-[10px] text-zinc-500 mb-1" data-quality="${escapeHtml(String(quality))}">${escapeHtml(version || 'v1 pre_beta')} | live roster | ${escapeHtml(liveLine)} | age ${dataAge ?? 'n/a'}s | confirmed ${Number(data.confirmed_bots || 0)} | window yesterday-&gt;now</div><table class="mobile-card-table w-full text-xs"><thead class="text-zinc-500">
-      <tr><th class="text-left">Bot</th><th class="text-left">Symbol</th><th class="text-left">Tier</th><th class="text-left">Venue</th><th class="text-left">Status</th><th class="text-right">Day PnL</th><th class="text-left">Last Trade</th><th class="text-left">Age</th><th class="text-right">R</th></tr>
+      <tr><th class="text-left">Bot</th><th class="text-left">Symbol</th><th class="text-left">Tier</th><th class="text-left">Venue</th><th class="text-left">Readiness</th><th class="text-left">Status</th><th class="text-right">Day PnL</th><th class="text-left">Last Trade</th><th class="text-left">Age</th><th class="text-right">R</th></tr>
       </thead><tbody>${bots.map(b => {
         const statusCls = b.status === 'running' ? 'text-emerald-400'
                         : b.status === 'paused' ? 'text-amber-400'
@@ -115,11 +153,16 @@ class RosterPanel extends Panel {
         const age = Number(b.last_trade_age_s || 0);
         const ageLabel = age > 0 ? `${Math.floor(age / 60)}m` : '-';
         const side = b.last_trade_side ? String(b.last_trade_side).toUpperCase() : '-';
+        const readiness = formatBotStrategyReadiness(b);
+        const actionLine = readiness.nextAction
+          ? `<div class="strategy-readiness-action">${escapeHtml(readiness.nextAction)}</div>`
+          : `<div class="strategy-readiness-action">${escapeHtml(readiness.laneLabel)}</div>`;
         return `<tr class="cursor-pointer hover:bg-zinc-800 ${isSel}" data-bot-id="${escapeHtml(b.name)}" data-symbol="${escapeHtml(b.symbol)}">
           <td data-label="Bot">${escapeHtml(b.name)}</td>
           <td data-label="Symbol">${escapeHtml(b.symbol)}</td>
           <td data-label="Tier">${escapeHtml(b.tier)}</td>
           <td data-label="Venue">${escapeHtml(b.venue)}</td>
+          <td data-label="Readiness"><span class="strategy-readiness-chip" data-readiness-state="${escapeHtml(readiness.state)}" title="${escapeHtml(readiness.nextAction || readiness.laneLabel)}">${escapeHtml(readiness.label)}</span>${actionLine}</td>
           <td data-label="Status" class="${statusCls}">${escapeHtml(b.status)}</td>
           <td data-label="Day PnL" class="text-right ${pnlCls}">${formatNumber(b.todays_pnl)}</td>
           <td data-label="Last Trade" class="text-zinc-300">${side} | ${formatTime(b.last_trade_ts)}</td>

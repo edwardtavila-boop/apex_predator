@@ -54,7 +54,7 @@ result written back to the decision journal as a `GRADER` event.
 ## Monitoring
 
 - Each run appends one `Actor.GRADER` event per strategy to
-  `docs/decision_journal.jsonl`. Filter by
+  `var/eta_engine/state/decision_journal.jsonl`. Filter by
   `intent="drift_check:<strategy_id>"` to find them.
 
 - For a quick read on current state without re-running:

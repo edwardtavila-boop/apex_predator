@@ -48,9 +48,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_DECISION_JOURNAL_PATH  # noqa: E402
 
 _DEFAULT_BASELINES = ROOT / "docs" / "strategy_baselines.json"
-_DEFAULT_JOURNAL = ROOT / "docs" / "decision_journal.jsonl"
+_DEFAULT_JOURNAL = ETA_RUNTIME_DECISION_JOURNAL_PATH
 
 
 def main() -> int:

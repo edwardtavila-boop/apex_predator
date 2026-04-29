@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 from pydantic import ValidationError
 
 from eta_engine.obs.decision_journal import (
+    DEFAULT_DECISION_JOURNAL_PATH,
+    LEGACY_DOCS_DECISION_JOURNAL_PATH,
     Actor,
     DecisionJournal,
     JournalEvent,
@@ -241,3 +243,25 @@ def test_default_journal_is_singleton() -> None:
     a = default_journal()
     b = default_journal()
     assert a is b
+
+
+def test_default_journal_uses_runtime_state_not_tracked_docs() -> None:
+    from eta_engine.obs.decision_journal import default_journal
+
+    journal = default_journal()
+
+    assert journal.path == DEFAULT_DECISION_JOURNAL_PATH
+    assert journal.path != LEGACY_DOCS_DECISION_JOURNAL_PATH
+    assert journal.path.name == "decision_journal.jsonl"
+    assert "var" in journal.path.parts
+    assert "eta_engine" in journal.path.parts
+    assert "state" in journal.path.parts
+
+
+def test_operator_watchdogs_default_to_runtime_journal() -> None:
+    from eta_engine.scripts import drift_check_all, fleet_corr_check, weekly_sharpe_check
+    from eta_engine.scripts.workspace_roots import ETA_RUNTIME_DECISION_JOURNAL_PATH
+
+    assert fleet_corr_check._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH
+    assert weekly_sharpe_check._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH
+    assert drift_check_all._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH

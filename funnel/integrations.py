@@ -439,7 +439,7 @@ def canonical_observability() -> list[ObservabilityIntegration]:
             module="eta_engine.obs.decision_journal",
             kind="journal",
             status="ACTIVE",
-            notes="Append-only JSONL decision log under docs/decision_journal.jsonl.",
+            notes="Append-only JSONL decision log under var/eta_engine/state/decision_journal.jsonl.",
         ),
         ObservabilityIntegration(
             name="AutopilotWatchdog",

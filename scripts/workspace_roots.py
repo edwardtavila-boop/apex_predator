@@ -25,6 +25,7 @@ ROOT_LOGS_DIR = WORKSPACE_ROOT / "logs"
 ROOT_VAR_DIR = WORKSPACE_ROOT / "var"
 ETA_RUNTIME_STATE_DIR = ROOT_VAR_DIR / "eta_engine" / "state"
 ETA_RUNTIME_LOG_DIR = ROOT_LOGS_DIR / "eta_engine"
+ETA_RUNTIME_DECISION_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "decision_journal.jsonl"
 
 
 def ensure_dir(path: Path) -> Path:

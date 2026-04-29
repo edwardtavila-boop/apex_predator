@@ -39,14 +39,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from eta_engine.brain.jarvis_v3.kaizen import (
+from eta_engine.brain.jarvis_v3.kaizen import (  # noqa: E402
     CycleKind,
     KaizenLedger,
     KaizenTicket,
     Retrospective,
     close_cycle,
 )
-from eta_engine.obs.decision_journal import (
+from eta_engine.obs.decision_journal import (  # noqa: E402
     DecisionJournal,
     JournalEvent,
     Outcome,
@@ -163,7 +163,7 @@ def fire_alert(ticket: KaizenTicket, retro: Retrospective, *, alerts_yaml: Path 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--journal", type=Path, default=None,
-                   help="Decision journal JSONL (defaults to eta_engine/docs/decision_journal.jsonl)")
+                   help="Decision journal JSONL (defaults to var/eta_engine/state/decision_journal.jsonl)")
     p.add_argument("--ledger", type=Path,
                    default=ROOT / "docs" / "kaizen_ledger.jsonl",
                    help="Kaizen ledger JSONL (default: eta_engine/docs/kaizen_ledger.jsonl)")
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  ticket: {ticket.id}")
     print(f"  title:  {ticket.title}")
     print(f"  impact: {ticket.impact}")
-    print(f"  rationale:")
+    print("  rationale:")
     print(f"    {ticket.rationale}")
     print()
 

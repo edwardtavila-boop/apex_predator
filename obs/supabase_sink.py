@@ -5,7 +5,7 @@ Best-effort Supabase mirror for the local decision journal.
 
 Why this exists
 ---------------
-The local JSONL at ``docs/decision_journal.jsonl`` is the canonical
+The local runtime JSONL at ``var/eta_engine/state/decision_journal.jsonl`` is the canonical
 source of truth — append-only, atomic on POSIX/NTFS, never blocks
 trading on a network hiccup. This module forwards each event to
 Supabase ``public.decision_journal`` for cross-machine queryability

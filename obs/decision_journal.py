@@ -13,7 +13,8 @@ fragmented. This module unifies them.
 
 Design
 ------
-* Single newline-delimited JSON file (``docs/decision_journal.jsonl``).
+* Single newline-delimited JSON file under canonical runtime state
+  (``var/eta_engine/state/decision_journal.jsonl``).
 * Append-only: every write is an atomic ``open(mode='a')``.
 * Every row is a ``JournalEvent`` with a stable schema + free-form
   ``metadata`` dict for actor-specific fields.
@@ -27,7 +28,7 @@ Public API
   * ``Outcome`` StrEnum (EXECUTED, BLOCKED, OVERRIDDEN, FAILED, NOTED)
   * ``JournalEvent`` pydantic model
   * ``DecisionJournal`` -- append/read wrapper over a Path
-  * ``default_journal()`` -- singleton tied to docs/decision_journal.jsonl
+  * ``default_journal()`` -- singleton tied to canonical runtime state
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_DECISION_JOURNAL_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -246,12 +249,14 @@ class DecisionJournal:
 # Default singleton
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[1] / "docs" / "decision_journal.jsonl"
+LEGACY_DOCS_DECISION_JOURNAL_PATH = Path(__file__).resolve().parents[1] / "docs" / "decision_journal.jsonl"
+DEFAULT_DECISION_JOURNAL_PATH = ETA_RUNTIME_DECISION_JOURNAL_PATH
+_DEFAULT_PATH = DEFAULT_DECISION_JOURNAL_PATH
 _default: DecisionJournal | None = None
 
 
 def default_journal() -> DecisionJournal:
-    """Process-wide singleton bound to docs/decision_journal.jsonl."""
+    """Process-wide singleton bound to canonical runtime state."""
     global _default  # noqa: PLW0603
     if _default is None:
         _default = DecisionJournal(_DEFAULT_PATH)

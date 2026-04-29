@@ -22,8 +22,9 @@ documented per-module under their `[REAL]` / `[CONTRACT]` / `[STUB]` status tags
 Frozen baselines live under `eta_v3_framework/v1_locked/` with SHA-256 manifest
 gating to prevent silent edits to reproducibility-critical code.
 
-Audit-trail mirror to a Supabase `decision_journal` (append-only). Local JSONL
-fallback if the mirror is unreachable.
+Audit-trail mirror to a Supabase `decision_journal` (append-only). The local
+JSONL source of truth lives under `var/eta_engine/state/decision_journal.jsonl`
+if the mirror is unreachable.
 
 ## Internal codename note
 

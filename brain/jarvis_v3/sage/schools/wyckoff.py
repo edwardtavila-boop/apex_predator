@@ -48,9 +48,11 @@ class WyckoffSchool(SchoolBase):
         closes = ctx.closes()
         volumes = ctx.volumes()
 
-        # Range over last 20 bars
-        range_high = max(highs[-20:])
-        range_low = min(lows[-20:])
+        # Range over the prior 20 bars. Excluding the active bar is essential:
+        # otherwise a new spring/upthrust wick becomes the range edge and can
+        # never pierce it.
+        range_high = max(highs[-21:-1])
+        range_low = min(lows[-21:-1])
         last = bars[-1]
         last_close = float(last["close"])
         last_low = float(last["low"])

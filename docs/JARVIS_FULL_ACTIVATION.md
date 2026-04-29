@@ -116,6 +116,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
   `var/eta_engine/state/operator_queue_snapshot.previous.json` and embeds a
   `drift` block comparing blocker count, top OP id, status, and first action,
   so heartbeat reports can distinguish unchanged blockers from new drift.
+- `scripts/operator_queue_heartbeat.py --changed-only` wraps the canonical
+  snapshot writer with a quiet-by-default notification payload, letting
+  10-minute automation emit operator-queue alerts only when drift actually
+  changes.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

@@ -125,6 +125,7 @@ def test_windows_deploy_defaults_drop_legacy_install_and_localappdata_paths() ->
 def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     targets = (
         "eta_engine/scripts/drift_watchdog_smoke.py",
+        "eta_engine/scripts/operator_queue_heartbeat.py",
         "eta_engine/scripts/operator_queue_snapshot.py",
         "eta_engine/scripts/runtime_log_smoke.py",
         "eta_engine/scripts/vps_failover_summary.py",
@@ -151,6 +152,9 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     )
     assert "workspace_roots.ETA_OPERATOR_QUEUE_PREVIOUS_SNAPSHOT_PATH" in _read(
         "eta_engine/scripts/operator_queue_snapshot.py"
+    )
+    assert "workspace_roots.ETA_OPERATOR_QUEUE_SNAPSHOT_PATH" in _read(
+        "eta_engine/scripts/operator_queue_heartbeat.py"
     )
     assert "workspace_roots.ETA_RUNTIME_STATE_DIR" in _read(
         "eta_engine/obs/heartbeat_writer.py"

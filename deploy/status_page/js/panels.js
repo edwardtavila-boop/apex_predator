@@ -5,6 +5,13 @@
 const STALE_AFTER_MS = 30_000;
 let PANEL_SEQ = 0;
 
+function shouldDeferHiddenRefresh(panel) {
+  if (!document.hidden) return false;
+  if (!panel.lastRefreshAt) return false;
+  panel.updateRefreshLabel();
+  return true;
+}
+
 function panelIcon(containerId) {
   const id = String(containerId || '');
   if (id.includes('verdict')) return '◉';
@@ -94,6 +101,7 @@ export class Panel {
   /** Called by Poller. Fetches + renders + handles errors. */
   async refresh() {
     if (!this.element) return;
+    if (shouldDeferHiddenRefresh(this)) return;
     const startedAt = Date.now();
     this._requestSeq = (this._requestSeq || 0) + 1;
     const requestSeq = this._requestSeq;
@@ -226,6 +234,14 @@ export function initTabs() {
   window.addEventListener('resize', () => moveIndicator(
     Array.from(tabBtns).find((b) => b.getAttribute('aria-selected') === 'true') || tabBtns[0],
   ));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    const active = Array.from(tabBtns).find((b) => b.getAttribute('aria-selected') === 'true') || tabBtns[0];
+    moveIndicator(active);
+    window.dispatchEvent(new CustomEvent('eta-dashboard-visible', {
+      detail: { at: Date.now() },
+    }));
+  });
 
   const compactBtn = document.getElementById('top-compact-toggle');
   const compactKey = 'eta.command_center.compact_mode';

@@ -155,6 +155,11 @@ class TestStatusPage:
         assert "viewport-fit=cover" in html
         assert 'data-command-center-shell="eta-live-status-page"' in html
         assert 'data-mobile-dashboard="adaptive"' in html
+        assert 'data-dashboard-version="v1"' in html
+        assert 'data-release-stage="pre_beta"' in html
+        assert "ETA // V1 Command Center" in html
+        assert "Pre-Beta V1" in html
+        assert "Live data contract: bot fleet, equity, auth, freshness" in html
         assert 'aria-label="Primary dashboard tabs"' in html
         assert 'class="skip-link"' in html
         assert 'class="modal-card' in html
@@ -194,6 +199,8 @@ class TestStatusPage:
         assert "server_ts" in bot_fleet
         assert "source_age_s" in bot_fleet
         assert "source_updated_at" in bot_fleet
+        assert "dashboard_version" in bot_fleet
+        assert "release_stage" in bot_fleet
         assert "document.hidden" in panels
         assert "cache: 'no-store'" in auth
 

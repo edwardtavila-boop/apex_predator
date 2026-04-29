@@ -50,6 +50,14 @@ if TYPE_CHECKING:
 
 _BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 CANONICAL_BOT_FLEET_TITLE = "Evolutionary Trading Algo // Bot Fleet Roster"
+DASHBOARD_VERSION = "v1"
+DASHBOARD_RELEASE_STAGE = "pre_beta"
+DASHBOARD_REQUIRED_DATA = (
+    "bot_fleet",
+    "fleet_equity",
+    "auth_session",
+    "source_freshness",
+)
 
 # State/log dirs: repo-relative so every deployment reads the right directory.
 # ETA_STATE_DIR / ETA_LOG_DIR are canonical; APEX_* remains as a legacy test/runtime fallback.
@@ -62,6 +70,17 @@ _DEFAULT_RUNTIME_STATE = _WORKSPACE_ROOT / "firm_command_center" / "var" / "data
 STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE))))
 LOG_DIR   = Path(os.environ.get("ETA_LOG_DIR", os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG))))
 _START_TS = time.time()
+
+
+def _dashboard_contract() -> dict:
+    """Machine-readable contract shared by V1 dashboard endpoints."""
+    return {
+        "dashboard_version": DASHBOARD_VERSION,
+        "release_stage": DASHBOARD_RELEASE_STAGE,
+        "beta_launched": False,
+        "required_data": list(DASHBOARD_REQUIRED_DATA),
+        "operator_url": "https://ops.evolutionarytradingalgo.com",
+    }
 
 
 def _state_dir() -> Path:
@@ -129,6 +148,7 @@ def _truth_snapshot(rows: list[dict], *, server_ts: float) -> dict:
 
     return {
         "title": CANONICAL_BOT_FLEET_TITLE,
+        **_dashboard_contract(),
         "legacy_dashboard_retired": True,
         "source_of_truth": str(state_dir),
         "runtime_state_path": str(_runtime_state_path()),
@@ -546,6 +566,7 @@ def health() -> dict:
     state_writable = ensure_dir_writable(state_dir)
     return {
         "status": "ok",
+        **_dashboard_contract(),
         "state_dir": str(state_dir),
         "log_dir": str(log_dir),
         "state_dir_exists": state_dir.exists(),
@@ -1461,16 +1482,31 @@ def equity_curve(
     else:
         summary = data.get("summary") or _compute_pnl_summary(data)
 
+    server_ts = time.time()
+    source_age_s = (
+        max(0, int(server_ts - source_mtime))
+        if source_mtime is not None
+        else None
+    )
+    source_updated_at = (
+        datetime.fromtimestamp(source_mtime, UTC).isoformat()
+        if source_mtime is not None
+        else None
+    )
     # Preserve legacy keys (today/thirty_day) for backwards-compat with old test
     out = {
         "bot_id": bot,
         "range": range,
+        **_dashboard_contract(),
         "series": series,
         "curve": series,
         "summary": summary,
         "baseline_equity": baseline,
-        "server_ts": time.time(),
+        "server_ts": server_ts,
         "data_ts": source_mtime,
+        "data_age_s": source_age_s,
+        "source_updated_at": source_updated_at,
+        "source_age_s": source_age_s,
         "source": series_source,
         "since_days": since_days,
         "live": _fills_activity_snapshot(bot=bot),

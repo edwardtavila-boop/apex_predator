@@ -6,24 +6,27 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Evolutionary Trading Algo | Live Dashboard</title>
+  <title>Evolutionary Trading Algo | V1 Command Center</title>
+  <meta name="description" content="Pre-beta V1 operator dashboard for live ETA bot fleet, equity, auth, and freshness truth." />
   <meta name="theme-color" content="#020406" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/theme.css?v=20260428e" />
+  <link rel="stylesheet" href="/theme.css?v=20260429v1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col antialiased"
       data-command-center-shell="eta-live-status-page"
-      data-mobile-dashboard="adaptive">
+      data-mobile-dashboard="adaptive"
+      data-dashboard-version="v1"
+      data-release-stage="pre_beta">
   <a class="skip-link" href="#command-center-main">Skip to Command Center</a>
 
   <!-- Login modal (hidden by default; shown by auth.js when unauthenticated) -->
   <div id="login-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur hidden items-center justify-center">
     <form id="login-form" class="modal-card bg-zinc-900 border border-zinc-700 rounded p-6 w-96 space-y-3">
-      <h2 class="text-lg font-semibold">ETA Live Dashboard</h2>
+      <h2 class="text-lg font-semibold">ETA V1 Command Center</h2>
       <p class="text-xs text-zinc-400">Secure operator access for ops.evolutionarytradingalgo.com.</p>
       <input id="login-username" type="text" placeholder="username"
              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2" autocomplete="username" />
@@ -53,7 +56,9 @@
 
   <!-- Top bar -->
   <header id="top-bar" class="border-b border-zinc-800 px-4 py-2 flex flex-wrap items-center gap-3 text-sm">
-    <div class="font-bold tracking-[0.24em] text-cyan-300 uppercase">ETA // Live Dashboard</div>
+    <div class="font-bold tracking-[0.24em] text-cyan-300 uppercase">ETA // V1 Command Center</div>
+    <div id="top-dashboard-version" class="dashboard-v1-chip" title="Pre-beta V1 dashboard contract">Pre-Beta V1</div>
+    <div id="top-dashboard-contract" class="dashboard-contract-chip">Live data contract: bot fleet, equity, auth, freshness</div>
     <div id="top-kill-switch" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500"></span><span>kill</span></div>
     <div id="top-v22-toggle" class="flex items-center gap-1"></div>
     <div id="top-stress" class="flex items-center gap-1"></div>
@@ -166,12 +171,12 @@
   <div id="update-audit-strip" class="hidden lg:flex"></div>
 
   <!-- JS modules (load order matters) -->
-  <script type="module" src="/js/panels.js?v=20260428e"></script>
-  <script type="module" src="/js/auth.js?v=20260428e"></script>
-  <script type="module" src="/js/live.js?v=20260428e"></script>
-  <script type="module" src="/js/supercharge.js?v=20260428e"></script>
-  <script type="module" src="/js/command_center.js?v=20260428e"></script>
-  <script type="module" src="/js/bot_fleet.js?v=20260428e"></script>
+  <script type="module" src="/js/panels.js?v=20260429v1"></script>
+  <script type="module" src="/js/auth.js?v=20260429v1"></script>
+  <script type="module" src="/js/live.js?v=20260429v1"></script>
+  <script type="module" src="/js/supercharge.js?v=20260429v1"></script>
+  <script type="module" src="/js/command_center.js?v=20260429v1"></script>
+  <script type="module" src="/js/bot_fleet.js?v=20260429v1"></script>
   <script type="module">
     import { initTabs } from '/js/panels.js';
     initTabs();

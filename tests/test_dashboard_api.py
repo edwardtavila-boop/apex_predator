@@ -89,6 +89,15 @@ class TestDashboardAPI:
         j = r.json()
         assert j["status"] == "ok"
         assert j["state_dir_exists"]
+        assert j["dashboard_version"] == "v1"
+        assert j["release_stage"] == "pre_beta"
+        assert j["beta_launched"] is False
+        assert set(j["required_data"]) == {
+            "bot_fleet",
+            "fleet_equity",
+            "auth_session",
+            "source_freshness",
+        }
 
     def test_heartbeat(self, app_client):
         r = app_client.get("/api/heartbeat")
@@ -778,6 +787,15 @@ class TestDashboardAPI:
         assert mnq["tier"] == "orb"
 
         assert data["confirmed_bots"] == 2
+        assert data["dashboard_version"] == "v1"
+        assert data["release_stage"] == "pre_beta"
+        assert data["beta_launched"] is False
+        assert set(data["required_data"]) == {
+            "bot_fleet",
+            "fleet_equity",
+            "auth_session",
+            "source_freshness",
+        }
 
     def test_fleet_equity_uses_supervisor_when_curves_are_missing(self, app_client):
         """Fleet equity stays live from supervisor heartbeat when curve files are absent."""
@@ -828,6 +846,15 @@ class TestDashboardAPI:
         assert data["pnl"] == 1.5
         assert data["source_updated_at"] == now
         assert data["source_heartbeat_count"] == 2
+        assert data["dashboard_version"] == "v1"
+        assert data["release_stage"] == "pre_beta"
+        assert data["beta_launched"] is False
+        assert set(data["required_data"]) == {
+            "bot_fleet",
+            "fleet_equity",
+            "auth_session",
+            "source_freshness",
+        }
         assert data["source_age_s"] <= 5
         assert data["data_ts"] <= data["server_ts"]
         assert data["data_ts"] > data["server_ts"] - 5

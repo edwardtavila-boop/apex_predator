@@ -89,8 +89,9 @@ class RosterPanel extends Panel {
     const live = data.live || {};
     const dataAge = data.data_age_s ?? data.fleet_age_s ?? live.last_fill_age_s ?? null;
     const quality = data.stale_payload_alert ? 'stale' : data.truth_status || 'live';
+    const version = [data.dashboard_version, data.release_stage].filter(Boolean).join(' ');
     const liveLine = `server ${srvTs} | fills 1h ${live.fills_1h ?? 0} | fills 24h ${live.fills_24h ?? 0} | last fill ${formatTime(live.last_fill_ts)}`;
-    this.body.innerHTML = `<div class="dashboard-freshness-line text-[10px] text-zinc-500 mb-1" data-quality="${escapeHtml(String(quality))}">live roster | ${escapeHtml(liveLine)} | age ${dataAge ?? 'n/a'}s | confirmed ${Number(data.confirmed_bots || 0)} | window yesterday-&gt;now</div><table class="mobile-card-table w-full text-xs"><thead class="text-zinc-500">
+    this.body.innerHTML = `<div class="dashboard-freshness-line text-[10px] text-zinc-500 mb-1" data-quality="${escapeHtml(String(quality))}">${escapeHtml(version || 'v1 pre_beta')} | live roster | ${escapeHtml(liveLine)} | age ${dataAge ?? 'n/a'}s | confirmed ${Number(data.confirmed_bots || 0)} | window yesterday-&gt;now</div><table class="mobile-card-table w-full text-xs"><thead class="text-zinc-500">
       <tr><th class="text-left">Bot</th><th class="text-left">Symbol</th><th class="text-left">Tier</th><th class="text-left">Venue</th><th class="text-left">Status</th><th class="text-right">Day PnL</th><th class="text-left">Last Trade</th><th class="text-left">Age</th><th class="text-right">R</th></tr>
       </thead><tbody>${bots.map(b => {
         const statusCls = b.status === 'running' ? 'text-emerald-400'
@@ -336,7 +337,8 @@ class EquityCurvePanel extends Panel {
     const t = this.element?.querySelector('.panel-title');
     if (t) {
       const srv = data.server_ts ? new Date(data.server_ts * 1000).toLocaleTimeString() : '-';
-      t.textContent = `${this.selectedBot ? `Equity - ${this.selectedBot}` : 'Fleet Equity Curve'} (${this.range.toUpperCase()}) | ${data.source || 'live'} | ${srv}`;
+      const contract = [data.dashboard_version, data.release_stage].filter(Boolean).join(' ') || 'v1 pre_beta';
+      t.textContent = `${this.selectedBot ? `Equity - ${this.selectedBot}` : 'Fleet Equity Curve'} (${this.range.toUpperCase()}) | ${contract} | ${data.source || 'live'} | ${srv}`;
     }
     const ov = this.body?.querySelector('#eq-live-overview');
     if (ov) {

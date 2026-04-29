@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from eta_engine.bots.base_bot import Fill
+    from eta_engine.strategies.retrospective import TradeOutcome
 
 
 _ENTRY_SIGNAL_TYPES: frozenset[SignalType] = frozenset(
@@ -127,8 +128,28 @@ def is_close_fill(fill: Fill) -> bool:
     return abs(float(fill.realized_pnl)) > 1e-12
 
 
+def build_trade_outcome(
+    *,
+    strategy: StrategyId,
+    regime: RegimeLabel,
+    pnl_r: float,
+    equity_after: float,
+) -> TradeOutcome:
+    """Build the strategy-layer trade outcome without importing it at module load."""
+
+    from eta_engine.strategies.retrospective import TradeOutcome
+
+    return TradeOutcome(
+        strategy=strategy,
+        regime=regime,
+        pnl_r=float(pnl_r),
+        equity_after=float(equity_after),
+    )
+
+
 __all__ = [
     "ActiveEntry",
+    "build_trade_outcome",
     "compute_risk_usd",
     "default_strategy_for_symbol",
     "is_close_fill",

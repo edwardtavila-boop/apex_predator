@@ -57,7 +57,13 @@ if TYPE_CHECKING:
 
     from eta_engine.brain.jarvis_context import JarvisContext
     from eta_engine.brain.model_policy import ModelTier, TaskCategory
+    from eta_engine.strategies.adaptive_sizing import RegimeLabel
     from eta_engine.strategies.engine_adapter import RouterAdapter
+    from eta_engine.strategies.models import StrategyId
+    from eta_engine.strategies.retrospective import RetrospectiveReport
+    from eta_engine.strategies.retrospective_wiring import (
+        RetrospectiveManager,
+    )
 
 logger = logging.getLogger(__name__)
 SEED_CONFIG = BotConfig(
@@ -130,6 +136,10 @@ class CryptoSeedBot(BaseBot):
         initial_grid_bounds: tuple[float, float] | None = None,
         strategy_adapter: RouterAdapter | None = None,
         profile: Any | None = None,  # noqa: ANN401 -- profile is a pluggable dataclass
+        retrospective_manager: RetrospectiveManager | None = None,
+        auto_wire_retrospective: bool = False,
+        retrospective_config: dict[str, Any] | None = None,
+        default_retrospective_strategy: StrategyId | None = None,
     ) -> None:
         super().__init__(config or SEED_CONFIG)
         self.grid_config = GridConfig()
@@ -141,6 +151,10 @@ class CryptoSeedBot(BaseBot):
         self._venue_symbol = venue_symbol or self.config.symbol
         self._strategy_adapter = strategy_adapter
         self._profile = profile
+        self._retrospective_manager = retrospective_manager
+        self._auto_wire_retrospective = auto_wire_retrospective
+        self._retrospective_config: dict[str, Any] = dict(retrospective_config) if retrospective_config else {}
+        self._default_retrospective_strategy = default_retrospective_strategy
         self._recent_bars: deque[StrategyBar] = deque(maxlen=128)
         self._current_bar_idx = 0
         self._loss_streak = 0
@@ -258,13 +272,27 @@ class CryptoSeedBot(BaseBot):
             )
             self.state.is_paused = True
             return
+        if self._auto_wire_retrospective and self._retrospective_manager is None:
+            from eta_engine.strategies.retrospective_wiring import (
+                RetrospectiveManager,
+            )
+
+            self._retrospective_manager = RetrospectiveManager(
+                starting_equity=self.config.starting_capital_usd,
+                **self._retrospective_config,
+            )
+            logger.info(
+                "Crypto Seed bot auto-wired RetrospectiveManager (starting_equity=$%.2f)",
+                self.config.starting_capital_usd,
+            )
         logger.info(
-            "Crypto Seed bot starting | capital=$%.2f symbol=%s grid_levels=%d router=%s jarvis=%s",
+            "Crypto Seed bot starting | capital=$%.2f symbol=%s grid_levels=%d router=%s jarvis=%s retrospective=%s",
             self.config.starting_capital_usd,
             self._venue_symbol,
             len(self.grid_state.levels),
             "yes" if self._router is not None else "no",
             "yes" if self._jarvis is not None else "no",
+            "yes" if self._retrospective_manager is not None else "no",
         )
         self._record_event(
             intent="crypto_seed_start",
@@ -1355,6 +1383,10 @@ class CryptoSeedBot(BaseBot):
             elif delta > 0.0:
                 self._loss_streak = 0
             self._refresh_runtime_throttle({})
+            if float(fill.risk_at_entry) > 0.0:
+                self.record_trade_outcome(
+                    pnl_r=delta / float(fill.risk_at_entry),
+                )
         fill_side = self._coerce_side(side) or self._coerce_side(fill.side)
         matched = False
         for order in self.grid_state.active_orders:
@@ -1381,6 +1413,43 @@ class CryptoSeedBot(BaseBot):
                     self.grid_state.filled_sells += 1
                 break
         return matched
+
+    @property
+    def retrospective_manager(self) -> RetrospectiveManager | None:
+        """Return the optional retrospective manager used by dashboards/tests."""
+
+        return self._retrospective_manager
+
+    def record_trade_outcome(
+        self,
+        *,
+        pnl_r: float,
+        strategy: StrategyId | None = None,
+        regime: RegimeLabel | None = None,
+    ) -> RetrospectiveReport | None:
+        """Feed a closed grid/overlay trade into the retrospective manager."""
+
+        if self._retrospective_manager is None:
+            return None
+        from eta_engine.bots.retrospective_adapter import (
+            build_trade_outcome,
+            default_strategy_for_symbol,
+        )
+        from eta_engine.strategies.adaptive_sizing import RegimeLabel
+
+        strat = strategy or self._default_retrospective_strategy or default_strategy_for_symbol(self.config.symbol)
+        reg = regime or RegimeLabel.TRANSITION
+        outcome = build_trade_outcome(
+            strategy=strat,
+            regime=reg,
+            pnl_r=pnl_r,
+            equity_after=self.state.equity,
+        )
+        try:
+            return self._retrospective_manager.record_trade(outcome)
+        except Exception as e:  # noqa: BLE001 - never crash the fill loop
+            logger.warning("Crypto Seed retrospective record_trade failed: %s", e)
+            return None
 
     # ── Decision Logic ──
 

@@ -98,6 +98,16 @@ sentiment feeds: `btc_hybrid` and `eth_perp` resolve symbol-specific
 `BTC/1h` and `ETH/1h` sentiment to the canonical `FEAR_GREEDMACRO/D`
 Fear & Greed proxy.
 
+Strategy readiness is now exposed as a separate framework-native matrix via
+`python -m eta_engine.scripts.bot_strategy_readiness --json`. It joins the
+per-bot registry, frozen baseline status, and data audit so JARVIS can see
+which bots are `paper_soak`, `live_preflight`, `shadow_only`, `research`,
+`non_edge`, `blocked_data`, or `deactivated` without scraping prose. On the
+2026-04-29 default data library, the launch lanes are: 6 `live_preflight`,
+4 `paper_soak`, 4 `shadow_only`, 3 `research`, 1 `non_edge`, 1 `deactivated`,
+and 0 `blocked_data`. The matrix deliberately keeps `can_live_trade=false`
+until the separate per-bot promotion preflight and broker smoke checks run.
+
 The launch gate now also checks every critical `DataRequirement` behind
 each bot, not just the primary strategy dataset. Missing critical support
 feeds block paper-live launch, stale critical support feeds warn, and fresh

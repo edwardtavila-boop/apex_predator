@@ -123,6 +123,18 @@ After the inventory republish, inspect
 Proxy rows are advisory quality caveats, synthetic rows are canonical support
 feeds, and any non-zero `unknown` count should be resolved before broker smoke.
 
+Then inspect the strategy/data readiness matrix:
+
+```bash
+python -m eta_engine.scripts.bot_strategy_readiness --json
+```
+
+This merges the per-bot strategy registry, frozen baselines, and data audit
+into launch lanes such as `paper_soak`, `live_preflight`, `shadow_only`,
+`research`, `non_edge`, and `blocked_data`. Treat `live_preflight` as permission
+to run the separate per-bot promotion preflight and broker smoke checks, not as
+permission to route live capital by itself.
+
 ---
 
 ## Phase 2 — Venue smoke test (≈5 min, paper account preferred)

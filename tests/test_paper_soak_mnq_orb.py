@@ -104,7 +104,7 @@ def test_registry_check_passes_for_mnq_futures() -> None:
     ok, msg, extras = _registry_check()
     assert ok, msg
     assert extras["bot_id"] == "mnq_futures"
-    assert extras["strategy_id"] == "mnq_orb_v1"
+    assert extras["strategy_id"] == "mnq_orb_v2"
     assert "baseline" in extras
 
 
@@ -195,7 +195,7 @@ def test_build_plan_zero_sessions_exits_3() -> None:
 
 def test_soak_plan_to_dict_roundtrip_keys() -> None:
     p = SoakPlan(
-        bot_id="mnq_futures", strategy_id="mnq_orb_v1",
+        bot_id="mnq_futures", strategy_id="mnq_orb_v2",
         symbol="MNQ1", timeframe="5m",
         start_date=date(2026, 4, 27), end_date=date(2026, 5, 8),
         rth_session_dates=[date(2026, 4, 27)],

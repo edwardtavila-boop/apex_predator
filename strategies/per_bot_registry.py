@@ -157,7 +157,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
     # MNQ futures — micro E-mini Nasdaq, ORB baseline
     StrategyAssignment(
         bot_id="mnq_futures",
-        strategy_id="mnq_orb_v1",
+        strategy_id="mnq_orb_v2",
         symbol="MNQ1",
         timeframe="5m",
         scorer_name="mnq",  # unused when strategy_kind=orb but kept for sync
@@ -182,10 +182,34 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "clear, rule-based strategy: range high/low of first "
             "15 min after 9:30 ET, breakout entry with EMA-200 "
             "bias filter, ATR-based stop, 2R target, max 1 trade "
-            "per session, no entries after 11:00 ET. See "
+            "per session, no entries after 11:00 ET. Latest-slice "
+            "retune on 2026-04-29 over the canonical imported "
+            "20k most recent bars improved agg OOS Sharpe from "
+            "-1.43 to +1.79 with range=5m, rr=3.0, atr=1.5, "
+            "EMA=50; DSR pass remained 50%, so this is a "
+            "paper/research upgrade rather than a final live "
+            "promotion. See "
             "strategies/orb_strategy.py."
         ),
         extras={
+            "promotion_status": "research_candidate",
+            "orb_config": {
+                "range_minutes": 5,
+                "rr_target": 3.0,
+                "atr_stop_mult": 1.5,
+                "ema_bias_period": 50,
+            },
+            "research_tune": {
+                "retuned_on": "2026-04-29",
+                "scope": "latest_20k_bar_research_candidate",
+                "source_artifact": (
+                    "var/eta_engine/state/research_grid/"
+                    "orb_sweep_MNQ1_5m_20260429_155144.md"
+                ),
+                "previous_agg_oos_sharpe": -1.429,
+                "candidate_agg_oos_sharpe": 1.788,
+                "strict_gate": False,
+            },
             # Standardized promotion safeguards (added 2026-04-27 to
             # match the BTC/ETH/NQ-DRB rows). Half-size for first 30d
             # post-promotion; daily loss capped at 4% of equity.
@@ -722,7 +746,6 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "range_minutes": 120,
                 "atr_stop_mult": 3.0,
                 "rr_target": 1.5,
-                "session_cutoff_hour_utc": 18,
             },
             "daily_loss_limit_pct": 4.0,
             # Half-size first 30 days post-promotion (re-promotion 2026-04-27).
@@ -774,7 +797,6 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "range_minutes": 60,
                 "atr_stop_mult": 3.0,
                 "rr_target": 2.0,
-                "session_cutoff_hour_utc": 18,
             },
             "fleet_corr_partner": "btc_hybrid",
             "daily_loss_limit_pct": 4.0,
@@ -870,7 +892,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
     # SOL perp — same crypto_orb baseline; SOL is research candidate
     StrategyAssignment(
         bot_id="sol_perp",
-        strategy_id="sol_corb_v1",
+        strategy_id="sol_corb_v2",
         symbol="SOL",
         timeframe="1h",
         scorer_name="btc",  # unused when strategy_kind=crypto_orb
@@ -890,17 +912,34 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "trade x 1/day (tighter than BTC/ETH) because SOL "
             "beta to BTC is ~2.5 — risk sage flagged that 4 perps "
             "all firing daily breach the 4pct fleet circuit "
-            "breaker. atr_stop_mult bumped to 3.0 in extras to "
-            "account for 3-5bp SOL spread + slippage."
+            "breaker. Latest-slice retune on 2026-04-29 moved SOL "
+            "from the v1 config's agg OOS Sharpe -4.76 to +1.32 "
+            "with range=240m, atr=1.5, rr=2.0. DSR pass remains "
+            "42.9pct and degradation remains above the gate, so "
+            "this is a research/paper upgrade, not a live champion."
         ),
         extras={
+            "promotion_status": "research_candidate",
             "alt_strategy_kind": "confluence", "alt_threshold": 6.5,
             "crypto_orb_config": {
-                "range_minutes": 240, "session_cutoff_hour_utc": 18,
-                "max_trades_per_day": 1, "atr_stop_mult": 3.0,
+                "range_minutes": 240,
+                "max_trades_per_day": 1,
+                "atr_stop_mult": 1.5,
+                "rr_target": 2.0,
             },
             "fleet_corr_partner": "btc_hybrid",
             "research_candidate": True,
+            "research_tune": {
+                "retuned_on": "2026-04-29",
+                "scope": "latest_20k_bar_research_candidate",
+                "source_artifact": (
+                    "var/eta_engine/state/research_grid/"
+                    "sol_crypto_orb_sweep_20260429T160219Z.md"
+                ),
+                "previous_agg_oos_sharpe": -4.761,
+                "candidate_agg_oos_sharpe": 1.317,
+                "strict_gate": False,
+            },
             # Devils-advocate 2026-04-27: half-size for first 30 days.
             # SOL is the most fragile perp pick (worst IS Sharpe under
             # confluence) so the warm-up matters most here.

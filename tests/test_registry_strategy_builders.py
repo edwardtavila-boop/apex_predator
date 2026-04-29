@@ -18,7 +18,7 @@ from eta_engine.strategies.crypto_regime_trend_strategy import (
 from eta_engine.strategies.generic_sage_daily_gate import (
     GenericSageDailyGateStrategy,
 )
-from eta_engine.strategies.orb_strategy import ORBConfig
+from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy
 from eta_engine.strategies.per_bot_registry import get_for_bot
 from eta_engine.strategies.sage_daily_gated_strategy import SageDailyGatedStrategy
 from eta_engine.strategies.sage_gated_orb_strategy import SageGatedORBStrategy
@@ -65,6 +65,28 @@ def test_orb_sage_gated_builder_honors_futures_profile() -> None:
     assert strategy.cfg.orb.range_minutes == 15
     assert strategy.cfg.sage.min_conviction == 0.65
     assert strategy.cfg.sage.instrument_class == "futures"
+
+
+def test_plain_orb_builder_honors_nested_registry_config() -> None:
+    factory = _build_strategy_factory(
+        "orb",
+        {
+            "orb_config": {
+                "range_minutes": 5,
+                "rr_target": 3.0,
+                "atr_stop_mult": 1.5,
+                "ema_bias_period": 50,
+            },
+        },
+    )
+
+    strategy = factory()
+
+    assert isinstance(strategy, ORBStrategy)
+    assert strategy.cfg.range_minutes == 5
+    assert strategy.cfg.rr_target == 3.0
+    assert strategy.cfg.atr_stop_mult == 1.5
+    assert strategy.cfg.ema_bias_period == 50
 
 
 def test_crypto_regime_trend_builder_honors_unprefixed_registry_fields() -> None:
@@ -161,6 +183,35 @@ def test_btc_sage_daily_registry_assignment_pins_champion_base_config() -> None:
     assert strategy.cfg.base.filters.require_etf_flow_alignment is True
     assert strategy.cfg.min_daily_conviction == 0.50
     assert strategy.cfg.strict_mode is False
+
+
+def test_mnq_registry_assignment_pins_latest_slice_orb_config() -> None:
+    assignment = get_for_bot("mnq_futures")
+    assert assignment is not None
+
+    strategy = _build_strategy_factory(assignment.strategy_kind, assignment.extras)()
+
+    assert assignment.strategy_id == "mnq_orb_v2"
+    assert isinstance(strategy, ORBStrategy)
+    assert strategy.cfg.range_minutes == 5
+    assert strategy.cfg.rr_target == 3.0
+    assert strategy.cfg.atr_stop_mult == 1.5
+    assert strategy.cfg.ema_bias_period == 50
+    assert assignment.extras["research_tune"]["strict_gate"] is False
+
+
+def test_sol_registry_assignment_pins_latest_slice_crypto_orb_config() -> None:
+    assignment = get_for_bot("sol_perp")
+    assert assignment is not None
+
+    strategy = _build_strategy_factory(assignment.strategy_kind, assignment.extras)()
+
+    assert assignment.strategy_id == "sol_corb_v2"
+    assert isinstance(strategy.cfg, CryptoORBConfig)
+    assert strategy.cfg.range_minutes == 240
+    assert strategy.cfg.atr_stop_mult == 1.5
+    assert strategy.cfg.rr_target == 2.0
+    assert assignment.extras["research_tune"]["strict_gate"] is False
 
 
 def test_btc_ensemble_registry_extras_rebuild_all_tuned_voters() -> None:

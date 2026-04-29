@@ -1,8 +1,8 @@
 """
 EVOLUTIONARY TRADING ALGO  //  scripts.paper_soak_mnq_orb
 ==========================================================
-Pre-flight + run-config emitter for a 2-week IBKR paper-soak of
-``mnq_orb_v1`` (the promoted ORB baseline for MNQ).
+Pre-flight + run-config emitter for a 2-week IBKR paper-soak of the
+registry-pinned MNQ ORB baseline.
 
 What this script DOES
 ---------------------
@@ -24,11 +24,9 @@ What this script EXPLICITLY DOES NOT do
 * It does not start a live runner. The live MNQ supervisor lives
   in ``mnq_live_supervisor.py``; this is the prep step that the
   supervisor's launch checklist gates on.
-* It does not sweep parameters. The promoted ORB config is
-  intentionally frozen at:
-      range_minutes=15, rr_target=2.0, atr_stop_mult=2.0,
-      ema_bias_period=200, max_entry=11:00 ET, EOD flatten 15:55 ET.
-  Any change is a code-reviewed registry update, not a flag.
+* It does not sweep parameters. The ORB config is intentionally read
+  from ``strategies.per_bot_registry``. Any change is a code-reviewed
+  registry update, not a CLI flag.
 
 Usage
 -----
@@ -367,7 +365,7 @@ def write_plan(plan: SoakPlan) -> Path:
 
 
 def _render_checklist(plan: SoakPlan) -> str:
-    return f"""# mnq_orb_v1 paper-soak checklist
+    return f"""# {plan.strategy_id} paper-soak checklist
 
 Start: **{plan.start_date.isoformat()}**  End: **{plan.end_date.isoformat()}**
 Sessions: **{len(plan.rth_session_dates)}**

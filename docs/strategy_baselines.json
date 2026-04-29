@@ -15,6 +15,17 @@
       "_notes": "Numbers from the IS+OOS combined trade list of the 2026-04-27 sweep run. n_trades = 28+13 (window 0 IS+OOS) + ... averaged across IS/OOS. Re-baseline once live paper-soak produces 50+ real fills."
     },
     {
+      "strategy_id": "mnq_orb_v2",
+      "n_trades": 50,
+      "win_rate": 0.2,
+      "avg_r": -0.2593,
+      "r_stddev": 1.5495,
+      "_promoted_at": "2026-04-29",
+      "_promotion_status": "research_candidate",
+      "_walk_forward_summary": "MNQ1/5m latest 20k imported bars, 60d/30d windows, 1/2 positive OOS, agg OOS Sharpe +1.788, DSR median 0.651, 50% pass fraction. Latest-slice retune: range=5m, rr=3.0, atr_stop=1.5, ema=50. Strict gate remains FAIL because pass fraction is exactly 50% and the second OOS fold only fired one trade.",
+      "_notes": "Research/paper baseline only, not final live promotion. Persisted so paper-live drift checks and launch readiness can compare the retuned assignment honestly. Full latest-20k combined backtest: 50 trades, 20.0% win rate, avg R -0.2593, max DD 18.306%, total return -12.6815%; the improvement is OOS-slice relative to the prior latest-slice smoke, not a complete production promotion."
+    },
+    {
       "strategy_id": "nq_orb_v1",
       "n_trades": 41,
       "win_rate": 0.488,
@@ -174,6 +185,17 @@
       "_promoted_at": "2026-04-27",
       "_walk_forward_summary": "SOL/1h, 90d/30d windows, 9 windows. crypto_orb tuned for SOL volatility (range=120m, ATR=3.5, RR=2.5). Agg OOS Sharpe +2.34, 7/9 +OOS, 78pct DSR pass, 104 OOS trades. Strict gate FAIL on deg_avg.",
       "_notes": "SOL is materially more volatile than BTC/ETH; baseline ATR-stop and RR are widened accordingly. n_trades = sum IS+OOS across 9 windows (~104). Re-baseline once SOL ETF or sentiment data wires."
+    },
+    {
+      "strategy_id": "sol_corb_v2",
+      "n_trades": 116,
+      "win_rate": 0.3534,
+      "avg_r": 0.0603,
+      "r_stddev": 1.4403,
+      "_promoted_at": "2026-04-29",
+      "_promotion_status": "research_candidate",
+      "_walk_forward_summary": "SOL/1h latest 20k imported bars, 90d/30d windows, 11/21 positive OOS, agg OOS Sharpe +1.317, DSR median 0.027, 42.9% pass fraction, degradation 39.0%. Latest-slice retune: range=240m, atr_stop=1.5, rr=2.0, max 1 trade/day. Strict gate remains FAIL, but this replaces the v1 latest-slice result of agg OOS Sharpe -4.761.",
+      "_notes": "Research/paper baseline only, not final live promotion. Persisted so drift checks and launch readiness compare the retuned SOL assignment honestly. Full latest-20k combined backtest: 116 trades, 35.34% win rate, avg R +0.0603, max DD 10.7594%, total return +5.9853%."
     },
     {
       "strategy_id": "crypto_seed_dca",

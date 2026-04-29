@@ -173,6 +173,65 @@ def _critical_freshness_payload(
     }
 
 
+def _optional_freshness_payload(
+    audit: BotAudit,
+    *,
+    generated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Compact per-bot advisory rollup for optional data freshness."""
+    counts = {"fresh": 0, "warm": 0, "stale": 0, "missing": len(audit.missing_optional)}
+    stale: list[dict[str, Any]] = []
+    warm: list[dict[str, Any]] = []
+
+    if audit.deactivated:
+        return {
+            "status": "deactivated",
+            "total_optional": 0,
+            "available_optional": 0,
+            "missing_optional": 0,
+            "counts": {"fresh": 0, "warm": 0, "stale": 0, "missing": 0},
+            "stale": [],
+            "warm": [],
+        }
+
+    for req, dataset in audit.available:
+        if req.critical:
+            continue
+        item = {
+            "requirement": _requirement_payload(req),
+            "dataset": _dataset_payload(dataset, generated_at=generated_at),
+        }
+        freshness = item["dataset"].get("freshness", {})
+        status = freshness.get("status")
+        if status in {"fresh", "warm", "stale"}:
+            counts[status] += 1
+        if status == "stale":
+            stale.append(item)
+        elif status == "warm":
+            warm.append(item)
+
+    if counts["stale"]:
+        status = "stale"
+    elif counts["warm"]:
+        status = "warm"
+    elif counts["missing"]:
+        status = "missing"
+    elif counts["fresh"]:
+        status = "fresh"
+    else:
+        status = "none"
+
+    return {
+        "status": status,
+        "total_optional": sum(counts.values()),
+        "available_optional": counts["fresh"] + counts["warm"] + counts["stale"],
+        "missing_optional": counts["missing"],
+        "counts": counts,
+        "stale": stale,
+        "warm": warm,
+    }
+
+
 def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> dict[str, Any]:
     return {
         "bot_id": audit.bot_id,
@@ -180,6 +239,7 @@ def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> 
         "deactivated": audit.deactivated,
         "critical_coverage_pct": round(audit.critical_coverage_pct, 2),
         "critical_freshness": _critical_freshness_payload(audit, generated_at=generated_at),
+        "optional_freshness": _optional_freshness_payload(audit, generated_at=generated_at),
         "available": [
             {
                 "requirement": _requirement_payload(req),
@@ -239,6 +299,51 @@ def _freshness_summary(datasets: list[DatasetMeta], generated_at: datetime) -> d
             if item["freshness"]["status"] == "stale"
         ],
         "warm": [item for item in items if item["freshness"]["status"] == "warm"],
+    }
+
+
+def _bot_optional_freshness_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts = {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 0,
+        "missing": 0,
+        "none": 0,
+        "deactivated": 0,
+    }
+    stale_bots: list[dict[str, Any]] = []
+    warm_bots: list[dict[str, Any]] = []
+    missing_bots: list[dict[str, Any]] = []
+
+    for item in items:
+        bot_id = item["bot_id"]
+        freshness = item["optional_freshness"]
+        status = freshness["status"]
+        if status in status_counts:
+            status_counts[status] += 1
+        if freshness["counts"]["stale"]:
+            stale_bots.append({
+                "bot_id": bot_id,
+                "stale_count": freshness["counts"]["stale"],
+                "stale": freshness["stale"],
+            })
+        if freshness["counts"]["warm"]:
+            warm_bots.append({
+                "bot_id": bot_id,
+                "warm_count": freshness["counts"]["warm"],
+                "warm": freshness["warm"],
+            })
+        if freshness["counts"]["missing"]:
+            missing_bots.append({
+                "bot_id": bot_id,
+                "missing_optional": item["missing_optional"],
+            })
+
+    return {
+        "status_counts": status_counts,
+        "stale_bots": stale_bots,
+        "warm_bots": warm_bots,
+        "missing_bots": missing_bots,
     }
 
 
@@ -324,6 +429,7 @@ def build_inventory_snapshot(
             },
             "deactivated": deactivated,
             "critical_freshness": _bot_critical_freshness_summary(bot_items),
+            "optional_freshness": _bot_optional_freshness_summary(bot_items),
             "items": bot_items,
         },
     }

@@ -56,12 +56,15 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
     assert dataset is not None
 
     available_req = DataRequirement("bars", "BTC", "1h")
+    optional_req = DataRequirement("correlation", "BTC", "1h", critical=False)
     missing_req = DataRequirement("funding", "BTC", "8h")
+    missing_optional_req = DataRequirement("sentiment", "BTC", "D", critical=False)
     audits = [
         BotAudit(
             bot_id="btc_test",
-            available=[(available_req, dataset)],
+            available=[(available_req, dataset), (optional_req, dataset)],
             missing_critical=[missing_req],
+            missing_optional=[missing_optional_req],
             sources_hint=("scripts/fetch_funding_rates.py",),
         ),
         BotAudit(bot_id="xrp_perp", deactivated=True),
@@ -100,8 +103,25 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
         "deactivated": 1,
     }
     assert payload["bot_coverage"]["critical_freshness"]["blocked_bots"][0]["bot_id"] == "btc_test"
+    assert payload["bot_coverage"]["optional_freshness"]["status_counts"] == {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 1,
+        "missing": 0,
+        "none": 0,
+        "deactivated": 1,
+    }
+    assert payload["bot_coverage"]["optional_freshness"]["stale_bots"][0]["bot_id"] == "btc_test"
+    assert payload["bot_coverage"]["optional_freshness"]["missing_bots"][0]["bot_id"] == "btc_test"
     assert payload["bot_coverage"]["items"][0]["critical_freshness"]["status"] == "blocked"
     assert payload["bot_coverage"]["items"][0]["critical_freshness"]["counts"] == {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 1,
+        "missing": 1,
+    }
+    assert payload["bot_coverage"]["items"][0]["optional_freshness"]["status"] == "stale"
+    assert payload["bot_coverage"]["items"][0]["optional_freshness"]["counts"] == {
         "fresh": 0,
         "warm": 0,
         "stale": 1,

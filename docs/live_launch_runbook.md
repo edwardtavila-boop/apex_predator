@@ -101,7 +101,7 @@ python -m eta_engine.scripts.refresh_launch_data --json
 Expect `ok: true` and a full step list covering:
 
 - `MNQ`, `NQ`, and `ES` futures bars
-- `DXY` 5m context bars
+- `DXY` 5m and 1h context bars
 - `VIX` 5m and 1m context bars
 - daily NQ extension
 - inventory republish + paper-live readiness verification

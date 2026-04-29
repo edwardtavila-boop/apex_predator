@@ -19,37 +19,54 @@ It runs the safe non-Databento refresh path:
 5. `fetch_index_futures_bars --symbol NQ --timeframe 1h --period 730d`
 6. `fetch_index_futures_bars --symbol NQ --timeframe 4h --period 730d`
 7. `fetch_index_futures_bars --symbol ES --timeframe 5m`
-8. `extend_nq_daily_yahoo`
-9. `announce_data_library`
-10. `paper_live_launch_check --json`
+8. `fetch_market_context_bars --symbol DXY --timeframe 5m`
+9. `fetch_market_context_bars --symbol DXY --timeframe 1h`
+10. `fetch_market_context_bars --symbol VIX --timeframe 5m`
+11. `fetch_market_context_bars --symbol VIX --timeframe 1m`
+12. `extend_nq_daily_yahoo`
+13. `announce_data_library`
+14. `paper_live_launch_check --json`
 
 On 2026-04-29 it refreshed:
-* `MNQ1_5m.csv`: 490,103 -> 493,043 rows, ending 2026-04-29.
+* `MNQ1_5m.csv`: 490,103 -> 493,046 rows, ending 2026-04-29.
 * `MNQ1_1h.csv`: 41,007 -> 41,285 rows, ending 2026-04-29.
 * `MNQ1_4h.csv`: 11,113 -> 11,180 rows, ending 2026-04-29.
-* `NQ1_5m.csv`: 20,726 -> 23,751 rows, ending 2026-04-29.
+* `NQ1_5m.csv`: 20,726 -> 23,754 rows, ending 2026-04-29.
 * `NQ1_1h.csv`: 25,255 -> 25,539 rows, ending 2026-04-29.
 * `NQ1_4h.csv`: 20,442 -> 24,150 rows, ending 2026-04-29.
-* `ES1_5m.csv`: 491,074 -> 494,014 rows, ending 2026-04-29.
+* `ES1_5m.csv`: 491,074 -> 494,017 rows, ending 2026-04-29.
+* `DXY_5m.csv`: 1,888 -> 13,440 rows, ending 2026-04-29.
+* `DXY_1h.csv`: 0 -> 14,299 rows, ending 2026-04-29.
+* `VIX_5m.csv`: 0 -> 9,108 rows, ending 2026-04-29.
+* `VIX_1m.csv`: 0 -> 5,399 rows, ending 2026-04-29.
 * `NQ1_D.csv`: 6,775 -> 6,787 rows, ending 2026-04-29.
 
 Result after republishing the inventory: all 19 paper-live bot definitions
 returned `READY`, with `warn: []` and `block: []`. The inventory snapshot
-now reports 54 datasets, 25 fresh, 2 warm, and 27 stale; bot coverage is
+now reports 57 datasets, 29 fresh, 2 warm, and 26 stale; bot coverage is
 18 runnable, 1 deactivated, and 0 blocked. The snapshot also exposes
 dataset freshness bands so "data exists" and "data is current" are no
 longer conflated.
 
 The inventory snapshot now distinguishes raw dataset freshness from the
 canonical dataset each symbol/timeframe resolves to. Raw freshness remains
-25 fresh / 2 warm / 27 stale, while canonical freshness is 25 fresh / 1
-warm / 19 stale, with 8 stale raw feeds explicitly marked as superseded
+29 fresh / 2 warm / 26 stale, while canonical freshness is 29 fresh / 1
+warm / 16 stale, with stale raw feeds explicitly marked as superseded
 by a better canonical dataset.
 
 Bot coverage now also includes a per-bot critical-feed freshness rollup.
 After republishing the snapshot, `bot_coverage.critical_freshness` reports
 18 fresh active bots, 1 deactivated bot, and 0 warm / stale / blocked
 critical-feed bots.
+
+Bot coverage also exposes optional-feed freshness as an advisory surface.
+After the context-feed refresh, `bot_coverage.optional_freshness` reports
+13 fresh bots, 3 missing-optional bots, 2 bots with no optional feeds,
+1 deactivated bot, and 0 stale / warm optional-feed bots. Missing optional
+feeds remain advisory only and do not affect paper-live launch readiness.
+The safe public-data optional improvement this batch was `DXY/1h`, which
+now resolves for `btc_hybrid`; the remaining optional gaps are sentiment
+and SOL on-chain provider feeds.
 
 The launch gate now also checks every critical `DataRequirement` behind
 each bot, not just the primary strategy dataset. Missing critical support

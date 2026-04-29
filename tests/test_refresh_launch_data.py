@@ -21,6 +21,7 @@ def test_build_plan_refreshes_launch_data_then_republishes_and_verifies() -> Non
         "nq_4h",
         "es_5m",
         "dxy_5m",
+        "dxy_1h",
         "vix_5m",
         "vix_1m",
         "nq_daily",
@@ -35,11 +36,12 @@ def test_build_plan_refreshes_launch_data_then_republishes_and_verifies() -> Non
     assert "eta_engine.scripts.fetch_index_futures_bars --symbol NQ --timeframe 4h" in commands[5]
     assert "eta_engine.scripts.fetch_index_futures_bars --symbol ES --timeframe 5m" in commands[6]
     assert "eta_engine.scripts.fetch_market_context_bars --symbol DXY --timeframe 5m" in commands[7]
-    assert "eta_engine.scripts.fetch_market_context_bars --symbol VIX --timeframe 5m" in commands[8]
-    assert "eta_engine.scripts.fetch_market_context_bars --symbol VIX --timeframe 1m" in commands[9]
-    assert "eta_engine.scripts.extend_nq_daily_yahoo" in commands[10]
-    assert "eta_engine.scripts.announce_data_library" in commands[11]
-    assert "eta_engine.scripts.paper_live_launch_check --json" in commands[12]
+    assert "eta_engine.scripts.fetch_market_context_bars --symbol DXY --timeframe 1h" in commands[8]
+    assert "eta_engine.scripts.fetch_market_context_bars --symbol VIX --timeframe 5m" in commands[9]
+    assert "eta_engine.scripts.fetch_market_context_bars --symbol VIX --timeframe 1m" in commands[10]
+    assert "eta_engine.scripts.extend_nq_daily_yahoo" in commands[11]
+    assert "eta_engine.scripts.announce_data_library" in commands[12]
+    assert "eta_engine.scripts.paper_live_launch_check --json" in commands[13]
 
 
 def test_build_plan_can_skip_inventory_and_verify() -> None:
@@ -54,6 +56,7 @@ def test_build_plan_can_skip_inventory_and_verify() -> None:
         "nq_4h",
         "es_5m",
         "dxy_5m",
+        "dxy_1h",
         "vix_5m",
         "vix_1m",
         "nq_daily",
@@ -109,6 +112,7 @@ def test_run_plan_reports_success(monkeypatch) -> None:
         "nq_4h",
         "es_5m",
         "dxy_5m",
+        "dxy_1h",
         "vix_5m",
         "vix_1m",
         "nq_daily",
@@ -120,5 +124,5 @@ def test_live_launch_runbook_mentions_operator_refresh_entrypoint() -> None:
 
     assert "python -m eta_engine.scripts.operator_env_bootstrap --create --json" in text
     assert "python -m eta_engine.scripts.refresh_launch_data --json" in text
-    assert "DXY` 5m context bars" in text
+    assert "DXY` 5m and 1h context bars" in text
     assert "VIX` 5m and 1m context bars" in text

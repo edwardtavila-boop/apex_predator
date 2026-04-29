@@ -58,8 +58,9 @@ def test_fetch_via_yfinance_uses_context_symbol_mapping(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "yfinance", FakeYFinance)
 
     rows = mod._fetch_via_yfinance("VIX", "1m", "7d")
+    dxy_rows = mod._fetch_via_yfinance("DXY", "1h", "730d")
 
-    assert calls == [("^VIX", "7d", "1m")]
+    assert calls == [("^VIX", "7d", "1m"), ("DX-Y.NYB", "730d", "1h")]
     assert rows == [
         {
             "time": int(ts.timestamp()),
@@ -70,6 +71,7 @@ def test_fetch_via_yfinance_uses_context_symbol_mapping(monkeypatch) -> None:
             "volume": 123.0,
         }
     ]
+    assert dxy_rows == rows
 
 
 def test_merge_with_existing_keeps_unique_sorted_rows(tmp_path: Path) -> None:

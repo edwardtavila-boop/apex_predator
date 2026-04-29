@@ -45,12 +45,14 @@ _YF_SYMBOL: dict[str, str] = {
 _YF_INTERVAL_BY_TF: dict[str, str] = {
     "1m": "1m",
     "5m": "5m",
+    "1h": "1h",
     "D": "1d",
 }
 
 _YF_PERIOD_BY_TF: dict[str, str] = {
     "1m": "7d",
     "5m": "60d",
+    "1h": "730d",
     "D": "max",
 }
 

@@ -7,6 +7,7 @@ proceed if either fails. Exit codes:
   1 -> ruff failed
   2 -> pytest failed
   3 -> setup error (e.g. cannot find pytest or ruff)
+  4 -> forbidden runtime artifact staged
 
 Usage
 -----
@@ -50,6 +51,13 @@ HOOK_BODY = """#!/bin/sh
 # eta_engine pre-commit hygiene gate (auto-installed)
 exec python scripts/_pre_commit_check.py
 """
+FORBIDDEN_STAGED_PATHS = frozenset(
+    {
+        # Runtime append-only journal. The canonical live JSONL is under
+        # var/eta_engine/state; the tracked docs copy is legacy/history only.
+        "docs/decision_journal.jsonl",
+    }
+)
 
 
 def _run(cmd: list[str], *, cwd: Path) -> int:
@@ -59,8 +67,8 @@ def _run(cmd: list[str], *, cwd: Path) -> int:
     return proc.returncode
 
 
-def _staged_python_files(*, root: Path) -> list[str]:
-    """Return staged .py files (relative paths). Empty list -> nothing to lint."""
+def _staged_files(*, root: Path) -> list[str]:
+    """Return staged files (relative POSIX-style paths)."""
     out = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
         cwd=root,
@@ -70,7 +78,36 @@ def _staged_python_files(*, root: Path) -> list[str]:
     )
     if out.returncode != 0:
         return []
-    return [line for line in out.stdout.splitlines() if line.endswith(".py") and (root / line).exists()]
+    return [line.replace("\\", "/") for line in out.stdout.splitlines() if line]
+
+
+def _staged_python_files(*, root: Path) -> list[str]:
+    """Return staged .py files (relative paths). Empty list -> nothing to lint."""
+    return [line for line in _staged_files(root=root) if line.endswith(".py") and (root / line).exists()]
+
+
+def _forbidden_staged_files_from_lines(lines: list[str]) -> list[str]:
+    """Return staged paths that are runtime artifacts and must not be committed."""
+    normalized = [line.replace("\\", "/") for line in lines]
+    return [line for line in normalized if line in FORBIDDEN_STAGED_PATHS]
+
+
+def _forbidden_staged_check(*, root: Path) -> int:
+    """Block tracked runtime artifacts from slipping into source history."""
+    forbidden = _forbidden_staged_files_from_lines(_staged_files(root=root))
+    if not forbidden:
+        return 0
+    print(
+        "[pre-commit] FAIL: forbidden runtime artifact(s) staged:",
+        file=sys.stderr,
+    )
+    for path in forbidden:
+        print(f"[pre-commit]   {path}", file=sys.stderr)
+    print(
+        "[pre-commit]   leave runtime journal/state files unstaged; canonical live writes belong under var/.",
+        file=sys.stderr,
+    )
+    return 4
 
 
 def _ruff_check(*, root: Path) -> int:
@@ -147,6 +184,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.install_hook:
         return _install_hook(root=ROOT)
+
+    rc = _forbidden_staged_check(root=ROOT)
+    if rc != 0:
+        return rc
 
     print("[pre-commit] running ruff...", file=sys.stderr)
     rc = _ruff_check(root=ROOT)

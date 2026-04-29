@@ -59,6 +59,18 @@ def test_default_runtime_log_falls_back_to_legacy_snapshot(monkeypatch, tmp_path
     assert workspace_roots.default_runtime_log_path() == legacy
 
 
+def test_default_drift_watchdog_log_falls_back_to_legacy_snapshot(monkeypatch, tmp_path: Path) -> None:
+    canonical = tmp_path / "var" / "eta_engine" / "state" / "missing_drift.jsonl"
+    legacy = tmp_path / "eta_engine" / "docs" / "drift_watchdog.jsonl"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text('{"severity":"green"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(workspace_roots, "ETA_DRIFT_WATCHDOG_LOG_PATH", canonical)
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH", legacy)
+
+    assert workspace_roots.default_drift_watchdog_log_path() == legacy
+
+
 def test_backup_state_tracks_resolved_alert_log_first(monkeypatch, tmp_path: Path) -> None:
     canonical = tmp_path / "logs" / "eta_engine" / "alerts_log.jsonl"
     canonical.parent.mkdir(parents=True)
@@ -88,19 +100,39 @@ def test_repo_health_tracks_resolved_runtime_logs_first(monkeypatch, tmp_path: P
 def test_vps_failover_tracks_workspace_runtime_logs(monkeypatch, tmp_path: Path) -> None:
     alerts = tmp_path / "logs" / "eta_engine" / "alerts_log.jsonl"
     runtime = tmp_path / "logs" / "eta_engine" / "runtime_log.jsonl"
+    drift = tmp_path / "var" / "eta_engine" / "state" / "drift_watchdog.jsonl"
     alerts.parent.mkdir(parents=True)
+    drift.parent.mkdir(parents=True)
     alerts.write_text('{"event":"runtime_start"}\n', encoding="utf-8")
     runtime.write_text('{"kind":"tick"}\n', encoding="utf-8")
+    drift.write_text('{"severity":"green"}\n', encoding="utf-8")
 
     monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_ALERTS_LOG_PATH", alerts)
     monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_LOG_PATH", runtime)
+    monkeypatch.setattr(workspace_roots, "ETA_DRIFT_WATCHDOG_LOG_PATH", drift)
     monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_ALERTS_LOG_PATH", tmp_path / "legacy_alerts.jsonl")
     monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_RUNTIME_LOG_PATH", tmp_path / "legacy_runtime.jsonl")
 
     _, recommended = vps_failover_drill._state_file_paths()
     recommended_paths = [path for _, path in recommended]
+    assert drift in recommended_paths
     assert alerts in recommended_paths
     assert runtime in recommended_paths
+
+
+def test_vps_failover_requires_canonical_runtime_log_not_legacy_fallback(monkeypatch, tmp_path: Path) -> None:
+    canonical = tmp_path / "logs" / "eta_engine" / "runtime_log.jsonl"
+    legacy = tmp_path / "eta_engine" / "docs" / "runtime_log.jsonl"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text('{"kind":"legacy"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_LOG_PATH", canonical)
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_RUNTIME_LOG_PATH", legacy)
+
+    _, recommended = vps_failover_drill._state_file_paths()
+    recommended_paths = [path for _, path in recommended]
+    assert canonical in recommended_paths
+    assert legacy not in recommended_paths
 
 
 def test_vps_failover_archives_workspace_paths_relative_to_workspace() -> None:

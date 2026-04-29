@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import os
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from eta_engine.scripts import preflight_bot_promotion as mod
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import pytest
 
 
@@ -91,3 +95,20 @@ def test_check_broker_keys_missing_does_not_resurrect_tradovate(
     assert "TASTY_SESSION_TOKEN" in result.summary
     assert "TRADOVATE_USERNAME" not in result.summary
     assert result.details["dormant_brokers"] == ["Tradovate"]
+
+
+def test_drift_watchdog_recent_uses_canonical_resolver(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    log_path = tmp_path / "var" / "eta_engine" / "state" / "drift_watchdog.jsonl"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text('{"severity":"green"}\n', encoding="utf-8")
+    now = datetime.now(UTC).timestamp()
+
+    os.utime(log_path, (now, now))
+    monkeypatch.setattr(mod, "default_drift_watchdog_log_path", lambda: log_path)
+
+    result = mod._check_drift_watchdog_recent()
+
+    assert result.severity == "green"
+    assert result.details["path"].endswith("drift_watchdog.jsonl")

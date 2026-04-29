@@ -26,8 +26,10 @@ ROOT_VAR_DIR = WORKSPACE_ROOT / "var"
 ETA_RUNTIME_STATE_DIR = ROOT_VAR_DIR / "eta_engine" / "state"
 ETA_RUNTIME_LOG_DIR = ROOT_LOGS_DIR / "eta_engine"
 ETA_RUNTIME_DECISION_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "decision_journal.jsonl"
+ETA_DRIFT_WATCHDOG_LOG_PATH = ETA_RUNTIME_STATE_DIR / "drift_watchdog.jsonl"
 ETA_RUNTIME_ALERTS_LOG_PATH = ETA_RUNTIME_LOG_DIR / "alerts_log.jsonl"
 ETA_RUNTIME_LOG_PATH = ETA_RUNTIME_LOG_DIR / "runtime_log.jsonl"
+ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "drift_watchdog.jsonl"
 ETA_LEGACY_DOCS_ALERTS_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "alerts_log.jsonl"
 ETA_LEGACY_DOCS_RUNTIME_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "runtime_log.jsonl"
 
@@ -60,3 +62,10 @@ def default_runtime_log_path() -> Path:
     if ETA_RUNTIME_LOG_PATH.exists() or not ETA_LEGACY_DOCS_RUNTIME_LOG_PATH.exists():
         return ETA_RUNTIME_LOG_PATH
     return ETA_LEGACY_DOCS_RUNTIME_LOG_PATH
+
+
+def default_drift_watchdog_log_path() -> Path:
+    """Prefer canonical drift-watchdog state, with legacy docs fallback."""
+    if ETA_DRIFT_WATCHDOG_LOG_PATH.exists() or not ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH.exists():
+        return ETA_DRIFT_WATCHDOG_LOG_PATH
+    return ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH

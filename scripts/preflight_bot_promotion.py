@@ -75,12 +75,22 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import default_drift_watchdog_log_path  # noqa: E402
+
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
         pass
+
+
+def _display_path(path: Path) -> str:
+    """Return workspace-relative paths for operator messages when possible."""
+    try:
+        return path.relative_to(ROOT.parent).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _load_env_file() -> None:
@@ -321,12 +331,14 @@ def _check_warmup_policy(bot_id: str):  # type: ignore[no-untyped-def]  # noqa: 
 
 def _check_drift_watchdog_recent():  # type: ignore[no-untyped-def]  # noqa: ANN202
     """4. drift_watchdog.jsonl appended within 24h."""
-    p = ROOT / "docs" / "drift_watchdog.jsonl"
+    p = default_drift_watchdog_log_path()
+    display_path = _display_path(p)
     if not p.exists():
         return CheckResult(
             name="drift_watchdog_recent",
             severity="amber",
-            summary="drift_watchdog.jsonl missing — schedule run_drift_watchdog daily",
+            summary=f"{display_path} missing -- schedule run_drift_watchdog daily",
+            details={"path": display_path},
         )
     try:
         mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=UTC)
@@ -334,7 +346,8 @@ def _check_drift_watchdog_recent():  # type: ignore[no-untyped-def]  # noqa: ANN
         return CheckResult(
             name="drift_watchdog_recent",
             severity="amber",
-            summary=f"can't stat drift_watchdog.jsonl: {exc}",
+            summary=f"can't stat {display_path}: {exc}",
+            details={"path": display_path},
         )
     age_h = (datetime.now(UTC) - mtime).total_seconds() / 3600
     if age_h > 24:
@@ -342,14 +355,16 @@ def _check_drift_watchdog_recent():  # type: ignore[no-untyped-def]  # noqa: ANN
             name="drift_watchdog_recent",
             severity="amber",
             summary=(
-                f"drift_watchdog last ran {age_h:.0f}h ago "
-                "(threshold 24h) — schedule a daily task"
+                f"drift_watchdog last ran {age_h:.0f}h ago at {display_path} "
+                "(threshold 24h) -- schedule a daily task"
             ),
+            details={"path": display_path, "age_h": age_h},
         )
     return CheckResult(
         name="drift_watchdog_recent",
         severity="green",
-        summary=f"drift_watchdog ran {age_h:.1f}h ago",
+        summary=f"drift_watchdog ran {age_h:.1f}h ago at {display_path}",
+        details={"path": display_path, "age_h": age_h},
     )
 
 

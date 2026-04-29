@@ -17,7 +17,7 @@ What it does (locally — safe to run anytime)
    resuming trading after a host loss are present and recent:
    - ``docs/strategy_baselines.json`` (the frozen baselines)
    - ``docs/decision_journal.jsonl`` (the audit trail)
-   - ``docs/drift_watchdog.jsonl`` (drift history)
+   - ``var/eta_engine/state/drift_watchdog.jsonl`` (drift history)
    - ``logs/eta_engine/alerts_log.jsonl`` (alert history)
    - ``logs/eta_engine/runtime_log.jsonl`` (runtime history)
    - ``.env`` (broker keys — checks file exists, NEVER reads contents)
@@ -76,7 +76,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-from eta_engine.scripts.workspace_roots import default_alerts_log_path, default_runtime_log_path  # noqa: E402
+from eta_engine.scripts import workspace_roots  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -90,9 +90,7 @@ _STATE_FILES_REQUIRED: list[str] = [
     "docs/strategy_baselines.json",
     "docs/decision_journal.jsonl",
 ]
-_STATIC_STATE_FILES_RECOMMENDED: list[str] = [
-    "docs/drift_watchdog.jsonl",
-]
+_STATIC_STATE_FILES_RECOMMENDED: list[str] = []
 # .env is special — we verify presence but NEVER read contents
 _SECRETS_FILE = ".env"
 
@@ -141,8 +139,15 @@ def _state_file_paths() -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]
     recommended = [(rel, ROOT / rel) for rel in _STATIC_STATE_FILES_RECOMMENDED]
     recommended.extend(
         [
-            (_display_path(default_alerts_log_path()), default_alerts_log_path()),
-            (_display_path(default_runtime_log_path()), default_runtime_log_path()),
+            (
+                _display_path(workspace_roots.ETA_DRIFT_WATCHDOG_LOG_PATH),
+                workspace_roots.ETA_DRIFT_WATCHDOG_LOG_PATH,
+            ),
+            (
+                _display_path(workspace_roots.default_alerts_log_path()),
+                workspace_roots.default_alerts_log_path(),
+            ),
+            (_display_path(workspace_roots.ETA_RUNTIME_LOG_PATH), workspace_roots.ETA_RUNTIME_LOG_PATH),
         ]
     )
     return required, recommended
@@ -502,7 +507,11 @@ _DRILL_DAY_CHECKLIST: list[tuple[str, str]] = [
     ("T+25", "Run python -m eta_engine.scripts.preflight_bot_promotion --json."),
     ("T+27", "Read JSON; resolve any RED before proceeding (no live orders past this)."),
     ("T+30", "Start daemons: live_supervisor, drift_watchdog, jarvis_dashboard."),
-    ("T+35", "Confirm drift_watchdog appended at least one row to docs/drift_watchdog.jsonl."),
+    (
+        "T+35",
+        "Confirm drift_watchdog appended at least one row to "
+        "var/eta_engine/state/drift_watchdog.jsonl.",
+    ),
     ("T+40", "Submit one PAPER round-trip order via IBKR; verify fill recorded."),
     ("T+45", "Compare round-trip to last known-good record on old host (sanity)."),
     ("T+50", "Decision: proceed to live? If yes, flip APEX_MODE=LIVE in .env."),

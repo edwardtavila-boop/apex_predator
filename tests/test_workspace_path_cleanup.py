@@ -20,8 +20,14 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.CRYPTO_MACRO_ROOT == ROOT / "data" / "crypto" / "macro"
     assert workspace_roots.ETA_RUNTIME_STATE_DIR == ROOT / "var" / "eta_engine" / "state"
     assert workspace_roots.ETA_RUNTIME_LOG_DIR == ROOT / "logs" / "eta_engine"
+    assert workspace_roots.ETA_DRIFT_WATCHDOG_LOG_PATH == (
+        ROOT / "var" / "eta_engine" / "state" / "drift_watchdog.jsonl"
+    )
     assert workspace_roots.ETA_RUNTIME_ALERTS_LOG_PATH == ROOT / "logs" / "eta_engine" / "alerts_log.jsonl"
     assert workspace_roots.ETA_RUNTIME_LOG_PATH == ROOT / "logs" / "eta_engine" / "runtime_log.jsonl"
+    assert workspace_roots.ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH == (
+        ROOT / "eta_engine" / "docs" / "drift_watchdog.jsonl"
+    )
     assert workspace_roots.ETA_LEGACY_DOCS_ALERTS_LOG_PATH == ROOT / "eta_engine" / "docs" / "alerts_log.jsonl"
     assert workspace_roots.ETA_LEGACY_DOCS_RUNTIME_LOG_PATH == ROOT / "eta_engine" / "docs" / "runtime_log.jsonl"
 

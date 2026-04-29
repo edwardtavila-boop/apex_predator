@@ -76,6 +76,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - The VPS failover idempotent-resume check now follows the live deterministic
   order-id router and `idempotent_order_id` preflight evidence instead of
   looking for broker-order semantics in the pure JARVIS VPS admin vocabulary.
+- Drift-watchdog defaults now append to
+  `var/eta_engine/state/drift_watchdog.jsonl`, and DR checks require canonical
+  runtime/drift evidence instead of treating stale tracked-doc snapshots as
+  live failover history.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

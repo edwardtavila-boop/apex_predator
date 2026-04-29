@@ -26,7 +26,8 @@ For each strategy listed in ``docs/strategy_baselines.json`` with
 5. Loads the pinned baseline from strategy_baselines.json and
    converts the recent trades to the same shape.
 6. Calls ``obs.drift_monitor.assess_drift(recent, baseline)``.
-7. Logs each result to ``docs/drift_watchdog.jsonl`` (append-only).
+7. Logs each result to ``var/eta_engine/state/drift_watchdog.jsonl``
+   (append-only).
 8. Dispatches amber/red severity via ``obs.alert_dispatcher`` so
    the operator sees them in the alerts feed.
 
@@ -70,6 +71,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import ETA_DRIFT_WATCHDOG_LOG_PATH  # noqa: E402
+
 # Windows cp1252 console can't print Greek/math glyphs that show up in
 # assess_drift reasons. Force stdout/stderr to UTF-8 so the watchdog
 # doesn't crash mid-run on the first σ-bearing reason string.
@@ -81,7 +84,7 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 DEFAULT_BASELINES = ROOT / "docs" / "strategy_baselines.json"
-DEFAULT_LOG = ROOT / "docs" / "drift_watchdog.jsonl"
+DEFAULT_LOG = ETA_DRIFT_WATCHDOG_LOG_PATH
 
 
 def _load_baselines(path: Path) -> list[dict[str, Any]]:
@@ -226,7 +229,7 @@ def main() -> int:
     p.add_argument("--red-z", type=float, default=3.0)
     p.add_argument(
         "--log-path", type=Path, default=DEFAULT_LOG,
-        help="JSONL append target",
+        help=f"JSONL append target (default: {DEFAULT_LOG})",
     )
     p.add_argument(
         "--no-alerts", action="store_true",

@@ -236,6 +236,50 @@ class OperatorQueuePanel extends Panel {
   }
 }
 
+// --- 5c. Bot strategy readiness ---
+class BotStrategyReadinessPanel extends Panel {
+  constructor() { super('cc-bot-strategy-readiness', '/api/jarvis/bot_strategy_readiness', 'Bot Strategy Readiness'); }
+  render(data) {
+    const top = document.getElementById('top-bot-readiness');
+    const summary = data.summary || {};
+    const lanes = summary.launch_lanes || {};
+    const blockedData = Number(summary.blocked_data || lanes.blocked_data || 0);
+    const paperReady = Number(summary.can_paper_trade || 0);
+    if (top) {
+      if (data.error || data.status !== 'ready') {
+        top.setAttribute('data-readiness', 'degraded');
+        top.textContent = `bots: ${data.status || 'degraded'}`;
+      } else {
+        top.setAttribute('data-readiness', blockedData > 0 ? 'blocked' : 'ready');
+        top.textContent = `bots: ${paperReady} paper ready / ${blockedData} blocked`;
+      }
+    }
+    if (data.error) {
+      this.body.innerHTML = `<div class="text-amber-300 text-sm">Readiness snapshot degraded: ${escapeHtml(data.error)}</div>`;
+      return;
+    }
+    const actions = data.top_actions || [];
+    const laneRows = Object.entries(lanes).map(([lane, count]) =>
+      `<div><div class="text-zinc-500">${escapeHtml(lane)}</div><div class="text-cyan-300 text-lg font-mono">${count}</div></div>`,
+    ).join('');
+    const actionRows = actions.slice(0, 4).map((item) =>
+      `<li class="border-b border-zinc-800/70 pb-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-mono text-cyan-300">${escapeHtml(item.bot_id || 'bot')}</span>
+          <span class="text-zinc-400">${escapeHtml(item.launch_lane || '')}</span>
+        </div>
+        <div class="text-zinc-300">${escapeHtml(item.next_action || '')}</div>
+      </li>`,
+    ).join('');
+    this.body.innerHTML = `
+      <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+        ${laneRows || '<div class="text-zinc-500">snapshot missing</div>'}
+      </div>
+      <div class="text-xs text-zinc-500 mb-1">next actions</div>
+      <ul class="space-y-2 text-xs">${actionRows || '<li class="text-emerald-300">No readiness actions.</li>'}</ul>`;
+  }
+}
+
 // --- 6. Policy diff ---
 class PolicyDiffPanel extends Panel {
   constructor() { super('cc-policy-diff', '/api/jarvis/policy_diff', 'Bandit Policy Diff'); }
@@ -348,6 +392,7 @@ onAuthenticated(() => {
     new DisagreementHeatmapPanel(),
     new StressMoodPanel(),
     new OperatorQueuePanel(),
+    new BotStrategyReadinessPanel(),
     new PolicyDiffPanel(),
     new V22TogglePanel(),
     new EdgeLeaderboardPanel(),

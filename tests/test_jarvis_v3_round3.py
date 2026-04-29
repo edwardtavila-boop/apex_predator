@@ -9,6 +9,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -273,6 +274,117 @@ class TestStatusCli:
         assert "operator_queue" in payload
         assert "summary" in payload["operator_queue"]
         assert "top_blockers" in payload["operator_queue"]
+
+    def test_bot_strategy_readiness_summary_loads_snapshot(self, tmp_path: Path) -> None:
+        from eta_engine.scripts.jarvis_status import build_bot_strategy_readiness_summary
+
+        target = tmp_path / "bot_strategy_readiness_latest.json"
+        target.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-29T20:00:00+00:00",
+                    "source": "bot_strategy_readiness",
+                    "summary": {
+                        "total_bots": 3,
+                        "blocked_data": 1,
+                        "can_live_any": False,
+                        "can_paper_trade": 2,
+                        "launch_lanes": {"blocked_data": 1, "live_preflight": 1, "paper_soak": 1},
+                    },
+                    "rows": [
+                        {
+                            "bot_id": "btc_compression",
+                            "launch_lane": "blocked_data",
+                            "next_action": "Fetch missing critical data: bars:BTC/1h",
+                            "can_paper_trade": False,
+                            "can_live_trade": False,
+                        },
+                        {
+                            "bot_id": "nq_daily_drb",
+                            "launch_lane": "live_preflight",
+                            "next_action": "Run per-bot promotion preflight",
+                            "can_paper_trade": True,
+                            "can_live_trade": False,
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        payload = build_bot_strategy_readiness_summary(path=target, limit=2)
+
+        assert payload["status"] == "ready"
+        assert payload["generated_at"] == "2026-04-29T20:00:00+00:00"
+        assert payload["summary"]["blocked_data"] == 1
+        assert payload["top_actions"][0]["bot_id"] == "btc_compression"
+        assert payload["top_actions"][0]["next_action"].startswith("Fetch missing critical data")
+
+    def test_bot_strategy_readiness_summary_fails_soft_when_missing(self, tmp_path: Path) -> None:
+        from eta_engine.scripts.jarvis_status import build_bot_strategy_readiness_summary
+
+        payload = build_bot_strategy_readiness_summary(path=tmp_path / "missing.json")
+
+        assert payload["status"] == "missing"
+        assert payload["summary"] == {}
+        assert payload["top_actions"] == []
+
+    def test_json_subcommand_surfaces_bot_strategy_readiness(self, monkeypatch, capsys) -> None:
+        from eta_engine.scripts import jarvis_status
+
+        monkeypatch.setattr(
+            jarvis_status,
+            "build_bot_strategy_readiness_summary",
+            lambda **_kwargs: {
+                "source": "bot_strategy_readiness",
+                "status": "ready",
+                "summary": {"blocked_data": 0, "launch_lanes": {"live_preflight": 6}},
+                "top_actions": [],
+            },
+        )
+
+        ret = jarvis_status.main(["--json"])
+
+        assert ret == 0
+        payload = json.loads(capsys.readouterr().out)
+        readiness = payload["bot_strategy_readiness"]
+        assert readiness["status"] == "ready"
+        assert readiness["summary"]["launch_lanes"]["live_preflight"] == 6
+
+    def test_default_status_prints_bot_strategy_readiness(self, monkeypatch, capsys) -> None:
+        from eta_engine.scripts import jarvis_status
+
+        monkeypatch.setattr(
+            jarvis_status,
+            "build_bot_strategy_readiness_summary",
+            lambda **_kwargs: {
+                "source": "bot_strategy_readiness",
+                "status": "ready",
+                "summary": {
+                    "blocked_data": 0,
+                    "can_live_any": False,
+                    "can_paper_trade": 10,
+                    "launch_lanes": {
+                        "live_preflight": 6,
+                        "non_edge": 1,
+                        "paper_soak": 4,
+                        "shadow_only": 4,
+                    },
+                },
+                "top_actions": [],
+            },
+        )
+
+        ret = jarvis_status.main([])
+
+        assert ret == 0
+        out = capsys.readouterr().out
+        assert "Bot readiness:" in out
+        assert "live_preflight=6" in out
+        assert "paper_soak=4" in out
+        assert "shadow_only=4" in out
+        assert "non_edge=1" in out
 
     def test_json_subcommand_surfaces_operator_blockers(self, monkeypatch, capsys) -> None:
         from eta_engine.scripts import operator_action_queue

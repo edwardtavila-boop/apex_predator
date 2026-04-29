@@ -84,6 +84,14 @@ DASHBOARD_CARD_REGISTRY = (
         "stale_after_s": 30,
     },
     {
+        "id": "cc-bot-strategy-readiness",
+        "title": "Bot Strategy Readiness",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/bot_strategy_readiness",
+        "required": True,
+        "stale_after_s": 60,
+    },
+    {
         "id": "cc-v22-toggle",
         "title": "V22 Modulation",
         "source": "endpoint",
@@ -577,6 +585,29 @@ def _operator_queue_payload() -> dict:
     }
 
 
+def _bot_strategy_readiness_payload() -> dict:
+    """Return bot strategy/data readiness without letting snapshot probes break the dashboard."""
+    try:
+        from eta_engine.scripts.jarvis_status import build_bot_strategy_readiness_summary
+
+        payload = build_bot_strategy_readiness_summary()
+    except Exception as exc:  # noqa: BLE001 -- dashboard should render degraded state
+        return {
+            "source": "jarvis_status",
+            "error": str(exc),
+            "status": "unreadable",
+            "summary": {},
+            "top_actions": [],
+        }
+    return payload if isinstance(payload, dict) else {
+        "source": "jarvis_status",
+        "error": "bot strategy readiness summary returned a non-object payload",
+        "status": "unreadable",
+        "summary": {},
+        "top_actions": [],
+    }
+
+
 def _append_dashboard_event(event: str, payload: dict) -> None:
     """Best-effort append to local dashboard event log."""
     row = {"ts": time.time(), "event": event, **payload}
@@ -915,6 +946,7 @@ def dashboard_payload(response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     payload = dict(read_json_safe(_state_dir() / "dashboard_payload.json"))
     payload["operator_queue"] = _operator_queue_payload()
+    payload["bot_strategy_readiness"] = _bot_strategy_readiness_payload()
     return payload
 
 
@@ -941,6 +973,13 @@ def jarvis_operator_queue(response: Response) -> dict:
     """Current operator blockers, prioritized for dashboard rendering."""
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return _operator_queue_payload()
+
+
+@app.get("/api/jarvis/bot_strategy_readiness")
+def jarvis_bot_strategy_readiness(response: Response) -> dict:
+    """Current bot strategy/data readiness snapshot for dashboard rendering."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return _bot_strategy_readiness_payload()
 
 
 @app.get("/api/last-task")

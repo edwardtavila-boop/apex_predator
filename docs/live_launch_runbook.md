@@ -147,6 +147,20 @@ This writes
 The snapshot is read-only launch evidence; it must not be used as a broker
 execution switch.
 
+JARVIS and the dashboard API now read that same artifact through framework-native
+surfaces:
+
+```bash
+python -m eta_engine.scripts.jarvis_status --json
+curl http://127.0.0.1:8000/api/jarvis/bot_strategy_readiness
+```
+
+The dashboard rollup also embeds `bot_strategy_readiness` in `/api/dashboard`,
+so UI clients can show launch lanes and next actions without re-running shell
+commands. The V1 Command Center renders the same feed in the JARVIS view and
+the top-bar `bots` chip, so readiness posture remains visible even when the
+panel itself is off-screen.
+
 ---
 
 ## Phase 2 — Venue smoke test (≈5 min, paper account preferred)

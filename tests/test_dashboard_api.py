@@ -176,6 +176,63 @@ class TestDashboardAPI:
         assert r.json()["error"] == "probe exploded"
         assert r.json()["top_blockers"] == []
 
+    def test_dashboard_uses_bot_strategy_readiness_summary(self, app_client, monkeypatch):
+        from eta_engine.scripts import jarvis_status
+
+        monkeypatch.setattr(
+            jarvis_status,
+            "build_bot_strategy_readiness_summary",
+            lambda **_kwargs: {
+                "source": "bot_strategy_readiness",
+                "status": "ready",
+                "summary": {"blocked_data": 0, "launch_lanes": {"live_preflight": 6}},
+                "top_actions": [],
+            },
+        )
+
+        r = app_client.get("/api/dashboard")
+
+        assert r.status_code == 200
+        readiness = r.json()["bot_strategy_readiness"]
+        assert readiness["status"] == "ready"
+        assert readiness["summary"]["launch_lanes"]["live_preflight"] == 6
+
+    def test_jarvis_bot_strategy_readiness_endpoint(self, app_client, monkeypatch):
+        from eta_engine.scripts import jarvis_status
+
+        monkeypatch.setattr(
+            jarvis_status,
+            "build_bot_strategy_readiness_summary",
+            lambda **_kwargs: {
+                "source": "bot_strategy_readiness",
+                "status": "ready",
+                "summary": {"blocked_data": 0},
+                "top_actions": [{"bot_id": "mnq_futures_sage"}],
+            },
+        )
+
+        r = app_client.get("/api/jarvis/bot_strategy_readiness")
+
+        assert r.status_code == 200
+        assert r.json()["summary"]["blocked_data"] == 0
+        assert r.json()["top_actions"][0]["bot_id"] == "mnq_futures_sage"
+        assert "no-store" in r.headers["Cache-Control"]
+
+    def test_jarvis_bot_strategy_readiness_endpoint_fails_soft(self, app_client, monkeypatch):
+        from eta_engine.scripts import jarvis_status
+
+        def boom(**_kwargs):
+            raise RuntimeError("snapshot probe exploded")
+
+        monkeypatch.setattr(jarvis_status, "build_bot_strategy_readiness_summary", boom)
+
+        r = app_client.get("/api/jarvis/bot_strategy_readiness")
+
+        assert r.status_code == 200
+        assert r.json()["error"] == "snapshot probe exploded"
+        assert r.json()["summary"] == {}
+        assert r.json()["top_actions"] == []
+
     def test_dashboard_card_health_contract_has_no_dead_or_stale_cards(self, app_client):
         r = app_client.get("/api/dashboard/card-health")
         assert r.status_code == 200

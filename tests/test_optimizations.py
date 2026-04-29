@@ -141,9 +141,11 @@ class TestStatusPage:
             "top-sse-status",
             "top-card-health",
             "top-diagnostics",
+            "top-bot-readiness",
             "view-jarvis",
             "view-fleet",
             "cc-operator-queue",
+            "cc-bot-strategy-readiness",
             "fl-fill-tape",
             "toast-container",
         ):
@@ -181,6 +183,20 @@ class TestStatusPage:
         assert "/api/jarvis/operator_queue" in js
         assert "top-operator-queue" in js
         assert "next_actions" in js
+
+    def test_command_center_renders_bot_strategy_readiness_panel(self):
+        root = Path(__file__).resolve().parent.parent / "deploy" / "status_page"
+        js = (root / "js" / "command_center.js").read_text(encoding="utf-8")
+        css = (root / "theme.css").read_text(encoding="utf-8")
+
+        assert "BotStrategyReadinessPanel" in js
+        assert "/api/jarvis/bot_strategy_readiness" in js
+        assert "top-bot-readiness" in js
+        assert "paper ready" in js
+        assert "launch_lanes" in js
+        assert "#top-bot-readiness" in css
+        assert "setAttribute('data-readiness', blockedData > 0 ? 'blocked' : 'ready')" in js
+        assert "setAttribute('data-readiness', 'degraded')" in js
 
     def test_status_page_mobile_fleet_and_equity_contracts(self):
         root = Path(__file__).resolve().parent.parent / "deploy" / "status_page"

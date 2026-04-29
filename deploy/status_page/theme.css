@@ -298,7 +298,8 @@ nav {
 .dashboard-v1-chip,
 .dashboard-contract-chip,
 .card-health-chip,
-.diagnostics-chip {
+.diagnostics-chip,
+.bot-readiness-chip {
   border: 1px solid rgba(34, 211, 238, 0.35);
   border-radius: 999px;
   background:
@@ -330,6 +331,30 @@ nav {
   color: #bfdbfe;
   letter-spacing: 0.06em;
   cursor: pointer;
+}
+
+.bot-readiness-chip {
+  color: #a7f3d0;
+  letter-spacing: 0.06em;
+}
+
+.bot-readiness-chip[data-readiness="loading"] {
+  color: #bfdbfe;
+}
+
+.bot-readiness-chip[data-readiness="ready"] {
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #86efac;
+}
+
+.bot-readiness-chip[data-readiness="blocked"] {
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fcd34d;
+}
+
+.bot-readiness-chip[data-readiness="degraded"] {
+  border-color: rgba(239, 68, 68, 0.58);
+  color: #fca5a5;
 }
 
 .card-health-chip[data-health="degraded"] {
@@ -499,6 +524,7 @@ nav {
 #top-kill-switch,
 #top-v22-toggle,
 #top-stress,
+#top-bot-readiness,
 #top-fleet-equity,
 #top-alerts,
 #top-compact-toggle,

@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from eta_engine.brain.jarvis_daily_report import (
     generate_daily_report,
@@ -120,6 +121,127 @@ def build_operator_queue_summary(*, limit: int = 5) -> dict[str, object]:
     return _operator_queue_summary(limit=limit)
 
 
+def _empty_bot_strategy_readiness_payload(
+    *,
+    status: str,
+    path: Path,
+    error: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "source": "bot_strategy_readiness",
+        "path": str(path),
+        "status": status,
+        "summary": {},
+        "top_actions": [],
+    }
+    if error:
+        payload["error"] = error
+    return payload
+
+
+def _bot_strategy_action_priority(row: dict[str, object]) -> tuple[int, str]:
+    lane = str(row.get("launch_lane") or "")
+    lane_rank = {
+        "blocked_data": 0,
+        "live_preflight": 1,
+        "paper_soak": 2,
+        "shadow_only": 3,
+        "research": 4,
+        "non_edge": 5,
+        "deactivated": 6,
+    }.get(lane, 7)
+    return (lane_rank, str(row.get("bot_id") or ""))
+
+
+def build_bot_strategy_readiness_summary(
+    *,
+    path: Path | None = None,
+    limit: int = 5,
+) -> dict[str, object]:
+    """Load the canonical bot strategy readiness snapshot for JARVIS surfaces."""
+    from eta_engine.scripts import workspace_roots
+
+    target = Path(path) if path is not None else workspace_roots.ETA_BOT_STRATEGY_READINESS_SNAPSHOT_PATH
+    try:
+        raw_payload = json.loads(target.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return _empty_bot_strategy_readiness_payload(status="missing", path=target)
+    except (OSError, json.JSONDecodeError) as exc:
+        return _empty_bot_strategy_readiness_payload(status="unreadable", path=target, error=str(exc))
+
+    if not isinstance(raw_payload, dict):
+        return _empty_bot_strategy_readiness_payload(
+            status="unreadable",
+            path=target,
+            error="bot strategy readiness snapshot must be a JSON object",
+        )
+
+    summary = raw_payload.get("summary")
+    rows = raw_payload.get("rows")
+    summary_payload = summary if isinstance(summary, dict) else {}
+    row_payloads = rows if isinstance(rows, list) else []
+    top_actions: list[dict[str, object]] = []
+    for row in sorted(
+        (item for item in row_payloads if isinstance(item, dict) and item.get("next_action")),
+        key=_bot_strategy_action_priority,
+    ):
+        if len(top_actions) >= max(0, limit):
+            break
+        top_actions.append(
+            {
+                "bot_id": row.get("bot_id"),
+                "strategy_id": row.get("strategy_id"),
+                "launch_lane": row.get("launch_lane"),
+                "data_status": row.get("data_status"),
+                "promotion_status": row.get("promotion_status"),
+                "can_paper_trade": bool(row.get("can_paper_trade")),
+                "can_live_trade": bool(row.get("can_live_trade")),
+                "next_action": row.get("next_action"),
+            }
+        )
+
+    return {
+        "source": "bot_strategy_readiness",
+        "path": str(target),
+        "status": "ready",
+        "schema_version": raw_payload.get("schema_version"),
+        "generated_at": raw_payload.get("generated_at"),
+        "summary": summary_payload,
+        "top_actions": top_actions,
+    }
+
+
+def _format_bot_strategy_readiness(readiness: dict[str, object]) -> str:
+    status = str(readiness.get("status") or "unknown")
+    summary = readiness.get("summary")
+    if status != "ready" or not isinstance(summary, dict):
+        return f"{status} snapshot"
+
+    lanes = summary.get("launch_lanes")
+    lane_bits: list[str] = []
+    if isinstance(lanes, dict):
+        for lane in (
+            "live_preflight",
+            "paper_soak",
+            "shadow_only",
+            "research",
+            "non_edge",
+            "blocked_data",
+            "deactivated",
+        ):
+            value = lanes.get(lane)
+            if value is not None:
+                lane_bits.append(f"{lane}={value}")
+    if not lane_bits:
+        total = summary.get("total_bots", 0)
+        lane_bits.append(f"total_bots={total}")
+    if "can_paper_trade" in summary:
+        lane_bits.append(f"paper_ready={summary.get('can_paper_trade')}")
+    if "can_live_any" in summary:
+        lane_bits.append(f"live_any={summary.get('can_live_any')}")
+    return " ".join(lane_bits)
+
+
 def _print_status() -> int:
     """Default: print a concise status block."""
     snap = snapshot()
@@ -145,6 +267,8 @@ def _print_status() -> int:
         if isinstance(first, dict):
             op_first = str(first.get("op_id") or "")
     print(f"Operator blockers:     {op_blocked}{f' (top {op_first})' if op_first else ''}")
+    bot_readiness = build_bot_strategy_readiness_summary(limit=3)
+    print(f"Bot readiness:         {_format_bot_strategy_readiness(bot_readiness)}")
     print()
     if recs:
         print(f"=== {len(recs)} RECOMMENDATION(S) ===")
@@ -214,6 +338,7 @@ def _print_json() -> int:
         "health_verdict": verdict.value,
         "health_results": [r.model_dump(mode="json") for r in health_results],
         "operator_queue": build_operator_queue_summary(),
+        "bot_strategy_readiness": build_bot_strategy_readiness_summary(),
     }
     print(json.dumps(out, indent=2, default=str))
     return 0

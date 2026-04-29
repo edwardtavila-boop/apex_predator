@@ -112,7 +112,12 @@ The same command now supports `--snapshot`, which writes
 for dashboards and wakeup automation. The snapshot summary reports
 `can_live_any=false`, `can_paper_trade=10`, and the same launch-lane counts,
 making bot strategy posture accessible without re-running a shell command in
-UI clients.
+UI clients. JARVIS now exposes the same snapshot in
+`python -m eta_engine.scripts.jarvis_status --json`, and the dashboard API
+surfaces it at `/api/jarvis/bot_strategy_readiness` plus the
+`bot_strategy_readiness` field in `/api/dashboard`. The V1 Command Center
+also renders that feed through the JARVIS Bot Strategy Readiness panel and the
+top-bar `bots` chip.
 
 The launch gate now also checks every critical `DataRequirement` behind
 each bot, not just the primary strategy dataset. Missing critical support

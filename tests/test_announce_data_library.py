@@ -92,9 +92,27 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
         "critical": True,
         "note": "",
     }
+    assert payload["bot_coverage"]["critical_freshness"]["status_counts"] == {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 0,
+        "blocked": 1,
+        "deactivated": 1,
+    }
+    assert payload["bot_coverage"]["critical_freshness"]["blocked_bots"][0]["bot_id"] == "btc_test"
+    assert payload["bot_coverage"]["items"][0]["critical_freshness"]["status"] == "blocked"
+    assert payload["bot_coverage"]["items"][0]["critical_freshness"]["counts"] == {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 1,
+        "missing": 1,
+    }
     available_dataset = payload["bot_coverage"]["items"][0]["available"][0]["dataset"]
     assert available_dataset["key"] == "BTC/1h/history"
     assert available_dataset["freshness"]["status"] == "stale"
+    stale_requirement = payload["bot_coverage"]["items"][0]["critical_freshness"]["stale"][0]
+    assert stale_requirement["requirement"]["symbol"] == "BTC"
+    assert stale_requirement["dataset"]["key"] == "BTC/1h/history"
 
 
 def test_inventory_snapshot_separates_raw_and_canonical_freshness(tmp_path: Path) -> None:

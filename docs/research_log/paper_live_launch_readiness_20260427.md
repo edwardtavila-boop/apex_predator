@@ -44,6 +44,11 @@ canonical dataset each symbol/timeframe resolves to. Raw freshness remains
 warm / 20 stale, with 8 stale raw feeds explicitly marked as superseded
 by a better canonical dataset.
 
+Bot coverage now also includes a per-bot critical-feed freshness rollup.
+After republishing the snapshot, `bot_coverage.critical_freshness` reports
+18 fresh active bots, 1 deactivated bot, and 0 warm / stale / blocked
+critical-feed bots.
+
 The launch gate now also checks every critical `DataRequirement` behind
 each bot, not just the primary strategy dataset. Missing critical support
 feeds block paper-live launch, stale critical support feeds warn, and fresh

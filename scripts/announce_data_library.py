@@ -116,12 +116,70 @@ def _canonical_datasets(datasets: list[DatasetMeta]) -> dict[tuple[str, str], Da
     return canonical
 
 
+def _critical_freshness_payload(
+    audit: BotAudit,
+    *,
+    generated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Compact per-bot rollup for critical data freshness."""
+    counts = {"fresh": 0, "warm": 0, "stale": 0, "missing": len(audit.missing_critical)}
+    stale: list[dict[str, Any]] = []
+    warm: list[dict[str, Any]] = []
+
+    if audit.deactivated:
+        return {
+            "status": "deactivated",
+            "total_critical": 0,
+            "available_critical": 0,
+            "missing_critical": 0,
+            "counts": counts,
+            "stale": [],
+            "warm": [],
+        }
+
+    for req, dataset in audit.available:
+        if not req.critical:
+            continue
+        item = {
+            "requirement": _requirement_payload(req),
+            "dataset": _dataset_payload(dataset, generated_at=generated_at),
+        }
+        freshness = item["dataset"].get("freshness", {})
+        status = freshness.get("status")
+        if status in {"fresh", "warm", "stale"}:
+            counts[status] += 1
+        if status == "stale":
+            stale.append(item)
+        elif status == "warm":
+            warm.append(item)
+
+    if counts["missing"]:
+        status = "blocked"
+    elif counts["stale"]:
+        status = "stale"
+    elif counts["warm"]:
+        status = "warm"
+    else:
+        status = "fresh"
+
+    return {
+        "status": status,
+        "total_critical": sum(counts.values()),
+        "available_critical": counts["fresh"] + counts["warm"] + counts["stale"],
+        "missing_critical": counts["missing"],
+        "counts": counts,
+        "stale": stale,
+        "warm": warm,
+    }
+
+
 def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> dict[str, Any]:
     return {
         "bot_id": audit.bot_id,
         "runnable": audit.is_runnable,
         "deactivated": audit.deactivated,
         "critical_coverage_pct": round(audit.critical_coverage_pct, 2),
+        "critical_freshness": _critical_freshness_payload(audit, generated_at=generated_at),
         "available": [
             {
                 "requirement": _requirement_payload(req),
@@ -184,6 +242,50 @@ def _freshness_summary(datasets: list[DatasetMeta], generated_at: datetime) -> d
     }
 
 
+def _bot_critical_freshness_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts = {
+        "fresh": 0,
+        "warm": 0,
+        "stale": 0,
+        "blocked": 0,
+        "deactivated": 0,
+    }
+    stale_bots: list[dict[str, Any]] = []
+    warm_bots: list[dict[str, Any]] = []
+    blocked_bots: list[dict[str, Any]] = []
+
+    for item in items:
+        bot_id = item["bot_id"]
+        freshness = item["critical_freshness"]
+        status = freshness["status"]
+        if status in status_counts:
+            status_counts[status] += 1
+        if status == "stale":
+            stale_bots.append({
+                "bot_id": bot_id,
+                "stale_count": freshness["counts"]["stale"],
+                "stale": freshness["stale"],
+            })
+        elif status == "warm":
+            warm_bots.append({
+                "bot_id": bot_id,
+                "warm_count": freshness["counts"]["warm"],
+                "warm": freshness["warm"],
+            })
+        elif status == "blocked":
+            blocked_bots.append({
+                "bot_id": bot_id,
+                "missing_critical": item["missing_critical"],
+            })
+
+    return {
+        "status_counts": status_counts,
+        "stale_bots": stale_bots,
+        "warm_bots": warm_bots,
+        "blocked_bots": blocked_bots,
+    }
+
+
 def build_inventory_snapshot(
     lib: DataLibrary,
     audits: list[BotAudit],
@@ -197,6 +299,7 @@ def build_inventory_snapshot(
     runnable = [a.bot_id for a in audits if a.is_runnable and not a.deactivated]
     blocked = [a for a in audits if not a.is_runnable]
     deactivated = [a.bot_id for a in audits if a.deactivated]
+    bot_items = [_audit_payload(a, generated_at=ts) for a in audits]
     return {
         "schema_version": 1,
         "generated_at": ts.isoformat(),
@@ -220,7 +323,8 @@ def build_inventory_snapshot(
                 for a in blocked
             },
             "deactivated": deactivated,
-            "items": [_audit_payload(a, generated_at=ts) for a in audits],
+            "critical_freshness": _bot_critical_freshness_summary(bot_items),
+            "items": bot_items,
         },
     }
 

@@ -392,14 +392,35 @@ def _run_one(  # type: ignore[no-untyped-def]  # noqa: ANN202
 
 
 def _rank(results: list[CellRunResult]) -> list[CellRunResult]:
-    """Sort: PASS first, then by agg_oos_sharpe desc, then by deg asc."""
+    """Rank candidates by promotion quality, not just raw OOS Sharpe.
+
+    Failed cells can show huge OOS Sharpe when the trade sample is tiny or
+    variance collapses. Keep PASS cells first, then prefer failed cells that
+    at least have positive IS+OOS, fold consistency, and controlled
+    degradation before using capped OOS Sharpe as a tie-breaker.
+    """
+
+    def _key(r: CellRunResult) -> tuple:
+        viable_fail = r.agg_is_sharpe > 0.0 and r.agg_oos_sharpe > 0.0
+        pos_oos_fraction = (
+            r.n_positive_oos / r.n_windows
+            if r.n_windows > 0 else 0.0
+        )
+        capped_oos = min(r.agg_oos_sharpe, 10.0)
+        return (
+            not r.pass_gate,
+            not viable_fail,
+            -r.fold_dsr_pass_fraction,
+            r.avg_oos_degradation > 0.35,
+            -pos_oos_fraction,
+            -capped_oos,
+            -r.agg_is_sharpe,
+            r.avg_oos_degradation,
+        )
+
     return sorted(
         results,
-        key=lambda r: (
-            not r.pass_gate,
-            -r.agg_oos_sharpe,
-            r.avg_oos_degradation,
-        ),
+        key=_key,
     )
 
 

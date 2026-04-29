@@ -25,12 +25,11 @@ exist or fails).
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def projected_caps(ctx: Any, *, horizons: list[Any] | None = None) -> dict[Any, float]:
+def projected_caps(ctx: object, *, horizons: list[object] | None = None) -> dict[object, float]:
     """Return per-horizon size caps the bot should respect.
 
     When ``horizons.project`` is unavailable (module not present) OR
@@ -43,17 +42,28 @@ def projected_caps(ctx: Any, *, horizons: list[Any] | None = None) -> dict[Any, 
         if horizons is None:
             horizons = list(Horizon)
 
-        out: dict[Any, float] = {}
+        horizon_context = project(
+            base_composite=_base_composite(ctx),
+            base_binding=_base_binding(ctx),
+            hours_until_event=_hours_until_event(ctx),
+            event_label=_event_label(ctx),
+            is_overnight_now=_is_overnight(ctx),
+        )
+        out: dict[object, float] = {}
         for h in horizons:
             try:
-                projection = project(ctx, h)
+                projection = horizon_context.pick(h)
                 # The projected object is expected to expose a
                 # `size_cap_mult` field per horizons.py's HorizonContext.
                 cap = getattr(projection, "size_cap_mult", None)
                 if cap is None:
                     # Fall back to inverse-stress heuristic if the field
                     # isn't on the projection object
-                    stress = getattr(projection, "stress_composite", None)
+                    stress = getattr(
+                        projection,
+                        "stress_composite",
+                        getattr(projection, "composite", None),
+                    )
                     if isinstance(stress, (int, float)):
                         cap = max(0.1, 1.0 - float(stress))
                 if isinstance(cap, (int, float)):
@@ -67,7 +77,44 @@ def projected_caps(ctx: Any, *, horizons: list[Any] | None = None) -> dict[Any, 
         return {}
 
 
-def shortest_horizon_cap(ctx: Any) -> float:
+def _base_composite(ctx: object) -> float:
+    stress = getattr(ctx, "stress_score", None)
+    raw = getattr(stress, "composite", getattr(ctx, "stress_composite", 0.0))
+    try:
+        return max(0.0, min(1.0, float(raw)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _base_binding(ctx: object) -> str:
+    stress = getattr(ctx, "stress_score", None)
+    return str(getattr(stress, "binding_constraint", getattr(ctx, "binding_constraint", "unknown")) or "unknown")
+
+
+def _hours_until_event(ctx: object) -> float | None:
+    macro = getattr(ctx, "macro", None)
+    raw = getattr(macro, "hours_until_next_event", None)
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _event_label(ctx: object) -> str | None:
+    macro = getattr(ctx, "macro", None)
+    raw = getattr(macro, "next_event_label", None)
+    return str(raw) if raw else None
+
+
+def _is_overnight(ctx: object) -> bool:
+    session = getattr(ctx, "session_phase", "")
+    value = getattr(session, "value", session)
+    return str(value).upper() == "OVERNIGHT"
+
+
+def shortest_horizon_cap(ctx: object) -> float:
     """Convenience: the cap for the shortest horizon, or 1.0 if unavailable.
 
     A bot scoping a tight scalp uses this. If horizons.project errors

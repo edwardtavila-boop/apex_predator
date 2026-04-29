@@ -1,6 +1,7 @@
 """Live data collector -- runs both MNQ + BTC feeds alongside each other.
 
-Writes three JSONL streams into ``docs/live_data/``:
+Writes three JSONL streams into canonical ignored runtime state
+(``var/eta_engine/state/live_data/`` by default):
 
   * ``live_ticks_mnq.jsonl``
   * ``live_ticks_btc.jsonl``
@@ -35,6 +36,7 @@ from eta_engine.obs.dual_data_collector import (  # noqa: E402
     CollectorConfig,
     DualDataCollector,
 )
+from eta_engine.scripts.workspace_roots import ETA_LIVE_DATA_RUNTIME_DIR  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -124,7 +126,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--out-dir",
         type=str,
-        default=str(ROOT / "docs" / "live_data"),
+        default=str(ETA_LIVE_DATA_RUNTIME_DIR),
         help="Directory for the three JSONL output files.",
     )
     p.add_argument(

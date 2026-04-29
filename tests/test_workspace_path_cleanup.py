@@ -23,6 +23,9 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR == (
         ROOT / "var" / "eta_engine" / "state" / "research_grid"
     )
+    assert workspace_roots.ETA_LIVE_DATA_RUNTIME_DIR == (
+        ROOT / "var" / "eta_engine" / "state" / "live_data"
+    )
     assert workspace_roots.ETA_OPERATOR_QUEUE_SNAPSHOT_PATH == (
         ROOT / "var" / "eta_engine" / "state" / "operator_queue_snapshot.json"
     )
@@ -153,6 +156,8 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     assert "workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR" in _read(
         "eta_engine/scripts/run_research_grid.py"
     )
+    assert "ETA_LIVE_DATA_RUNTIME_DIR" in _read("eta_engine/scripts/dual_data_collector.py")
+    assert 'ROOT / "docs" / "live_data"' not in _read("eta_engine/scripts/dual_data_collector.py")
     assert "ETA_RUNTIME_DECISION_JOURNAL_PATH" in _read(
         "eta_engine/scripts/announce_data_library.py"
     )
@@ -193,6 +198,8 @@ def test_legacy_docs_decision_journal_is_ignored_runtime_state() -> None:
     assert "docs/alerts_log.jsonl" in gitignore
     assert "docs/runtime_log.jsonl" in gitignore
     assert "docs/drift_watchdog.jsonl" in gitignore
+    assert "docs/live_data/*.jsonl" in gitignore
+    assert "docs/live_data/collector_last_run.json" in gitignore
 
 
 def test_smoke_check_uses_workspace_state_and_log_dirs() -> None:

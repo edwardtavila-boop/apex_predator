@@ -224,7 +224,7 @@ class TestMcpOauthProbeUnderSyntheticState:
         assert len(items) == 3
         assert all(i.verdict == VERDICT_DONE for i in items)
 
-    def test_status_needs_auth_marks_blocked(self, monkeypatch) -> None:
+    def test_status_needs_auth_marks_observed_not_launch_blocking(self, monkeypatch) -> None:
         from eta_engine.scripts.operator_action_queue import (
             _op6_op7_op8_mcp_oauth,
         )
@@ -239,7 +239,9 @@ class TestMcpOauthProbeUnderSyntheticState:
             },
         }
         items = _op6_op7_op8_mcp_oauth(roadmap)
-        assert all(i.verdict == VERDICT_BLOCKED for i in items)
+        assert all(i.verdict == VERDICT_OBSERVED for i in items)
+        assert all(i.evidence["launch_blocker"] is False for i in items)
+        assert all("not blocking trading launch readiness" in i.detail for i in items)
 
     def test_status_missing_marks_unknown(self) -> None:
         from eta_engine.scripts.operator_action_queue import (
@@ -274,6 +276,28 @@ class TestActiveBrokerCredentialProbes:
 
         assert item.verdict == VERDICT_DONE
         assert item.evidence["TASTY_API_BASE_URL"] is True
+
+    def test_missing_tastytrade_creds_are_observed_not_launch_blocking(self, monkeypatch) -> None:
+        from eta_engine.scripts import operator_action_queue
+
+        monkeypatch.setattr(operator_action_queue, "_env_key_present", lambda _name: False)
+
+        item = operator_action_queue._op4_tastytrade_creds()
+
+        assert item.verdict == VERDICT_OBSERVED
+        assert item.evidence["launch_blocker"] is False
+        assert "not blocking first live tick" in item.detail
+
+    def test_unfunded_tastytrade_fallback_is_observed_not_launch_blocking(self, monkeypatch) -> None:
+        from eta_engine.scripts import operator_action_queue
+
+        monkeypatch.setattr(operator_action_queue, "_env_key_present", lambda _name: False)
+
+        item = operator_action_queue._op2_fund_tastytrade()
+
+        assert item.verdict == VERDICT_OBSERVED
+        assert item.evidence["role"] == "secondary_fallback"
+        assert item.evidence["launch_blocker"] is False
 
 
 class TestStrategyResearchCandidateProbe:

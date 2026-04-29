@@ -5,7 +5,8 @@ Why this exists
 ---------------
 Several blockers between "code complete" and "live tick" are
 operator-only -- broker funding, credential stashing in keyring,
-MCP OAuth re-auth, design-call decisions. These accumulated through
+alert credentials, and design-call decisions. Ancillary MCP OAuth
+re-auth is tracked separately as observed integration debt. These accumulated through
 the v0.1.64-v0.1.69 residual-risk closure work into a 17-item OP-list
 captured in the session transcript. The operator wanted that list
 as a one-liner CLI so they can run it on demand without scrolling
@@ -197,8 +198,11 @@ def _op2_fund_tastytrade() -> OpItem:
             "probed without auth -- check Tastytrade portal manually"
         )
     else:
-        item.verdict = VERDICT_BLOCKED
-        item.detail = "Tastytrade creds absent; populate per OP-4 first"
+        item.verdict = VERDICT_OBSERVED
+        item.detail = (
+            "Tastytrade fallback creds absent; recommended before failover drills, "
+            "but not blocking first live tick while IBKR is primary."
+        )
     item.evidence = {
         "tasty_api_base_url_present": _env_key_present("TASTY_API_BASE_URL"),
         "tasty_account_present": _env_key_present(
@@ -207,6 +211,8 @@ def _op2_fund_tastytrade() -> OpItem:
         "tasty_session_present": _env_key_present(
             "TASTY_SESSION_TOKEN",
         ),
+        "launch_blocker": False,
+        "role": "secondary_fallback",
     }
     return item
 
@@ -250,10 +256,17 @@ def _op4_tastytrade_creds() -> OpItem:
         item.verdict = VERDICT_DONE
         item.detail = "All 3 Tastytrade keys resolve"
     else:
-        item.verdict = VERDICT_BLOCKED
+        item.verdict = VERDICT_OBSERVED
         missing = [k for k, v in present.items() if not v]
-        item.detail = f"Missing: {', '.join(missing)}"
-    item.evidence = present
+        item.detail = (
+            f"Missing fallback key(s): {', '.join(missing)}. "
+            "Recommended for failover, not blocking first live tick while IBKR is primary."
+        )
+    item.evidence = {
+        **present,
+        "launch_blocker": False,
+        "role": "secondary_fallback",
+    }
     return item
 
 
@@ -284,7 +297,7 @@ def _op5_telegram_creds() -> OpItem:
 
 
 def _op6_op7_op8_mcp_oauth(roadmap: dict[str, Any]) -> list[OpItem]:
-    """OAuth state for the three needs_auth MCPs."""
+    """OAuth state for ancillary MCPs that are not trading-launch blockers."""
     mcp_status = roadmap.get("shared_artifacts", {}).get("mcp_status") or roadmap.get("mcp_status") or {}
     items: list[OpItem] = []
     for op_id, mcp in (
@@ -302,15 +315,22 @@ def _op6_op7_op8_mcp_oauth(roadmap: dict[str, Any]) -> list[OpItem]:
             item.verdict = VERDICT_UNKNOWN
             item.detail = f"roadmap_state.json has no entry for mcp_status.{mcp}"
         elif status == "needs_auth":
-            item.verdict = VERDICT_BLOCKED
-            item.detail = "needs_auth -- run OAuth flow in browser"
+            item.verdict = VERDICT_OBSERVED
+            item.detail = (
+                "needs_auth -- run OAuth flow in browser when this product/integration "
+                "surface is needed; not blocking trading launch readiness"
+            )
         elif status in ("ok", "authed", "authorized"):
             item.verdict = VERDICT_DONE
             item.detail = f"status={status}"
         else:
             item.verdict = VERDICT_OBSERVED
             item.detail = f"status={status}"
-        item.evidence = {"mcp_status": status}
+        item.evidence = {
+            "mcp_status": status,
+            "launch_blocker": False,
+            "scope": "ancillary_mcp_integration",
+        }
         items.append(item)
     return items
 

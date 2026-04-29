@@ -20,7 +20,7 @@ What it does (locally — safe to run anytime)
    - ``var/eta_engine/state/drift_watchdog.jsonl`` (drift history)
    - ``logs/eta_engine/alerts_log.jsonl`` (alert history)
    - ``logs/eta_engine/runtime_log.jsonl`` (runtime history)
-   - ``.env`` (broker keys — checks file exists, NEVER reads contents)
+   - ``.env`` (broker keys — checks required key presence without emitting values)
 2. **Backup-restore round-trip**: tars the state dir into a temp
    tarball, untars it into a scratch dir, diffs to verify integrity.
 3. **Bootstrap-script lint**: runs ``deploy/install_vps.sh`` through
@@ -91,7 +91,7 @@ _STATE_FILES_REQUIRED: list[str] = [
     "var/eta_engine/state/decision_journal.jsonl",
 ]
 _STATIC_STATE_FILES_RECOMMENDED: list[str] = []
-# .env is special — we verify presence but NEVER read contents
+# .env is special: inspect only key names / non-empty status and never emit values.
 _SECRETS_FILE = ".env"
 
 _DEPLOY_FILES_REQUIRED: list[str] = [
@@ -108,7 +108,7 @@ _ENV_COPY_COMMANDS = [
     "cp .env.example .env && chmod 600 .env",
     "$EDITOR .env",
 ]
-_ENV_READINESS_REQUIREMENTS: dict[str, list[str]] = {
+_ENV_READINESS_REQUIRED_GROUPS: dict[str, list[str]] = {
     "runtime_mode": ["APEX_MODE=PAPER"],
     "jarvis_budget": [
         "ANTHROPIC_API_KEY",
@@ -121,12 +121,36 @@ _ENV_READINESS_REQUIREMENTS: dict[str, list[str]] = {
         "IBKR_ACCOUNT_ID",
         "IBKR_SYMBOL_CONID_MAP or IBKR_CONID_<SYMBOL>",
     ],
+}
+_ENV_READINESS_RECOMMENDED_GROUPS: dict[str, list[str]] = {
     "tastytrade_fallback": [
         "TASTY_VENUE_TYPE=paper",
         "TASTY_API_BASE_URL",
         "TASTY_ACCOUNT_NUMBER",
         "TASTY_SESSION_TOKEN",
     ],
+}
+_ENV_REQUIRED_KEY_OPTIONS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "runtime_mode": (("APEX_MODE",),),
+    "jarvis_budget": (
+        ("ANTHROPIC_API_KEY",),
+        ("JARVIS_HOURLY_USD_BUDGET",),
+        ("JARVIS_DAILY_USD_BUDGET",),
+    ),
+    "ibkr_primary": (
+        ("IBKR_VENUE_TYPE",),
+        ("IBKR_CP_BASE_URL",),
+        ("IBKR_ACCOUNT_ID",),
+        ("IBKR_SYMBOL_CONID_MAP", "IBKR_CONID_"),
+    ),
+}
+_ENV_RECOMMENDED_KEY_OPTIONS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "tastytrade_fallback": (
+        ("TASTY_VENUE_TYPE",),
+        ("TASTY_API_BASE_URL",),
+        ("TASTY_ACCOUNT_NUMBER",),
+        ("TASTY_SESSION_TOKEN",),
+    ),
 }
 _ENV_TEMPLATE_REQUIRED_TOKENS = [
     "APEX_MODE",
@@ -222,7 +246,7 @@ def _archive_name(path: Path) -> str:
 
 
 def _env_readiness_details() -> dict[str, Any]:
-    """Return operator guidance for populating .env without reading secrets."""
+    """Return operator guidance for populating .env without exposing secrets."""
     example_path = ROOT / _ENV_EXAMPLE_FILE
     return {
         "env_path": _display_path(ROOT / _SECRETS_FILE),
@@ -232,9 +256,55 @@ def _env_readiness_details() -> dict[str, Any]:
         "copy_commands": list(_ENV_COPY_COMMANDS),
         "active_brokers": ["IBKR", "Tastytrade"],
         "dormant_brokers": ["Tradovate"],
-        "required_groups": _ENV_READINESS_REQUIREMENTS,
-        "note": "populate real values only; the DR drill never reads .env contents",
+        "required_groups": _ENV_READINESS_REQUIRED_GROUPS,
+        "recommended_groups": _ENV_READINESS_RECOMMENDED_GROUPS,
+        "note": "populate real values only; the DR drill inspects key names/non-empty status and never emits values",
     }
+
+
+def _env_key_state(path: Path) -> dict[str, bool]:
+    """Return env key -> has non-empty value without exposing values."""
+    key_state: dict[str, bool] = {}
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").strip()
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        key_state[key] = bool(value.strip().strip('"').strip("'"))
+    return key_state
+
+
+def _env_option_satisfied(key_state: dict[str, bool], options: tuple[str, ...]) -> bool:
+    """Return True when any exact key or prefix option is populated."""
+    for option in options:
+        if option.endswith("_"):
+            if any(key.startswith(option) and has_value for key, has_value in key_state.items()):
+                return True
+        elif key_state.get(option):
+            return True
+    return False
+
+
+def _missing_env_requirements(
+    key_state: dict[str, bool],
+    groups: dict[str, tuple[tuple[str, ...], ...]],
+) -> dict[str, list[str]]:
+    """Return display-safe missing key requirements by group."""
+    missing: dict[str, list[str]] = {}
+    for group, requirements in groups.items():
+        group_missing = [
+            " or ".join(options)
+            for options in requirements
+            if not _env_option_satisfied(key_state, options)
+        ]
+        if group_missing:
+            missing[group] = group_missing
+    return missing
 
 
 def _vps_bash_validation_details(*, reason: str | None = None) -> dict[str, Any]:
@@ -333,7 +403,7 @@ def _check_state_files_fresh() -> CheckResult:
 
 
 def _check_secrets_present() -> CheckResult:
-    """1c. .env exists. Never reads contents."""
+    """1c. .env exists and required launch keys are populated."""
     p = ROOT / _SECRETS_FILE
     if not p.exists():
         return CheckResult(
@@ -341,15 +411,45 @@ def _check_secrets_present() -> CheckResult:
             severity="amber",
             summary=(
                 ".env missing — operator must populate broker keys "
-                "before flipping live (script never reads contents)"
+                "before flipping live"
             ),
             details=_env_readiness_details(),
+        )
+    details = _env_readiness_details()
+    try:
+        key_state = _env_key_state(p)
+    except OSError as exc:
+        return CheckResult(
+            name="secrets_present",
+            severity="amber",
+            summary=f".env exists but could not be inspected safely: {exc}",
+            details={**details, "inspection_error": type(exc).__name__},
+        )
+    missing_required = _missing_env_requirements(key_state, _ENV_REQUIRED_KEY_OPTIONS)
+    missing_recommended = _missing_env_requirements(key_state, _ENV_RECOMMENDED_KEY_OPTIONS)
+    inspected_details = {
+        **details,
+        "required_missing": missing_required,
+        "recommended_missing": missing_recommended,
+        "inspected_keys_only": True,
+        "values_emitted": False,
+    }
+    if missing_required:
+        missing_count = sum(len(values) for values in missing_required.values())
+        return CheckResult(
+            name="secrets_present",
+            severity="amber",
+            summary=(
+                f".env exists but {missing_count} required launch key(s) are "
+                "missing or empty (values not emitted)"
+            ),
+            details=inspected_details,
         )
     return CheckResult(
         name="secrets_present",
         severity="green",
-        summary=f".env exists ({p.stat().st_size} bytes; contents not read)",
-        details=_env_readiness_details(),
+        summary=f".env required launch keys are populated ({p.stat().st_size} bytes; values not emitted)",
+        details=inspected_details,
     )
 
 

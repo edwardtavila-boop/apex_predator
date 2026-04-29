@@ -211,7 +211,69 @@ def test_vps_failover_missing_env_reports_template_and_active_brokers(
     assert result.details["active_brokers"] == ["IBKR", "Tastytrade"]
     assert result.details["dormant_brokers"] == ["Tradovate"]
     assert "IBKR_ACCOUNT_ID" in result.details["required_groups"]["ibkr_primary"]
-    assert "TASTY_SESSION_TOKEN" in result.details["required_groups"]["tastytrade_fallback"]
+    assert "TASTY_SESSION_TOKEN" in result.details["recommended_groups"]["tastytrade_fallback"]
+
+
+def test_vps_failover_existing_env_with_empty_required_keys_stays_amber(
+    monkeypatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".env.example").write_text("APEX_MODE=\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "APEX_MODE=",
+                "ANTHROPIC_API_KEY=",
+                "JARVIS_HOURLY_USD_BUDGET=5",
+                "JARVIS_DAILY_USD_BUDGET=25",
+                "IBKR_VENUE_TYPE=paper",
+                "IBKR_CP_BASE_URL=",
+                "IBKR_ACCOUNT_ID=DU123",
+                "IBKR_CONID_MNQ1=",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(vps_failover_drill, "ROOT", tmp_path)
+
+    result = vps_failover_drill._check_secrets_present()
+
+    assert result.severity == "amber"
+    assert "runtime_mode" in result.details["required_missing"]
+    assert "jarvis_budget" in result.details["required_missing"]
+    assert "ibkr_primary" in result.details["required_missing"]
+    assert result.details["values_emitted"] is False
+    assert "DU123" not in json.dumps(result.details)
+
+
+def test_vps_failover_required_env_keys_populated_without_tastytrade_is_green(
+    monkeypatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".env.example").write_text("APEX_MODE=\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "APEX_MODE=PAPER",
+                "ANTHROPIC_API_KEY=placeholder-secret",
+                "JARVIS_HOURLY_USD_BUDGET=5",
+                "JARVIS_DAILY_USD_BUDGET=25",
+                "IBKR_VENUE_TYPE=paper",
+                "IBKR_CP_BASE_URL=https://127.0.0.1:5000/v1/api",
+                "IBKR_ACCOUNT_ID=DU123",
+                "IBKR_CONID_MNQ1=123456",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(vps_failover_drill, "ROOT", tmp_path)
+
+    result = vps_failover_drill._check_secrets_present()
+
+    assert result.severity == "green"
+    assert result.details["required_missing"] == {}
+    assert "tastytrade_fallback" in result.details["recommended_missing"]
+    assert result.details["values_emitted"] is False
+    assert "placeholder-secret" not in json.dumps(result.details)
+    assert "DU123" not in json.dumps(result.details)
 
 
 def test_vps_failover_env_template_completeness_passes_for_full_template(

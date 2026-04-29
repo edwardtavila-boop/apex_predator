@@ -1,7 +1,7 @@
 """Pre-commit hygiene gate for eta_engine.
 
-Runs ruff + pytest before any commit and refuses to let the commit
-proceed if either fails. Exit codes:
+Runs staged-file guardrails, ruff, and pytest before any commit and
+refuses to let the commit proceed if a hard gate fails. Exit codes:
 
   0 -> all checks passed, commit may proceed
   1 -> ruff failed
@@ -21,9 +21,10 @@ As a git pre-commit hook (one-time install):
 
     python scripts/_pre_commit_check.py --install-hook
 
-The hook runs the full pytest sweep and ruff on production code only
-(strategies/ + scripts/). Test-file annotation noise is intentionally
-not enforced -- production cleanliness is what blocks the commit.
+The hook runs stale-path lint and secret audit on staged files, then
+ruff on staged Python, then the full pytest sweep. Test-file annotation
+noise is intentionally not enforced -- staged-file safety and production
+cleanliness are what block the commit.
 
 Why this exists
 ---------------
@@ -35,7 +36,7 @@ GitHub snapshot stays close to local truth.
 Design constraints
 ------------------
 * Pure stdlib + subprocess -- nothing to install
-* Fast path: ruff first (sub-second), then pytest (~12s)
+* Fast path: staged-file safety checks first, then ruff, then pytest
 * --quick flag skips pytest for tiny doc-only commits
 * --no-pytest also skips, but loudly warns
 """

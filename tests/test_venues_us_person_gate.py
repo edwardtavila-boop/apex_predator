@@ -4,11 +4,13 @@ The router must HARD-REFUSE live orders to non-FCM venues when
 ``IS_US_PERSON`` is True, with no failover path that bypasses the
 gate. Adapters must stay importable for offline backtest + unit tests.
 """
+
 from __future__ import annotations
 
 import pytest
 
-from eta_engine.venues import cme_mapping, router as router_mod
+from eta_engine.venues import cme_mapping
+from eta_engine.venues import router as router_mod
 from eta_engine.venues.base import (
     OrderRequest,
     OrderType,
@@ -19,7 +21,6 @@ from eta_engine.venues.router import (
     NON_FCM_VENUES,
     SmartRouter,
 )
-
 
 # ─── M2: US-person gate ──────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ def test_non_fcm_venues_includes_offshore_perps() -> None:
     assert "okx" in NON_FCM_VENUES
     assert "deribit" in NON_FCM_VENUES
     assert "hyperliquid" in NON_FCM_VENUES
+    assert "bitget" in NON_FCM_VENUES
+    assert "binance" in NON_FCM_VENUES
 
 
 def test_fcm_venues_not_in_non_fcm() -> None:

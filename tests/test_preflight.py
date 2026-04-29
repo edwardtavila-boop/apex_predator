@@ -65,29 +65,71 @@ def test_check_secrets_caps_missing_list_at_five_for_display(monkeypatch: pytest
 
 def test_check_venues_passes_when_config_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(preflight, "CONFIG_PATH", tmp_path / "nope.json")
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "reports")
     name, ok, msg = preflight.check_venues()
     assert ok is True
-    # Baked-in venues include tradovate/ibkr/tastytrade once the
-    # broker-dormancy mandate (2026-04-24) added IBKR + Tastytrade to
-    # the canonical list. Check that at least the baked-in set is
-    # reported (previously 2, now 3).
-    assert "venues configured" in msg
+    # Baked-in venues are active futures brokers only. Tradovate is
+    # DORMANT and crypto/offshore venues cannot be readiness-positive
+    # for US-person live boot.
+    assert "2 venues configured" in msg
     assert "ready=" in msg
 
 
-def test_check_venues_reads_venues_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_check_venues_blocks_explicit_dormant_and_offshore_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps({"venues": ["tradovate", "bybit", "okx", "binance"]}))
     monkeypatch.setattr(preflight, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "reports")
     name, ok, msg = preflight.check_venues()
-    assert ok is True
+    assert ok is False
     assert "4 venues" in msg
+    assert "failed=tradovate,bybit,okx,binance" in msg
+
+
+def test_check_venues_uses_active_futures_from_execution_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cfg = tmp_path / "config.json"
+    cfg.write_text(
+        json.dumps(
+            {
+                "execution": {
+                    "futures": {
+                        "broker_primary": "ibkr",
+                        "broker_backup": "tastytrade",
+                        "broker_dormant": ["tradovate"],
+                    },
+                    "crypto": {
+                        "exchange_primary": "bybit",
+                        "exchange_backups": ["okx", "bitget"],
+                    },
+                },
+            },
+        ),
+    )
+    reports = tmp_path / "reports"
+    monkeypatch.setattr(preflight, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", reports)
+
+    name, ok, msg = preflight.check_venues()
+
+    assert ok is True
+    assert "2 venues configured" in msg
+    payload = json.loads((reports / "preflight_venue_connections_latest.json").read_text(encoding="utf-8"))
+    assert payload["configured_brokers"] == ["ibkr", "tastytrade"]
+    assert payload["policy"]["dormant_brokers"] == ["tradovate"]
+    assert "bybit" in payload["policy"]["blocked_live_venues"]
 
 
 def test_check_venues_fails_on_unreadable_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     cfg = tmp_path / "config.json"
     cfg.write_text("{this is not valid json")
     monkeypatch.setattr(preflight, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(preflight, "VENUE_CONNECTION_REPORT_DIR", tmp_path / "reports")
     name, ok, msg = preflight.check_venues()
     assert ok is False
     assert "unreadable" in msg

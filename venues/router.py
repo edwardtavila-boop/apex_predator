@@ -77,7 +77,7 @@ IS_US_PERSON: bool = os.environ.get("APEX_IS_US_PERSON", "true").lower() in (
 #: the USA, the operator must produce documented compliance-counsel guidance
 #: AND set ``APEX_IS_US_PERSON=false`` explicitly in the live process env.
 NON_FCM_VENUES: frozenset[str] = frozenset({
-    "bybit", "okx", "deribit", "hyperliquid",
+    "bybit", "okx", "deribit", "hyperliquid", "bitget", "binance",
 })
 
 # ---------------------------------------------------------------------------

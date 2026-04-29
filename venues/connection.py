@@ -37,6 +37,13 @@ from eta_engine.venues.base import ConnectionStatus, VenueBase, VenueConnectionR
 from eta_engine.venues.bybit import BybitVenue
 from eta_engine.venues.ibkr import IbkrClientPortalVenue
 from eta_engine.venues.okx import OkxVenue
+from eta_engine.venues.router import (
+    ACTIVE_FUTURES_VENUES,
+    DEFAULT_FUTURES_VENUE,
+    DORMANT_BROKERS,
+    IS_US_PERSON,
+    NON_FCM_VENUES,
+)
 from eta_engine.venues.tastytrade import TastytradeVenue
 from eta_engine.venues.tradovate import TradovateVenue
 
@@ -56,6 +63,10 @@ _UNAVAILABLE_NOTES: dict[str, str] = {
     "gemini": "Gemini adapter not implemented in the current repo",
     "deribit": "Deribit adapter not implemented in the current repo",
 }
+
+_US_PERSON_BLOCKED_VENUES: frozenset[str] = frozenset(
+    set(NON_FCM_VENUES) | {"bitget", "binance"},
+)
 
 
 def _truthy(raw: str | None) -> bool:
@@ -192,6 +203,12 @@ class BrokerConnectionSummary:
             "config_path": self.config_path,
             "configured_brokers": self.configured_brokers,
             "source": self.source,
+            "policy": {
+                "active_futures_brokers": list(ACTIVE_FUTURES_VENUES),
+                "dormant_brokers": sorted(DORMANT_BROKERS),
+                "is_us_person": IS_US_PERSON,
+                "blocked_live_venues": sorted(_US_PERSON_BLOCKED_VENUES) if IS_US_PERSON else [],
+            },
             "reports": [report.to_dict() for report in self.reports],
             "summary": {
                 "health": self.health(),
@@ -269,6 +286,8 @@ class BrokerConnectionManager:
             _extend_names(names, execution.get("brokers"))
             futures = execution.get("futures")
             if isinstance(futures, dict):
+                dormant: list[str] = []
+                _extend_names(dormant, futures.get("broker_dormant"))
                 _extend_names(names, futures.get("brokers"))
                 _extend_names(
                     names,
@@ -278,17 +297,14 @@ class BrokerConnectionManager:
                     ],
                 )
                 _extend_names(names, futures.get("broker_backups"))
-            crypto = execution.get("crypto")
-            if isinstance(crypto, dict):
-                _extend_names(names, crypto.get("exchanges"))
-                _extend_names(names, crypto.get("exchange_primary"))
-                _extend_names(names, crypto.get("exchange_backups"))
+                dormant_names = set(_dedupe(dormant)) | set(DORMANT_BROKERS)
+                names = [name for name in names if name.strip().lower() not in dormant_names]
         if not names:
             # Last-resort default when no config provides broker names.
             # IBKR + Tastytrade are the active futures brokers per
             # operator mandate 2026-04-24; Tradovate is DORMANT and
             # deliberately excluded from this fallback list.
-            names = ["ibkr", "tastytrade", "bybit"]
+            names = list(ACTIVE_FUTURES_VENUES)
         return _dedupe(names)
 
     def _venue_for_name(self, name: str) -> VenueBase | None:
@@ -296,6 +312,9 @@ class BrokerConnectionManager:
 
     async def connect_name(self, name: str) -> VenueConnectionReport:
         clean = name.strip().lower()
+        policy_blocked = self._policy_blocked_report(clean)
+        if policy_blocked is not None:
+            return policy_blocked
         venue = self._venue_for_name(clean)
         if venue is None:
             note = _UNAVAILABLE_NOTES.get(clean, "adapter not implemented in the current repo")
@@ -321,6 +340,43 @@ class BrokerConnectionManager:
             if endpoint:
                 report.details["endpoint"] = endpoint
         return report
+
+    def _policy_blocked_report(self, clean: str) -> VenueConnectionReport | None:
+        venue = self._venue_for_name(clean)
+        creds_present = bool(venue.has_credentials()) if venue is not None else False
+        if clean in DORMANT_BROKERS:
+            reason = (
+                f"{clean} is DORMANT; use active futures brokers "
+                f"{', '.join(ACTIVE_FUTURES_VENUES)} unless the operator reactivates it in code and docs"
+            )
+            return VenueConnectionReport(
+                venue=clean,
+                status=ConnectionStatus.FAILED,
+                creds_present=creds_present,
+                details={
+                    "policy_state": "dormant",
+                    "active_substitute": DEFAULT_FUTURES_VENUE,
+                    "reason": reason,
+                },
+                error=reason,
+            )
+        if IS_US_PERSON and clean in _US_PERSON_BLOCKED_VENUES:
+            reason = (
+                f"{clean} is blocked for US-person live readiness; "
+                "route live exposure through US-legal futures brokers instead"
+            )
+            return VenueConnectionReport(
+                venue=clean,
+                status=ConnectionStatus.FAILED,
+                creds_present=creds_present,
+                details={
+                    "policy_state": "blocked_us_person",
+                    "active_substitute": DEFAULT_FUTURES_VENUE,
+                    "reason": reason,
+                },
+                error=reason,
+            )
+        return None
 
     async def connect(self, names: Iterable[str] | None = None) -> BrokerConnectionSummary:
         selected = _dedupe(names if names is not None else self.configured_brokers())

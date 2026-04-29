@@ -52,6 +52,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 #: Possible verdicts for a single OP item.
 VERDICT_DONE = "DONE"
@@ -440,6 +442,52 @@ def _op17_phase_advancement() -> OpItem:
     )
 
 
+def _op18_vps_failover_readiness() -> OpItem:
+    item = OpItem(
+        op_id="OP-18",
+        title="Resolve current VPS failover red/amber blockers",
+        where="python -m eta_engine.scripts.vps_failover_summary --json",
+    )
+    try:
+        from eta_engine.scripts import vps_failover_summary
+
+        summary = vps_failover_summary.build_summary(skip_backup_test=True)
+    except Exception as exc:  # noqa: BLE001 -- operator queue must stay readable
+        item.verdict = VERDICT_UNKNOWN
+        item.detail = f"Unable to collect VPS failover summary: {exc}"
+        item.evidence = {"error": str(exc)}
+        return item
+
+    severity = str(summary.get("overall_severity", "unknown"))
+    blockers = summary.get("blockers", [])
+    counts = summary.get("counts", {})
+    if severity in {"red", "amber"}:
+        item.verdict = VERDICT_BLOCKED
+    elif severity == "green":
+        item.verdict = VERDICT_DONE
+    else:
+        item.verdict = VERDICT_UNKNOWN
+
+    if blockers:
+        first = blockers[0]
+        next_commands = first.get("next_commands") or []
+        command_hint = f"; next: {next_commands[0]}" if next_commands else ""
+        item.detail = (
+            f"{severity.upper()} with {len(blockers)} blocker(s); "
+            f"first={first.get('name')}: {first.get('summary')}{command_hint}"
+        )
+    else:
+        item.detail = f"{severity.upper()} failover summary; counts={counts}"
+    item.evidence = {
+        "overall_severity": severity,
+        "counts": counts,
+        "blockers": blockers,
+        "generated_at": summary.get("generated_at"),
+        "exit_code": summary.get("exit_code"),
+    }
+    return item
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -465,6 +513,7 @@ def collect_items() -> list[OpItem]:
     items.append(_op15_crypto_seed())
     items.append(_op16_eth_perp())
     items.append(_op17_phase_advancement())
+    items.append(_op18_vps_failover_readiness())
     return items
 
 

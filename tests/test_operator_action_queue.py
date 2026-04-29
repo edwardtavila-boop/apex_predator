@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 class TestOpListShape:
     """The list size + each item's required fields."""
 
-    def test_collects_all_seventeen_op_items(self):
+    def test_collects_all_eighteen_op_items(self):
         items = collect_items()
-        assert len(items) == 17
+        assert len(items) == 18
 
     def test_op_ids_are_sequential(self):
         items = collect_items()
         op_ids = [i.op_id for i in items]
-        expected = [f"OP-{n}" for n in range(1, 18)]
+        expected = [f"OP-{n}" for n in range(1, 19)]
         assert op_ids == expected
 
     def test_every_item_has_a_title(self):
@@ -128,7 +128,7 @@ class TestRenderText:
     def test_renders_each_op_id(self):
         items = collect_items()
         text = render_text(items)
-        for n in range(1, 18):
+        for n in range(1, 19):
             assert f"OP-{n}" in text
 
 
@@ -148,10 +148,10 @@ class TestJsonOutput:
         payload = json.loads(captured)
         assert "items" in payload
         assert "summary" in payload
-        assert len(payload["items"]) == 17
+        assert len(payload["items"]) == 18
         # summary counts must equal items count
         total = sum(payload["summary"].values())
-        assert total == 17
+        assert total == 18
 
     def test_json_summary_has_all_four_verdicts(
         self,
@@ -249,3 +249,54 @@ class TestMcpOauthProbeUnderSyntheticState:
         roadmap: dict[str, Any] = {}
         items = _op6_op7_op8_mcp_oauth(roadmap)
         assert all(i.verdict == VERDICT_UNKNOWN for i in items)
+
+
+class TestVpsFailoverProbeUnderSyntheticState:
+    def test_green_summary_marks_done(self, monkeypatch) -> None:
+        from eta_engine.scripts import vps_failover_summary
+        from eta_engine.scripts.operator_action_queue import _op18_vps_failover_readiness
+
+        monkeypatch.setattr(
+            vps_failover_summary,
+            "build_summary",
+            lambda **_kwargs: {
+                "overall_severity": "green",
+                "counts": {"red": 0, "amber": 0, "green": 8, "skip": 0},
+                "blockers": [],
+                "generated_at": "2026-04-29T00:00:00+00:00",
+                "exit_code": 0,
+            },
+        )
+
+        item = _op18_vps_failover_readiness()
+
+        assert item.verdict == VERDICT_DONE
+        assert item.evidence["overall_severity"] == "green"
+
+    def test_amber_summary_marks_blocked_with_next_command(self, monkeypatch) -> None:
+        from eta_engine.scripts import vps_failover_summary
+        from eta_engine.scripts.operator_action_queue import _op18_vps_failover_readiness
+
+        monkeypatch.setattr(
+            vps_failover_summary,
+            "build_summary",
+            lambda **_kwargs: {
+                "overall_severity": "amber",
+                "counts": {"red": 0, "amber": 1, "green": 7, "skip": 0},
+                "blockers": [
+                    {
+                        "name": "secrets_present",
+                        "summary": ".env missing",
+                        "next_commands": ["cp .env.example .env && chmod 600 .env"],
+                    }
+                ],
+                "generated_at": "2026-04-29T00:00:00+00:00",
+                "exit_code": 2,
+            },
+        )
+
+        item = _op18_vps_failover_readiness()
+
+        assert item.verdict == VERDICT_BLOCKED
+        assert "next: cp .env.example .env && chmod 600 .env" in item.detail
+        assert item.evidence["blockers"][0]["name"] == "secrets_present"

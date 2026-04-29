@@ -112,6 +112,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
   to `var/eta_engine/state/operator_queue_snapshot.json` with blocker counts,
   top OP id, and first next action, giving 10-minute wakeups a diffable status
   artifact without starting the dashboard server.
+- The same snapshot writer preserves
+  `var/eta_engine/state/operator_queue_snapshot.previous.json` and embeds a
+  `drift` block comparing blocker count, top OP id, status, and first action,
+  so heartbeat reports can distinguish unchanged blockers from new drift.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

@@ -29,7 +29,7 @@ For each configured bot whose apex_go_state flag is True:
          - FLATTEN_TIER_A_PREEMPTIVE → flatten MNQ + NQ only
     5. Dispatch events via AlertDispatcher per alerts.yaml routing.
     6. Heartbeat tick.
-    7. Append a structured entry to docs/runtime_log.jsonl.
+    7. Append a structured entry to logs/eta_engine/runtime_log.jsonl.
 
 Modes
 -----
@@ -41,7 +41,7 @@ Modes
                              Live mode is validated against kill_switch cushion.
 --state-path PATH            override roadmap_state.json (tests).
 --config-dir PATH            override configs/.
---log-path PATH              override docs/runtime_log.jsonl.
+--log-path PATH              override logs/eta_engine/runtime_log.jsonl.
 
 This script is safe by default: creds absent + --dry-run means *no* network
 calls, no orders, no money. Preflight is the gate that flips --live.
@@ -100,6 +100,7 @@ from eta_engine.core.market_quality import format_market_context_summary
 from eta_engine.core.runtime_log_rotator import RuntimeLogRotator
 from eta_engine.obs.alert_dispatcher import AlertDispatcher
 from eta_engine.obs.heartbeat import HeartbeatMonitor
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH, ETA_RUNTIME_LOG_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -190,7 +191,7 @@ class RuntimeConfig:
     tick_interval_s: float = 1.0
     state_path: Path = field(default_factory=lambda: ROOT / "roadmap_state.json")
     config_dir: Path = field(default_factory=lambda: ROOT / "configs")
-    log_path: Path = field(default_factory=lambda: ROOT / "docs" / "runtime_log.jsonl")
+    log_path: Path = field(default_factory=lambda: ETA_RUNTIME_LOG_PATH)
     # B3 closure (v0.1.69): operator-supplied expected size of the
     # Apex eval account in USD. When set, the tier-A aggregate-equity
     # invariant validator checks ``sum(tier_a.equity_usd)`` against
@@ -677,7 +678,7 @@ class ApexRuntime:
         self._last_consistency_status: ConsistencyStatus | None = None
         self.dispatcher = dispatcher or AlertDispatcher(
             cfg.alerts or {},
-            log_path=ROOT / "docs" / "alerts_log.jsonl",
+            log_path=ETA_RUNTIME_ALERTS_LOG_PATH,
         )
         self.heartbeat = heartbeat or HeartbeatMonitor()
         self.bindings = bindings if bindings is not None else BOT_BINDINGS
@@ -1260,7 +1261,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ap.add_argument("--state-path", type=Path, default=ROOT / "roadmap_state.json")
     ap.add_argument("--config-dir", type=Path, default=ROOT / "configs")
-    ap.add_argument("--log-path", type=Path, default=ROOT / "docs" / "runtime_log.jsonl")
+    ap.add_argument("--log-path", type=Path, default=ETA_RUNTIME_LOG_PATH)
     ap.add_argument(
         "--require-firm-health",
         choices=["off", "advisory", "strict"],

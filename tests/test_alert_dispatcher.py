@@ -11,6 +11,7 @@ import yaml
 
 from eta_engine.obs import alert_dispatcher as mod
 from eta_engine.obs.alert_dispatcher import AlertDispatcher, _RateLimiter
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -188,7 +189,7 @@ def test_each_send_writes_jsonl_line(tmp_path: Path, monkeypatch):
     d.send("bot_entry", {"n": 2})
     lines = (tmp_path / "a.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
-    assert [json.loads(l)["payload"]["n"] for l in lines] == [1, 2]
+    assert [json.loads(line)["payload"]["n"] for line in lines] == [1, 2]
 
 
 # --------------------------------------------------------------------------- #
@@ -202,3 +203,8 @@ def test_from_yaml_parses(tmp_path: Path, monkeypatch):
     d = AlertDispatcher.from_yaml(p, log_path=tmp_path / "a.jsonl")
     r = d.send("bot_entry", {"bot": "mnq"})
     assert "pushover" in r.delivered
+
+
+def test_default_log_path_uses_runtime_logs() -> None:
+    d = AlertDispatcher(_cfg())
+    assert d.log_path == ETA_RUNTIME_ALERTS_LOG_PATH

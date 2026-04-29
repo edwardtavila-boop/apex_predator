@@ -8,7 +8,7 @@ Decision #17: Pushover primary, email digest, SMS on kill.
 Design
 ------
 - No network calls unless creds are set in env. Otherwise logs to
-  docs/alerts_log.jsonl and no-ops the transport (so dryruns / CI stay clean).
+  logs/eta_engine/alerts_log.jsonl and no-ops the transport (so dryruns / CI stay clean).
 - Rate limits per level.
 - Events are one of the keys in routing.events in alerts.yaml. Unknown events
   are logged but not dispatched (loudly — we want to catch typos).
@@ -40,10 +40,14 @@ import urllib.request
 from collections import deque
 from dataclasses import dataclass, field
 from email.mime.text import MIMEText
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
+
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +190,7 @@ class AlertDispatcher:
 
     def __init__(self, cfg: dict[str, Any], log_path: Path | None = None) -> None:
         self.cfg = cfg
-        self.log_path = log_path or Path("eta_engine/docs/alerts_log.jsonl")
+        self.log_path = log_path or ETA_RUNTIME_ALERTS_LOG_PATH
         # Build per-level rate limiters
         rl = cfg.get("rate_limit", {}) or {}
         self._rl = {

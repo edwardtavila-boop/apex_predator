@@ -13,7 +13,7 @@ Side effects when run as a script:
   * writes ``docs/{broker}_session_status.json`` with the probe result +
     a UTC timestamp so downstream dashboards have a single artifact
     location per broker.
-  * appends one JSON line to ``docs/alerts_log.jsonl`` when the level is
+  * appends one JSON line to ``logs/eta_engine/alerts_log.jsonl`` when the level is
     YELLOW or RED. Identical-or-lower-severity duplicates inside a
     ``--dedupe-h`` window are suppressed so the alert log doesn't flood.
 
@@ -54,12 +54,13 @@ from pathlib import Path
 
 from eta_engine.brain.avengers.push import AlertLevel
 from eta_engine.brain.avengers.push import push as _default_push_fn
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH
 from eta_engine.venues.base import ConnectionStatus, VenueConnectionReport
 from eta_engine.venues.connection import BrokerConnectionManager
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATUS_DIR = ROOT / "docs"
-DEFAULT_ALERTS_LOG = ROOT / "docs" / "alerts_log.jsonl"
+DEFAULT_ALERTS_LOG = ETA_RUNTIME_ALERTS_LOG_PATH
 
 ACTIVE_BROKERS = ("ibkr", "tastytrade")
 

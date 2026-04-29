@@ -32,10 +32,12 @@ Exit codes:
 
 Usage:
     python -m eta_engine.scripts.run_cross_regime_validation
+    python -m eta_engine.scripts.run_cross_regime_validation --out-dir C:/tmp/cross_regime
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from dataclasses import dataclass
@@ -399,8 +401,16 @@ def _render_markdown(
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    out_dir = Path(__file__).resolve().parents[1] / "docs" / "cross_regime"
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "docs" / "cross_regime",
+        help="output directory for cross_regime_validation.{json,md}",
+    )
+    args = parser.parse_args(argv)
+    out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(UTC).isoformat()

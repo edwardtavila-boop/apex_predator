@@ -234,6 +234,8 @@ def test_full_run_writes_artifacts_and_exits_cleanly(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "eta_engine.scripts.run_cross_regime_validation",
+            "--out-dir",
+            str(tmp_path / "cross_regime"),
         ],
         capture_output=True,
         text=True,
@@ -245,8 +247,9 @@ def test_full_run_writes_artifacts_and_exits_cleanly(tmp_path: Path) -> None:
     assert result.returncode in (0, 2), f"returncode={result.returncode}, stderr={result.stderr[:500]}"
     assert "cross-regime validation:" in result.stdout
 
-    # Artifacts landed under eta_engine/docs/cross_regime/
-    artifacts = _repo_root() / "eta_engine" / "docs" / "cross_regime"
+    # Artifacts land in the explicit temp output dir so full test gates
+    # don't mutate the checked-in docs snapshots.
+    artifacts = tmp_path / "cross_regime"
     json_path = artifacts / "cross_regime_validation.json"
     md_path = artifacts / "cross_regime_validation.md"
     assert json_path.exists()

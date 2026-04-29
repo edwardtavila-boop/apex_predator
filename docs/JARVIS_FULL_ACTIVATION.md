@@ -61,6 +61,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - Decision-journal defaults now write operational GRADER/watchdog events to
   `var/eta_engine/state/decision_journal.jsonl`, keeping tracked docs snapshots
   clean unless a script explicitly targets them.
+- Runtime and alert-log defaults now write to `logs/eta_engine/runtime_log.jsonl`
+  and `logs/eta_engine/alerts_log.jsonl`; cross-regime verification tests use
+  explicit temp output so full gates do not churn tracked docs snapshots.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

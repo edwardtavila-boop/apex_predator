@@ -5,6 +5,7 @@ gate paper-live launch freshness:
 
 * MNQ1 5m via yfinance
 * MNQ1 1h via yfinance
+* MNQ1 4h via yfinance 1h -> 4h resampling
 * NQ1 5m via yfinance
 * NQ1 1h via yfinance
 * NQ1 4h via yfinance 1h -> 4h resampling
@@ -61,6 +62,20 @@ def build_plan(*, skip_inventory: bool = False, skip_verify: bool = False) -> li
                 "MNQ",
                 "--timeframe",
                 "1h",
+                "--period",
+                "730d",
+            ],
+        ),
+        (
+            "mnq_4h",
+            [
+                py,
+                "-m",
+                "eta_engine.scripts.fetch_index_futures_bars",
+                "--symbol",
+                "MNQ",
+                "--timeframe",
+                "4h",
                 "--period",
                 "730d",
             ],

@@ -14,34 +14,36 @@ python -m eta_engine.scripts.refresh_launch_data --json
 It runs the safe non-Databento refresh path:
 1. `fetch_index_futures_bars --symbol MNQ --timeframe 5m`
 2. `fetch_index_futures_bars --symbol MNQ --timeframe 1h --period 730d`
-3. `fetch_index_futures_bars --symbol NQ --timeframe 5m`
-4. `fetch_index_futures_bars --symbol NQ --timeframe 1h --period 730d`
-5. `fetch_index_futures_bars --symbol NQ --timeframe 4h --period 730d`
-6. `fetch_index_futures_bars --symbol ES --timeframe 5m`
-7. `extend_nq_daily_yahoo`
-8. `announce_data_library`
-9. `paper_live_launch_check --json`
+3. `fetch_index_futures_bars --symbol MNQ --timeframe 4h --period 730d`
+4. `fetch_index_futures_bars --symbol NQ --timeframe 5m`
+5. `fetch_index_futures_bars --symbol NQ --timeframe 1h --period 730d`
+6. `fetch_index_futures_bars --symbol NQ --timeframe 4h --period 730d`
+7. `fetch_index_futures_bars --symbol ES --timeframe 5m`
+8. `extend_nq_daily_yahoo`
+9. `announce_data_library`
+10. `paper_live_launch_check --json`
 
 On 2026-04-29 it refreshed:
-* `MNQ1_5m.csv`: 490,103 -> 493,041 rows, ending 2026-04-29.
+* `MNQ1_5m.csv`: 490,103 -> 493,043 rows, ending 2026-04-29.
 * `MNQ1_1h.csv`: 41,007 -> 41,285 rows, ending 2026-04-29.
-* `NQ1_5m.csv`: 20,726 -> 23,749 rows, ending 2026-04-29.
+* `MNQ1_4h.csv`: 11,113 -> 11,180 rows, ending 2026-04-29.
+* `NQ1_5m.csv`: 20,726 -> 23,751 rows, ending 2026-04-29.
 * `NQ1_1h.csv`: 25,255 -> 25,539 rows, ending 2026-04-29.
 * `NQ1_4h.csv`: 20,442 -> 24,150 rows, ending 2026-04-29.
-* `ES1_5m.csv`: 491,074 -> 494,012 rows, ending 2026-04-29.
+* `ES1_5m.csv`: 491,074 -> 494,014 rows, ending 2026-04-29.
 * `NQ1_D.csv`: 6,775 -> 6,787 rows, ending 2026-04-29.
 
 Result after republishing the inventory: all 19 paper-live bot definitions
 returned `READY`, with `warn: []` and `block: []`. The inventory snapshot
-now reports 54 datasets, 24 fresh, 2 warm, and 28 stale; bot coverage is
+now reports 54 datasets, 25 fresh, 2 warm, and 27 stale; bot coverage is
 18 runnable, 1 deactivated, and 0 blocked. The snapshot also exposes
 dataset freshness bands so "data exists" and "data is current" are no
 longer conflated.
 
 The inventory snapshot now distinguishes raw dataset freshness from the
 canonical dataset each symbol/timeframe resolves to. Raw freshness remains
-24 fresh / 2 warm / 28 stale, while canonical freshness is 24 fresh / 1
-warm / 20 stale, with 8 stale raw feeds explicitly marked as superseded
+25 fresh / 2 warm / 27 stale, while canonical freshness is 25 fresh / 1
+warm / 19 stale, with 8 stale raw feeds explicitly marked as superseded
 by a better canonical dataset.
 
 Bot coverage now also includes a per-bot critical-feed freshness rollup.

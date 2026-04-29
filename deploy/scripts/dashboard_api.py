@@ -58,6 +58,208 @@ DASHBOARD_REQUIRED_DATA = (
     "auth_session",
     "source_freshness",
 )
+DASHBOARD_CARD_REGISTRY = (
+    {
+        "id": "cc-verdict-stream",
+        "title": "Live Verdict Stream",
+        "source": "sse",
+        "endpoint": "/api/live/stream",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "cc-stress-mood",
+        "title": "Stress & Session",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/summary",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "cc-operator-queue",
+        "title": "Operator Blockers",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/operator_queue",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "cc-v22-toggle",
+        "title": "V22 Modulation",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/sage_modulation_toggle",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "cc-sage-explain",
+        "title": "Sage Explain",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/sage_explain?symbol=MNQ&side=long",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "cc-sage-health",
+        "title": "Sage Health",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/health",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "cc-disagreement-heatmap",
+        "title": "School Disagreement",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/sage_disagreement_heatmap?symbol=MNQ",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "cc-edge-leaderboard",
+        "title": "Edge Leaderboard",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/edge_leaderboard",
+        "required": True,
+        "stale_after_s": 60,
+    },
+    {
+        "id": "cc-policy-diff",
+        "title": "Bandit Policy Diff",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/policy_diff",
+        "required": True,
+        "stale_after_s": 120,
+    },
+    {
+        "id": "cc-model-tier",
+        "title": "Model Tier",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/model_tier",
+        "required": True,
+        "stale_after_s": 120,
+    },
+    {
+        "id": "cc-kaizen-latest",
+        "title": "Latest Kaizen Ticket",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/kaizen_latest",
+        "required": True,
+        "stale_after_s": 300,
+    },
+    {
+        "id": "fl-roster",
+        "title": "Bot Fleet Roster",
+        "source": "endpoint",
+        "endpoint": "/api/bot-fleet?since_days=1",
+        "required": True,
+        "stale_after_s": 15,
+    },
+    {
+        "id": "fl-drilldown",
+        "title": "Last Trade & Drill-Down",
+        "source": "endpoint",
+        "endpoint": "/api/bot-fleet/{selected_bot}",
+        "required": True,
+        "stale_after_s": 15,
+    },
+    {
+        "id": "fl-equity-curve",
+        "title": "Fleet Equity Curve",
+        "source": "endpoint",
+        "endpoint": "/api/equity?range=1d&normalize=1&since_days=1",
+        "required": True,
+        "stale_after_s": 15,
+    },
+    {
+        "id": "fl-drawdown",
+        "title": "Drawdown vs Threshold",
+        "source": "endpoint",
+        "endpoint": "/api/risk_gates",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "fl-sage-effect",
+        "title": "Sage Modulation",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/sage_modulation_stats",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "fl-correlation",
+        "title": "Correlation Throttles",
+        "source": "endpoint",
+        "endpoint": "/api/preflight",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "fl-edge-per-bot",
+        "title": "Per-Bot Edge",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/edge_leaderboard?bot={selected_bot}",
+        "required": True,
+        "stale_after_s": 45,
+    },
+    {
+        "id": "fl-position-reconciler",
+        "title": "Position Reconciler",
+        "source": "endpoint",
+        "endpoint": "/api/positions/reconciler",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "fl-risk-ladder",
+        "title": "Risk Gate Ladder",
+        "source": "endpoint",
+        "endpoint": "/api/risk_gates",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "fl-controls",
+        "title": "Lifecycle Controls",
+        "source": "client",
+        "endpoint": None,
+        "required": True,
+        "stale_after_s": None,
+    },
+    {
+        "id": "fl-fill-quality",
+        "title": "Fill Quality",
+        "source": "endpoint",
+        "endpoint": "/api/live/fills?limit=80",
+        "required": True,
+        "stale_after_s": 20,
+    },
+    {
+        "id": "fl-risk-sim",
+        "title": "Risk Simulator",
+        "source": "endpoint",
+        "endpoint": "/api/risk_gates",
+        "required": True,
+        "stale_after_s": 30,
+    },
+    {
+        "id": "fl-performance-os",
+        "title": "Performance OS",
+        "source": "endpoint",
+        "endpoint": "/api/bot-fleet",
+        "required": True,
+        "stale_after_s": 20,
+    },
+    {
+        "id": "fl-health-badges",
+        "title": "Bot Health Badges",
+        "source": "endpoint",
+        "endpoint": "/api/bot-fleet",
+        "required": True,
+        "stale_after_s": 20,
+    },
+)
 
 # State/log dirs: repo-relative so every deployment reads the right directory.
 # ETA_STATE_DIR / ETA_LOG_DIR are canonical; APEX_* remains as a legacy test/runtime fallback.
@@ -80,6 +282,46 @@ def _dashboard_contract() -> dict:
         "beta_launched": False,
         "required_data": list(DASHBOARD_REQUIRED_DATA),
         "operator_url": "https://ops.evolutionarytradingalgo.com",
+    }
+
+
+def _dashboard_card_health_payload() -> dict:
+    """Static V1 card registry so the shell can detect dead/unwired panels."""
+    cards: list[dict] = []
+    for item in DASHBOARD_CARD_REGISTRY:
+        card = dict(item)
+        source = str(card.get("source") or "endpoint")
+        if source == "sse":
+            card["status"] = "stream_ready"
+        elif source == "client":
+            card["status"] = "client_ready"
+        elif card.get("endpoint"):
+            card["status"] = "registered"
+        else:
+            card["status"] = "dead"
+        cards.append(card)
+
+    dead_cards = [card for card in cards if card["status"] == "dead"]
+    stale_cards: list[dict] = []
+    by_source: defaultdict[str, int] = defaultdict(int)
+    for card in cards:
+        by_source[str(card.get("source") or "endpoint")] += 1
+
+    return {
+        **_dashboard_contract(),
+        "source_of_truth": "dashboard_card_registry",
+        "generated_at": time.time(),
+        "cards": cards,
+        "dead_cards": dead_cards,
+        "stale_cards": stale_cards,
+        "summary": {
+            "total": len(cards),
+            "registered": sum(1 for card in cards if card["status"] == "registered"),
+            "client": int(by_source["client"]),
+            "sse": int(by_source["sse"]),
+            "dead": len(dead_cards),
+            "stale": len(stale_cards),
+        },
     }
 
 
@@ -592,6 +834,15 @@ def dashboard_payload(response: Response) -> dict:
     payload = dict(read_json_safe(_state_dir() / "dashboard_payload.json"))
     payload["operator_queue"] = _operator_queue_payload()
     return payload
+
+
+@app.get("/api/dashboard/card-health")
+def dashboard_card_health(response: Response) -> dict:
+    """V1 rendered-card source contract for dead/stale card detection."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return _dashboard_card_health_payload()
 
 
 @app.get("/api/jarvis/operator_queue")

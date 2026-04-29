@@ -176,6 +176,28 @@ class TestDashboardAPI:
         assert r.json()["error"] == "probe exploded"
         assert r.json()["top_blockers"] == []
 
+    def test_dashboard_card_health_contract_has_no_dead_or_stale_cards(self, app_client):
+        r = app_client.get("/api/dashboard/card-health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["dashboard_version"] == "v1"
+        assert data["release_stage"] == "pre_beta"
+        assert data["summary"]["dead"] == 0
+        assert data["summary"]["stale"] == 0
+        assert data["dead_cards"] == []
+        assert data["stale_cards"] == []
+
+        cards = {card["id"]: card for card in data["cards"]}
+        assert "cc-verdict-stream" in cards
+        assert "fl-roster" in cards
+        assert "fl-controls" in cards
+        assert "fl-equity-curve" in cards
+        assert cards["cc-verdict-stream"]["source"] == "sse"
+        assert cards["fl-controls"]["source"] == "client"
+        assert cards["fl-roster"]["endpoint"] == "/api/bot-fleet?since_days=1"
+        assert cards["fl-equity-curve"]["endpoint"].startswith("/api/equity?")
+        assert all(card["status"] not in {"dead", "stale"} for card in data["cards"])
+
     def test_kaizen_summary(self, app_client):
         r = app_client.get("/api/kaizen")
         assert r.status_code == 200

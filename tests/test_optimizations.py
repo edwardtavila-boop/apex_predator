@@ -9,6 +9,7 @@ Tests for the 10-optimization bundle:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -138,6 +139,7 @@ class TestStatusPage:
             "top-bar",
             "top-operator-queue",
             "top-sse-status",
+            "top-card-health",
             "view-jarvis",
             "view-fleet",
             "cc-operator-queue",
@@ -160,6 +162,7 @@ class TestStatusPage:
         assert "ETA // V1 Command Center" in html
         assert "Pre-Beta V1" in html
         assert "Live data contract: bot fleet, equity, auth, freshness" in html
+        assert "/api/dashboard/card-health" in html
         assert 'aria-label="Primary dashboard tabs"' in html
         assert 'class="skip-link"' in html
         assert 'class="modal-card' in html
@@ -201,8 +204,35 @@ class TestStatusPage:
         assert "source_updated_at" in bot_fleet
         assert "dashboard_version" in bot_fleet
         assert "release_stage" in bot_fleet
+        assert "ensureLiveBotSelection" in bot_fleet
+        assert "selectBot(firstLiveBot.name" in bot_fleet
         assert "document.hidden" in panels
         assert "cache: 'no-store'" in auth
+
+    def test_status_page_card_health_contract_is_wired(self):
+        root = Path(__file__).resolve().parent.parent / "deploy" / "status_page"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        css = (root / "theme.css").read_text(encoding="utf-8")
+        supercharge = (root / "js" / "supercharge.js").read_text(encoding="utf-8")
+
+        assert 'id="top-card-health"' in html
+        assert "card-health-chip" in css
+        assert "initCardHealthContract" in supercharge
+        assert "/api/dashboard/card-health" in supercharge
+        assert "dead_cards" in supercharge
+        assert "stale_cards" in supercharge
+
+    def test_card_health_registry_covers_every_rendered_panel(self):
+        from eta_engine.deploy.scripts.dashboard_api import DASHBOARD_CARD_REGISTRY
+
+        root = Path(__file__).resolve().parent.parent / "deploy" / "status_page"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        rendered = set(re.findall(r'data-panel-id="([^"]+)"', html))
+        registered = {str(card["id"]) for card in DASHBOARD_CARD_REGISTRY}
+
+        assert rendered
+        assert rendered == registered
+        assert len(registered) == len(DASHBOARD_CARD_REGISTRY)
 
     def test_status_page_has_no_visible_mojibake_tokens(self):
         root = Path(__file__).resolve().parent.parent / "deploy" / "status_page"

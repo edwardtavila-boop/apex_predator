@@ -23,6 +23,18 @@ function notify(message, type = 'success') {
   setTimeout(() => el.remove(), 3200);
 }
 
+function ensureLiveBotSelection(bots) {
+  const rows = Array.isArray(bots) ? bots : [];
+  if (!rows.length) return selection.botId;
+  const activeId = String(selection.botId || '');
+  const hasActive = rows.some((b) => String(b?.name || '') === activeId);
+  if (hasActive) return activeId;
+  const firstLiveBot = rows.find((b) => String(b?.status || '').toLowerCase() === 'running') || rows[0];
+  if (!firstLiveBot?.name) return activeId;
+  queueMicrotask(() => selectBot(firstLiveBot.name, firstLiveBot.symbol || selection.symbol));
+  return String(firstLiveBot.name);
+}
+
 // --- 1. Roster table ---
 class RosterPanel extends Panel {
   constructor() {
@@ -85,6 +97,7 @@ class RosterPanel extends Panel {
         </div>`;
       return;
     }
+    const activeBotId = ensureLiveBotSelection(bots);
     const srvTs = data.server_ts ? new Date(data.server_ts * 1000).toLocaleTimeString() : '-';
     const live = data.live || {};
     const dataAge = data.data_age_s ?? data.fleet_age_s ?? live.last_fill_age_s ?? null;
@@ -98,7 +111,7 @@ class RosterPanel extends Panel {
                         : b.status === 'paused' ? 'text-amber-400'
                         : b.status === 'killed' ? 'text-red-400' : 'text-zinc-400';
         const pnlCls = (b.todays_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400';
-        const isSel = selection.botId === b.name ? 'bg-zinc-800' : '';
+        const isSel = activeBotId === b.name ? 'bg-zinc-800' : '';
         const age = Number(b.last_trade_age_s || 0);
         const ageLabel = age > 0 ? `${Math.floor(age / 60)}m` : '-';
         const side = b.last_trade_side ? String(b.last_trade_side).toUpperCase() : '-';

@@ -463,6 +463,69 @@ function initDataFreshnessTelemetry() {
   setInterval(classify, 2000);
 }
 
+function initCardHealthContract() {
+  const chip = document.getElementById('top-card-health');
+  if (!chip) return;
+  const endpoint = chip.dataset.healthEndpoint || '/api/dashboard/card-health';
+
+  const setChip = (label, health, title = '') => {
+    chip.textContent = label;
+    chip.dataset.health = health;
+    chip.title = title;
+  };
+
+  const refresh = async () => {
+    try {
+      const resp = await fetch(`${endpoint}?_t=${Date.now()}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (!resp.ok) {
+        setChip(`cards: contract http ${resp.status}`, 'dead', endpoint);
+        return;
+      }
+      const payload = await resp.json();
+      const cards = Array.isArray(payload.cards) ? payload.cards : [];
+      const registryIds = new Set(cards.map((card) => String(card.id || '')).filter(Boolean));
+      const renderedIds = new Set([...document.querySelectorAll('[data-panel-id]')]
+        .map((el) => String(el.getAttribute('data-panel-id') || ''))
+        .filter(Boolean));
+      const missingDom = cards.filter((card) => card.required !== false && !renderedIds.has(String(card.id || '')));
+      const orphanDom = [...renderedIds].filter((id) => !registryIds.has(id));
+      const dead_cards = [
+        ...(Array.isArray(payload.dead_cards) ? payload.dead_cards : []),
+        ...missingDom.map((card) => ({ id: card.id, reason: 'missing_dom_panel' })),
+        ...orphanDom.map((id) => ({ id, reason: 'missing_registry_card' })),
+      ];
+      const stale_cards = Array.isArray(payload.stale_cards) ? payload.stale_cards : [];
+      if (dead_cards.length > 0) {
+        setChip(
+          `cards: ${dead_cards.length} dead`,
+          'dead',
+          dead_cards.map((card) => `${card.id}:${card.reason || card.status || 'dead'}`).join(', '),
+        );
+        return;
+      }
+      if (stale_cards.length > 0) {
+        setChip(
+          `cards: ${stale_cards.length} stale`,
+          'degraded',
+          stale_cards.map((card) => `${card.id}:${card.reason || card.status || 'stale'}`).join(', '),
+        );
+        return;
+      }
+      setChip(`cards: ${cards.length} live`, 'ok', `${cards.length} registered cards, ${renderedIds.size} rendered panels`);
+    } catch (err) {
+      setChip(`cards: contract down`, 'dead', String(err?.message || err));
+    }
+  };
+
+  refresh();
+  setInterval(refresh, 10_000);
+  window.addEventListener('eta-panel-error', () => setTimeout(refresh, 100));
+  window.addEventListener('eta-panel-refresh', () => setTimeout(refresh, 100));
+}
+
 function initConsistencyGuardrails() {
   let previousFillTs = 0;
   setInterval(async () => {
@@ -821,6 +884,7 @@ function boot() {
   initHideableFloatingSurfaces();
   initMinimalMode();
   initDataFreshnessTelemetry();
+  initCardHealthContract();
   initConsistencyGuardrails();
   initLatencyBudgetGuardrails();
   initTradeRefreshFanout();

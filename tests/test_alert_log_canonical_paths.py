@@ -140,3 +140,69 @@ def test_vps_failover_real_bash_syntax_error_is_red(monkeypatch) -> None:
 
     assert result.severity == "red"
     assert "syntax error" in result.summary
+
+
+def test_vps_failover_idempotent_resume_uses_live_order_evidence(monkeypatch, tmp_path: Path) -> None:
+    router = tmp_path / "live_supervisor.py"
+    preflight = tmp_path / "live_tiny_preflight_dryrun.py"
+    router.write_text(
+        "hashlib.sha256\n"
+        "def _ensure_client_order_id(): pass\n"
+        "client_order_id = 'coid'\n"
+        "idempotent_order_id = True\n",
+        encoding="utf-8",
+    )
+    preflight.write_text(
+        "def _gate_idempotent_order_id(): pass\n"
+        "JarvisAwareRouter._ensure_client_order_id\n"
+        "client_order_id\n"
+        "same coid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        vps_failover_drill,
+        "_IDEMPOTENCY_EVIDENCE_FILES",
+        [
+            (
+                "deterministic_router",
+                router,
+                ("_ensure_client_order_id", "client_order_id", "idempotent_order_id", "hashlib.sha256"),
+            ),
+            (
+                "required_preflight_gate",
+                preflight,
+                ("_gate_idempotent_order_id", "JarvisAwareRouter._ensure_client_order_id", "same coid"),
+            ),
+        ],
+    )
+
+    result = vps_failover_drill._check_idempotent_resume()
+
+    assert result.severity == "green"
+    assert "live deterministic order-id router" in result.summary
+    assert [item["label"] for item in result.details["evidence"]] == [
+        "deterministic_router",
+        "required_preflight_gate",
+    ]
+
+
+def test_vps_failover_idempotent_resume_stays_amber_when_evidence_is_incomplete(
+    monkeypatch, tmp_path: Path
+) -> None:
+    router = tmp_path / "live_supervisor.py"
+    router.write_text("client_order_id = 'coid'\n", encoding="utf-8")
+    missing_preflight = tmp_path / "live_tiny_preflight_dryrun.py"
+    monkeypatch.setattr(
+        vps_failover_drill,
+        "_IDEMPOTENCY_EVIDENCE_FILES",
+        [
+            ("deterministic_router", router, ("_ensure_client_order_id", "client_order_id")),
+            ("required_preflight_gate", missing_preflight, ("_gate_idempotent_order_id",)),
+        ],
+    )
+
+    result = vps_failover_drill._check_idempotent_resume()
+
+    assert result.severity == "amber"
+    assert "evidence incomplete" in result.summary
+    assert len(result.details["missing"]) == 2

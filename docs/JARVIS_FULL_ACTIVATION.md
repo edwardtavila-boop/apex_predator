@@ -73,6 +73,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - The VPS failover drill now separates environment-limited bash availability
   from true `deploy/install_vps.sh` syntax failures, so Windows WSL launcher
   gaps do not masquerade as broken deploy code.
+- The VPS failover idempotent-resume check now follows the live deterministic
+  order-id router and `idempotent_order_id` preflight evidence instead of
+  looking for broker-order semantics in the pure JARVIS VPS admin vocabulary.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

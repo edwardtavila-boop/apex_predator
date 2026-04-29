@@ -29,9 +29,9 @@ What it does (locally — safe to run anytime)
 4. **Cron schedule check**: verifies ``deploy/cron/`` has entries
    for the daemons that must restart on a fresh host (drift_watchdog,
    live_supervisor, etc.) so the operator doesn't forget any.
-5. **Idempotency probe** (mock): simulates resuming after a kill,
-   verifying the order-reconciler logic in ``brain/jarvis_v3/vps.py``
-   doesn't duplicate orders. *Mock — does not contact brokers.*
+5. **Idempotency probe** (mock): verifies the live deterministic
+   ``client_order_id`` router and the required preflight gate are both
+   present. *Mock — does not contact brokers.*
 
 Operator-only steps (printed as a checklist)
 --------------------------------------------
@@ -100,6 +100,29 @@ _DEPLOY_FILES_REQUIRED: list[str] = [
     "deploy/install_vps.sh",
     "deploy/HOST_RUNBOOK.md",
     "deploy/README.md",
+]
+
+_IDEMPOTENCY_EVIDENCE_FILES: list[tuple[str, Path, tuple[str, ...]]] = [
+    (
+        "deterministic_router",
+        ROOT / "scripts" / "live_supervisor.py",
+        (
+            "_ensure_client_order_id",
+            "client_order_id",
+            "idempotent_order_id",
+            "hashlib.sha256",
+        ),
+    ),
+    (
+        "required_preflight_gate",
+        ROOT / "scripts" / "live_tiny_preflight_dryrun.py",
+        (
+            "_gate_idempotent_order_id",
+            "JarvisAwareRouter._ensure_client_order_id",
+            "client_order_id",
+            "same coid",
+        ),
+    ),
 ]
 
 
@@ -411,43 +434,58 @@ def _backup_restore_round_trip(skip: bool) -> CheckResult:
         )
 
 
+def _idempotency_evidence() -> tuple[list[dict[str, Any]], list[str]]:
+    """Return proof files that cover restart-safe order dedup evidence."""
+    evidence: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for label, path, tokens in _IDEMPOTENCY_EVIDENCE_FILES:
+        if not path.exists():
+            missing.append(f"{label}: missing {_display_path(path)}")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        missing_tokens = [token for token in tokens if token not in text]
+        if missing_tokens:
+            missing.append(f"{label}: missing token(s) {', '.join(missing_tokens)}")
+            continue
+        evidence.append(
+            {
+                "label": label,
+                "path": _display_path(path),
+                "tokens": list(tokens),
+            }
+        )
+    return evidence, missing
+
+
 def _check_idempotent_resume() -> CheckResult:
     """6. Mock: would the resume duplicate orders?
 
-    Reads ``brain/jarvis_v3/vps.py`` and looks for the load-bearing
-    pattern: an idempotency-key check before order placement. This is
-    a smoke check — not a substitute for an actual paper round-trip
-    on the new host.
+    Static smoke check: verifies the live deterministic client-order-id router
+    and the required preflight gate are both present. This is not a substitute
+    for an actual paper round-trip on the new host.
     """
-    p = ROOT / "brain" / "jarvis_v3" / "vps.py"
-    if not p.exists():
-        return CheckResult(
-            name="idempotent_resume",
-            severity="amber",
-            summary="brain/jarvis_v3/vps.py missing — manual verify on DR day",
-        )
-    text = p.read_text(encoding="utf-8", errors="replace")
-    has_idempotency = (
-        "client_order_id" in text
-        or "idempotency" in text.lower()
-        or "dedup" in text.lower()
-    )
-    if not has_idempotency:
+    # The live order path owns idempotency; JARVIS VPS admin actions do not
+    # place orders, so the DR drill checks the order router plus preflight gate.
+    evidence, missing = _idempotency_evidence()
+    if missing:
         return CheckResult(
             name="idempotent_resume",
             severity="amber",
             summary=(
-                "vps.py doesn't reference client_order_id / idempotency / "
-                "dedup — verify manually that resumed daemons can't double-fire"
+                "idempotent resume evidence incomplete -- verify manually that "
+                "resumed daemons cannot double-fire"
             ),
+            details={"evidence": evidence, "missing": missing},
         )
     return CheckResult(
         name="idempotent_resume",
         severity="green",
-        summary="vps.py references idempotency-key pattern",
+        summary=(
+            "idempotent resume covered by live deterministic order-id router "
+            "+ required preflight gate"
+        ),
+        details={"evidence": evidence},
     )
-
-
 # ---------------------------------------------------------------------------
 # Operator-day checklist
 # ---------------------------------------------------------------------------

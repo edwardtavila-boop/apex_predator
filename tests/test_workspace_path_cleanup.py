@@ -20,6 +20,9 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.CRYPTO_MACRO_ROOT == ROOT / "data" / "crypto" / "macro"
     assert workspace_roots.ETA_RUNTIME_STATE_DIR == ROOT / "var" / "eta_engine" / "state"
     assert workspace_roots.ETA_RUNTIME_LOG_DIR == ROOT / "logs" / "eta_engine"
+    assert workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR == (
+        ROOT / "var" / "eta_engine" / "state" / "research_grid"
+    )
     assert workspace_roots.ETA_OPERATOR_QUEUE_SNAPSHOT_PATH == (
         ROOT / "var" / "eta_engine" / "state" / "operator_queue_snapshot.json"
     )
@@ -147,6 +150,9 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     assert "ETA_DRIFT_WATCHDOG_LOG_PATH" in _read("eta_engine/scripts/drift_watchdog_smoke.py")
     assert "ETA_RUNTIME_LOG_PATH" in _read("eta_engine/scripts/runtime_log_smoke.py")
     assert "vps_failover_drill.collect_checks" in _read("eta_engine/scripts/vps_failover_summary.py")
+    assert "workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR" in _read(
+        "eta_engine/scripts/run_research_grid.py"
+    )
     assert "workspace_roots.ETA_OPERATOR_QUEUE_SNAPSHOT_PATH" in _read(
         "eta_engine/scripts/operator_queue_snapshot.py"
     )

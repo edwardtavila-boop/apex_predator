@@ -23,9 +23,10 @@ list at the top of ``main()`` for a custom run.
 Output
 ------
 * stdout — single comparison table
-* ``docs/research_log/research_grid_<utc-stamp>.md`` — the same
-  table in markdown, plus per-row details. Re-runnable; the
-  filename contains a timestamp so previous runs are preserved.
+* Promotable/PASS runs save to ``docs/research_log`` by default.
+* Low-signal/no-data runs save to canonical ignored runtime state under
+  ``var/eta_engine/state/research_grid`` by default, so timestamped smoke
+  output does not clutter tracked docs.
 
 This becomes the "did anything regress" smoke test for any change
 to the engines, scorers, or feature pipeline.
@@ -41,6 +42,8 @@ from typing import TYPE_CHECKING
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
+
+from eta_engine.scripts import workspace_roots  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -714,6 +717,55 @@ def render_table(results: Sequence[CellResult]) -> str:
     return "\n".join(lines)
 
 
+def classify_research_results(results: Sequence[CellResult]) -> str:
+    """Classify whether a grid run belongs in tracked docs or runtime state."""
+    if any(result.pass_gate for result in results):
+        return "promotable"
+    if all(
+        result.n_windows == 0
+        and (
+            result.note.startswith("NO_DATA")
+            or result.note == "EMPTY_BARS"
+            or result.note.startswith("ERROR:")
+        )
+        for result in results
+    ):
+        return "no_data"
+    return "low_signal"
+
+
+def resolve_report_dir(
+    *,
+    artifact_class: str,
+    policy: str = "auto",
+    override: Path | None = None,
+) -> Path:
+    """Return the output directory for a research-grid report."""
+    if override is not None:
+        return override
+    if policy == "docs" or (policy == "auto" and artifact_class == "promotable"):
+        return ROOT / "docs" / "research_log"
+    return workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR
+
+
+def render_report(
+    *,
+    matrix: Sequence[ResearchCell],
+    results: Sequence[CellResult],
+    table: str,
+    generated_at: datetime,
+    artifact_class: str,
+) -> str:
+    """Render a markdown report with an explicit artifact classification."""
+    return (
+        f"# Research Grid — {generated_at.isoformat()}\n\n"
+        f"Cells: {len(matrix)}\n\n"
+        f"Artifact class: `{artifact_class}`\n\n"
+        + table
+        + "\n"
+    )
+
+
 def _matrix_from_registry() -> list[ResearchCell]:
     """Pull one ResearchCell per bot from strategies.per_bot_registry.
 
@@ -755,6 +807,18 @@ def main() -> int:
         help="registry = run every bot's assigned strategy (default); "
         "ad_hoc = the static research-question matrix below",
     )
+    p.add_argument(
+        "--report-policy",
+        choices=("auto", "docs", "runtime"),
+        default="auto",
+        help="auto = PASS reports to docs, low-signal/no-data reports to ignored runtime state",
+    )
+    p.add_argument(
+        "--report-dir",
+        type=Path,
+        default=None,
+        help="override report output directory",
+    )
     args = p.parse_args()
 
     base_block = frozenset({"trending_up", "trending_down"})
@@ -794,17 +858,27 @@ def main() -> int:
     table = render_table(results)
     print("\n" + table)
 
-    log_dir = ROOT / "docs" / "research_log"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    artifact_class = classify_research_results(results)
+    generated_at = datetime.now(UTC)
+    log_dir = resolve_report_dir(
+        artifact_class=artifact_class,
+        policy=args.report_policy,
+        override=args.report_dir,
+    )
+    workspace_roots.ensure_dir(log_dir)
+    stamp = generated_at.strftime("%Y%m%d_%H%M%S")
     log_path = log_dir / f"research_grid_{stamp}.md"
     log_path.write_text(
-        f"# Research Grid — {datetime.now(UTC).isoformat()}\n\n"
-        f"Cells: {len(matrix)}\n\n"
-        + table + "\n",
+        render_report(
+            matrix=matrix,
+            results=results,
+            table=table,
+            generated_at=generated_at,
+            artifact_class=artifact_class,
+        ),
         encoding="utf-8",
     )
-    print(f"\n[saved to {log_path}]")
+    print(f"\n[saved to {log_path} artifact_class={artifact_class}]")
     return 0 if any(r.pass_gate for r in results) else 1
 
 

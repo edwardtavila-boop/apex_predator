@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from eta_engine.scripts import run_research_grid, workspace_roots
+
+
+def _cell() -> run_research_grid.ResearchCell:
+    return run_research_grid.ResearchCell(
+        label="test",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",
+        threshold=0.0,
+        block_regimes=None,
+        window_days=30,
+        step_days=15,
+        min_trades_per_window=5,
+    )
+
+
+def _result(*, pass_gate: bool = False, n_windows: int = 0, note: str = "NO_DATA: BTC/1h"):
+    return run_research_grid.CellResult(
+        cell=_cell(),
+        n_windows=n_windows,
+        n_positive_oos=0,
+        agg_is_sharpe=0.0,
+        agg_oos_sharpe=0.0,
+        avg_oos_degradation=0.0,
+        deflated_sharpe=0.0,
+        fold_dsr_median=0.0,
+        fold_dsr_pass_fraction=0.0,
+        pass_gate=pass_gate,
+        note=note,
+    )
+
+
+def test_research_grid_classifies_promotable_runs_for_docs() -> None:
+    artifact_class = run_research_grid.classify_research_results([_result(pass_gate=True, n_windows=3)])
+
+    assert artifact_class == "promotable"
+    assert run_research_grid.resolve_report_dir(artifact_class=artifact_class) == (
+        run_research_grid.ROOT / "docs" / "research_log"
+    )
+
+
+def test_research_grid_routes_no_data_runs_to_runtime_state() -> None:
+    artifact_class = run_research_grid.classify_research_results([_result()])
+
+    assert artifact_class == "no_data"
+    assert run_research_grid.resolve_report_dir(artifact_class=artifact_class) == (
+        workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR
+    )
+
+
+def test_research_grid_routes_low_signal_runs_to_runtime_state() -> None:
+    artifact_class = run_research_grid.classify_research_results(
+        [_result(n_windows=0, note="1864 bars / 9d")]
+    )
+
+    assert artifact_class == "low_signal"
+    assert run_research_grid.resolve_report_dir(artifact_class=artifact_class) == (
+        workspace_roots.ETA_RESEARCH_GRID_RUNTIME_DIR
+    )
+
+
+def test_research_grid_report_records_artifact_class() -> None:
+    table = run_research_grid.render_table([_result()])
+    report = run_research_grid.render_report(
+        matrix=[_cell()],
+        results=[_result()],
+        table=table,
+        generated_at=datetime(2026, 4, 29, tzinfo=UTC),
+        artifact_class="no_data",
+    )
+
+    assert "Artifact class: `no_data`" in report
+    assert "| test | BTC/1h |" in report

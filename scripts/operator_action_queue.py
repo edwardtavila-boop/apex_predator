@@ -422,6 +422,41 @@ def _op15_crypto_seed() -> OpItem:
     )
 
 
+def _num(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _research_priority_key(blocker: dict[str, object]) -> tuple[float, ...]:
+    """Sort OP-16 blockers by next-action value instead of registry order."""
+    evidence = blocker.get("evidence")
+    if not isinstance(evidence, dict):
+        evidence = {}
+    source = evidence.get("full_history_smoke")
+    if not isinstance(source, dict):
+        source = evidence
+
+    oos = _num(source.get("agg_oos_sharpe", source.get("candidate_agg_oos_sharpe")))
+    dsr = _num(source.get("dsr_pass_fraction", source.get("candidate_dsr_pass_fraction")))
+    provider_backed = bool(evidence.get("provider_backed"))
+
+    if oos is not None and oos < 0:
+        bucket = 3.0
+    elif oos is None:
+        bucket = 2.0
+    elif provider_backed and dsr is not None and dsr >= 0.5:
+        bucket = 0.0
+    else:
+        bucket = 1.0
+
+    return (
+        bucket,
+        -(dsr if dsr is not None else -1.0),
+        -(oos if oos is not None else -999.0),
+    )
+
+
 def _op16_strategy_research_candidates() -> OpItem:
     item = OpItem(
         op_id="OP-16",
@@ -474,6 +509,7 @@ def _op16_strategy_research_candidates() -> OpItem:
             }
         )
 
+    blockers.sort(key=_research_priority_key)
     first = blockers[0]
     item.verdict = VERDICT_BLOCKED
     item.detail = (

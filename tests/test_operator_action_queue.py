@@ -318,6 +318,62 @@ class TestStrategyResearchCandidateProbe:
         assert item.verdict == VERDICT_DONE
         assert item.evidence["overall_severity"] == "green"
 
+    def test_research_blockers_prioritize_actionable_near_pass(self, monkeypatch) -> None:
+        from types import SimpleNamespace
+
+        from eta_engine.scripts import operator_action_queue
+
+        assignments = (
+            SimpleNamespace(
+                bot_id="mnq_futures",
+                strategy_id="mnq_orb_v2",
+                extras={"promotion_status": "research_candidate"},
+            ),
+            SimpleNamespace(
+                bot_id="eth_sage_daily",
+                strategy_id="eth_corb_sage_daily_v1",
+                extras={"promotion_status": "research_candidate"},
+            ),
+        )
+        payloads = {
+            "mnq_futures": {
+                "bot_id": "mnq_futures",
+                "strategy_id": "mnq_orb_v2",
+                "status": "WARN",
+                "warnings": ["research_candidate (strict gate failed; OOS -2.958)"],
+                "evidence": {
+                    "full_history_smoke": {
+                        "agg_oos_sharpe": -2.958,
+                        "dsr_pass_fraction": 0.132,
+                    },
+                },
+            },
+            "eth_sage_daily": {
+                "bot_id": "eth_sage_daily",
+                "strategy_id": "eth_corb_sage_daily_v1",
+                "status": "WARN",
+                "warnings": ["research_candidate (strict gate failed; OOS +3.877)"],
+                "evidence": {
+                    "candidate_agg_oos_sharpe": 3.877,
+                    "candidate_dsr_pass_fraction": 0.571,
+                    "provider_backed": True,
+                },
+            },
+        }
+        monkeypatch.setattr(
+            "eta_engine.strategies.per_bot_registry.ASSIGNMENTS",
+            assignments,
+        )
+        monkeypatch.setattr(
+            "eta_engine.scripts.paper_live_launch_check._audit_bot",
+            lambda assignment: payloads[assignment.bot_id],
+        )
+
+        item = operator_action_queue._op16_strategy_research_candidates()
+
+        assert item.evidence["blocked_bots"] == ["eth_sage_daily", "mnq_futures"]
+        assert "first=eth_sage_daily" in item.detail
+
 
 class TestVpsFailoverProbeUnderSyntheticState:
     def test_green_summary_marks_done(self, monkeypatch) -> None:

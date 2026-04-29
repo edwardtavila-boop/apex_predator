@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from eta_engine.scripts import (
@@ -105,3 +106,37 @@ def test_vps_failover_tracks_workspace_runtime_logs(monkeypatch, tmp_path: Path)
 def test_vps_failover_archives_workspace_paths_relative_to_workspace() -> None:
     workspace_log = workspace_roots.WORKSPACE_ROOT / "logs" / "eta_engine" / "alerts_log.jsonl"
     assert vps_failover_drill._archive_name(workspace_log) == "logs/eta_engine/alerts_log.jsonl"
+
+
+def test_vps_failover_wsl_launcher_gap_is_amber(monkeypatch) -> None:
+    monkeypatch.setattr(vps_failover_drill.shutil, "which", lambda _: "bash")
+
+    def fake_run(*_args, **_kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout="Windows Subsystem for Linux has no installed distributions.",
+            stderr="",
+        )
+
+    monkeypatch.setattr(vps_failover_drill.subprocess, "run", fake_run)
+    result = vps_failover_drill._check_install_script_syntax()
+
+    assert result.severity == "amber"
+    assert "cannot run scripts" in result.summary
+
+
+def test_vps_failover_real_bash_syntax_error_is_red(monkeypatch) -> None:
+    monkeypatch.setattr(vps_failover_drill.shutil, "which", lambda _: "bash")
+
+    def fake_run(*_args, **_kwargs):
+        return SimpleNamespace(
+            returncode=2,
+            stdout="",
+            stderr="deploy/install_vps.sh: line 12: syntax error near unexpected token",
+        )
+
+    monkeypatch.setattr(vps_failover_drill.subprocess, "run", fake_run)
+    result = vps_failover_drill._check_install_script_syntax()
+
+    assert result.severity == "red"
+    assert "syntax error" in result.summary

@@ -289,16 +289,43 @@ def _check_install_script_syntax() -> CheckResult:
             severity="amber",
             summary=f"bash -n failed to run: {exc}",
         )
+    output = _clean_process_output(result.stdout, result.stderr)
+    if result.returncode != 0 and _is_bash_launcher_unavailable(output):
+        return CheckResult(
+            name="install_script_syntax",
+            severity="amber",
+            summary=(
+                "bash exists but cannot run scripts in this environment "
+                "(WSL/Git Bash unavailable). Validate deploy/install_vps.sh "
+                "on the VPS or a shell with bash installed."
+            ),
+        )
     if result.returncode != 0:
         return CheckResult(
             name="install_script_syntax",
             severity="red",
-            summary=f"bash -n found errors: {result.stderr.strip()[:200]}",
+            summary=f"bash -n found errors: {output[:200]}",
         )
     return CheckResult(
         name="install_script_syntax",
         severity="green",
         summary="install_vps.sh syntax-clean",
+    )
+
+
+def _clean_process_output(*chunks: str) -> str:
+    """Normalize subprocess output for concise operator messages."""
+    text = "\n".join(chunk for chunk in chunks if chunk)
+    return text.replace("\x00", "").strip()
+
+
+def _is_bash_launcher_unavailable(output: str) -> bool:
+    """Detect Windows bash launchers that never reached shell parsing."""
+    lowered = output.lower()
+    return (
+        "windows subsystem for linux has no installed distributions" in lowered
+        or "wsl.exe --install" in lowered
+        or "install a distribution" in lowered
     )
 
 

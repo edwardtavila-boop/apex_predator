@@ -206,7 +206,10 @@ def test_vps_failover_missing_env_reports_template_and_active_brokers(
     assert result.severity == "amber"
     assert result.details["template"].replace("\\", "/").endswith(".env.example")
     assert result.details["template_exists"] is True
-    assert result.details["copy_commands"][0].startswith("Copy-Item")
+    assert result.details["copy_commands"][0].startswith(
+        "python scripts/operator_env_bootstrap.py --create"
+    )
+    assert result.details["copy_commands"][1].startswith("Copy-Item")
     assert result.details["copy_commands"][-2] == "cp .env.example .env && chmod 600 .env"
     assert result.details["active_brokers"] == ["IBKR", "Tastytrade"]
     assert result.details["dormant_brokers"] == ["Tradovate"]
@@ -243,6 +246,26 @@ def test_vps_failover_existing_env_with_empty_required_keys_stays_amber(
     assert "ibkr_primary" in result.details["required_missing"]
     assert result.details["values_emitted"] is False
     assert "DU123" not in json.dumps(result.details)
+
+
+def test_vps_failover_inline_comments_do_not_count_as_populated_env_values(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "EMPTY_WITH_COMMENT=      # fill me",
+                "QUOTED_EMPTY=''",
+                "POPULATED=value # operator note",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    state = vps_failover_drill._env_key_state(env_path)
+
+    assert state["EMPTY_WITH_COMMENT"] is False
+    assert state["QUOTED_EMPTY"] is False
+    assert state["POPULATED"] is True
 
 
 def test_vps_failover_required_env_keys_populated_without_tastytrade_is_green(

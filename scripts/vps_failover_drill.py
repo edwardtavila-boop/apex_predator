@@ -102,6 +102,7 @@ _DEPLOY_FILES_REQUIRED: list[str] = [
 
 _ENV_EXAMPLE_FILE = ".env.example"
 _ENV_COPY_COMMANDS = [
+    "python scripts/operator_env_bootstrap.py --create --json",
     "Copy-Item -LiteralPath .env.example -Destination .env",
     'icacls .env /inheritance:r /grant:r "${env:USERNAME}:(R,W)"',
     "notepad .env",
@@ -282,8 +283,20 @@ def _env_key_state(path: Path) -> dict[str, bool]:
         key = key.strip()
         if not key:
             continue
-        key_state[key] = bool(value.strip().strip('"').strip("'"))
+        key_state[key] = bool(_clean_env_value(value))
     return key_state
+
+
+def _clean_env_value(value: str) -> str:
+    """Normalize an env-file value for presence checks without exposing it."""
+    cleaned = value.strip()
+    if cleaned.startswith('"') and cleaned.endswith('"') and len(cleaned) >= 2:
+        return cleaned[1:-1].strip()
+    if cleaned.startswith("'") and cleaned.endswith("'") and len(cleaned) >= 2:
+        return cleaned[1:-1].strip()
+    if "#" in cleaned:
+        cleaned = cleaned.split("#", 1)[0].rstrip()
+    return cleaned.strip()
 
 
 def _env_option_satisfied(key_state: dict[str, bool], options: tuple[str, ...]) -> bool:

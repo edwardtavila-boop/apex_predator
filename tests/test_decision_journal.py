@@ -268,9 +268,13 @@ def test_operator_watchdogs_default_to_runtime_journal() -> None:
         vps_failover_drill,
         weekly_sharpe_check,
     )
-    from eta_engine.scripts.workspace_roots import ETA_RUNTIME_DECISION_JOURNAL_PATH
+    from eta_engine.scripts.workspace_roots import (
+        ETA_DATA_INVENTORY_SNAPSHOT_PATH,
+        ETA_RUNTIME_DECISION_JOURNAL_PATH,
+    )
 
     assert announce_data_library._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH
+    assert announce_data_library._DEFAULT_SNAPSHOT == ETA_DATA_INVENTORY_SNAPSHOT_PATH
     assert drift_check._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH
     assert fleet_corr_check._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH
     assert monte_carlo_stress._DEFAULT_JOURNAL == ETA_RUNTIME_DECISION_JOURNAL_PATH

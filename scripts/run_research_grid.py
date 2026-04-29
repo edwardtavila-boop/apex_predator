@@ -539,6 +539,23 @@ def _resolve_scorer(name: str):  # type: ignore[no-untyped-def]  # noqa: ANN202
     }[name]
 
 
+def _bars_note(ds: object, bars: list[object], max_bars: int | None) -> str:
+    """Describe loaded bars, including tradable-price filtering/caps."""
+    row_count = int(ds.row_count)  # type: ignore[attr-defined]
+    days = float(ds.days_span())
+    expected = min(max_bars, row_count) if max_bars is not None else row_count
+    if len(bars) < expected:
+        if max_bars is not None and max_bars < row_count:
+            return (
+                f"{len(bars)}/{expected} latest capped tradable "
+                f"positive-price bars ({row_count} raw) / {days:.0f}d"
+            )
+        return f"{len(bars)}/{row_count} total tradable positive-price bars / {days:.0f}d"
+    if max_bars is not None and len(bars) < row_count:
+        return f"{len(bars)}/{row_count} latest bars / {days:.0f}d capped"
+    return f"{row_count} bars / {days:.0f}d"
+
+
 def run_cell(cell: ResearchCell, *, max_bars: int | None = None) -> CellResult:
     """Run one walk-forward sweep and return the headline stats."""
     from eta_engine.backtest import (
@@ -564,6 +581,7 @@ def run_cell(cell: ResearchCell, *, max_bars: int | None = None) -> CellResult:
         ds,
         limit=max_bars,
         limit_from="tail" if max_bars is not None else "head",
+        require_positive_prices=True,
     )
     if not bars:
         return CellResult(
@@ -734,11 +752,7 @@ def run_cell(cell: ResearchCell, *, max_bars: int | None = None) -> CellResult:
         fold_dsr_median=res.fold_dsr_median,
         fold_dsr_pass_fraction=res.fold_dsr_pass_fraction,
         pass_gate=res.pass_gate,
-        note=(
-            f"{len(bars)}/{ds.row_count} latest bars / {ds.days_span():.0f}d capped"
-            if max_bars is not None and len(bars) < ds.row_count
-            else f"{ds.row_count} bars / {ds.days_span():.0f}d"
-        ),
+        note=_bars_note(ds, bars, max_bars),
     )
 
 

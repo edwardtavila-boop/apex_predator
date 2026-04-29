@@ -3,7 +3,10 @@ from __future__ import annotations
 import csv
 from typing import TYPE_CHECKING
 
+from eta_engine.scripts import hydrate_canonical_market_data as hydrate
 from eta_engine.scripts.hydrate_canonical_market_data import (
+    CryptoPlan,
+    ImportCandidate,
     _canonical_history_name_from_databento,
     _canonical_history_name_from_main,
     _convert_main_to_history,
@@ -47,3 +50,41 @@ def test_convert_main_to_history_rewrites_schema(tmp_path: Path) -> None:
     assert reader.fieldnames == ["time", "open", "high", "low", "close", "volume"]
     assert materialized[0]["time"] == "1735689600"
     assert materialized[1]["close"] == "101.5"
+
+
+def test_import_futures_dry_run_does_not_write_target(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.csv"
+    target = tmp_path / "history" / "MNQ1_5m.csv"
+    source.write_text("time,open,high,low,close,volume\n1,1,1,1,1,1\n", encoding="utf-8")
+    candidate = ImportCandidate(
+        source=source,
+        target=target,
+        source_kind="history",
+        note="test",
+        row_count=1,
+    )
+
+    monkeypatch.setattr(hydrate, "MNQ_HISTORY_ROOT", tmp_path / "unused")
+    monkeypatch.setattr(hydrate, "ensure_dir", lambda path: path)
+    monkeypatch.setattr(hydrate, "_collect_futures_candidates", lambda: {target: candidate})
+    monkeypatch.setattr(hydrate, "_probe_rows", lambda path, source_kind: 0)
+
+    imported, skipped = hydrate._import_futures(dry_run=True)
+
+    assert (imported, skipped) == (0, 1)
+    assert not target.exists()
+
+
+def test_crypto_price_dry_run_does_not_fetch(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(hydrate, "CRYPTO_HISTORY_ROOT", tmp_path)
+    monkeypatch.setattr(hydrate, "ensure_dir", lambda path: path)
+    monkeypatch.setattr(hydrate, "_CRYPTO_BAR_PLAN", (CryptoPlan("BTC", "1h", 1),))
+
+    def fail_fetch(**_: object) -> list[list[float]]:
+        raise AssertionError("dry-run must not fetch")
+
+    monkeypatch.setattr(hydrate, "fetch_crypto_bars", fail_fetch)
+
+    written, skipped = hydrate._fetch_crypto_prices(dry_run=True)
+
+    assert (written, skipped) == (0, 1)

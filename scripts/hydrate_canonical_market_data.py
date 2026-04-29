@@ -27,6 +27,7 @@ This script does three things:
 Usage::
 
     python -m eta_engine.scripts.hydrate_canonical_market_data
+    python -m eta_engine.scripts.hydrate_canonical_market_data --dry-run
     python -m eta_engine.scripts.hydrate_canonical_market_data --skip-crypto
     python -m eta_engine.scripts.hydrate_canonical_market_data --force
 """
@@ -262,7 +263,7 @@ def _convert_main_to_history(source: Path, target: Path) -> int:
     return rows
 
 
-def _import_futures(*, force: bool = False) -> tuple[int, int]:
+def _import_futures(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
     ensure_dir(MNQ_HISTORY_ROOT)
     imported = 0
     skipped = 0
@@ -279,6 +280,9 @@ def _import_futures(*, force: bool = False) -> tuple[int, int]:
             f"[hydrate:futures] {candidate.note}: {candidate.source} -> {target} "
             f"({candidate.row_count:,} rows)",
         )
+        if dry_run:
+            skipped += 1
+            continue
         if candidate.source_kind == "history":
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(candidate.source, target)
@@ -292,7 +296,7 @@ def _import_futures(*, force: bool = False) -> tuple[int, int]:
     return imported, skipped
 
 
-def _fetch_crypto_prices(*, force: bool = False) -> tuple[int, int]:
+def _fetch_crypto_prices(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
     ensure_dir(CRYPTO_HISTORY_ROOT)
     written = 0
     skipped = 0
@@ -308,6 +312,9 @@ def _fetch_crypto_prices(*, force: bool = False) -> tuple[int, int]:
             f"[hydrate:crypto] fetching {plan.symbol}/{plan.timeframe} "
             f"{start.date()} -> {now.date()}",
         )
+        if dry_run:
+            skipped += 1
+            continue
         rows = fetch_crypto_bars(
             symbol=plan.symbol,
             timeframe=plan.timeframe,
@@ -323,7 +330,7 @@ def _fetch_crypto_prices(*, force: bool = False) -> tuple[int, int]:
     return written, skipped
 
 
-def _fetch_crypto_funding(*, force: bool = False) -> tuple[int, int]:
+def _fetch_crypto_funding(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
     ensure_dir(CRYPTO_HISTORY_ROOT)
     written = 0
     skipped = 0
@@ -336,6 +343,9 @@ def _fetch_crypto_funding(*, force: bool = False) -> tuple[int, int]:
             skipped += 1
             continue
         print(f"[hydrate:funding] fetching {symbol} {start.date()} -> {end.date()}")
+        if dry_run:
+            skipped += 1
+            continue
         rows = fetch_funding(symbol=symbol, start=start, end=end)
         if not rows:
             print(f"  [warn] zero funding rows fetched for {symbol}")
@@ -346,13 +356,16 @@ def _fetch_crypto_funding(*, force: bool = False) -> tuple[int, int]:
     return written, skipped
 
 
-def _fetch_supporting_btc_series(*, force: bool = False) -> tuple[int, int]:
+def _fetch_supporting_btc_series(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
     wrote = 0
     skipped = 0
 
     etf_path = MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"
     if etf_path.exists() and etf_path.stat().st_size > 100 and not force:
         print(f"[hydrate:support] skip {etf_path.name} (already present)")
+        skipped += 1
+    elif dry_run:
+        print(f"[hydrate:support] would fetch {etf_path.name}")
         skipped += 1
     else:
         rows = fetch_btc_etf_flows(etf_path, dry_run=False)
@@ -363,6 +376,9 @@ def _fetch_supporting_btc_series(*, force: bool = False) -> tuple[int, int]:
     if fg_path.exists() and fg_path.stat().st_size > 100 and not force:
         print(f"[hydrate:support] skip {fg_path.name} (already present)")
         skipped += 1
+    elif dry_run:
+        print(f"[hydrate:support] would fetch {fg_path.name}")
+        skipped += 1
     else:
         rows = fetch_btc_fear_greed(fg_path, dry_run=False)
         if rows > 0:
@@ -372,6 +388,9 @@ def _fetch_supporting_btc_series(*, force: bool = False) -> tuple[int, int]:
     btc_daily = CRYPTO_HISTORY_ROOT / "BTC_D.csv"
     if lth_path.exists() and lth_path.stat().st_size > 100 and not force:
         print(f"[hydrate:support] skip {lth_path.name} (already present)")
+        skipped += 1
+    elif dry_run:
+        print(f"[hydrate:support] would build {lth_path.name}")
         skipped += 1
     else:
         rows = build_btc_lth_proxy(btc_daily, lth_path, dry_run=False)
@@ -385,19 +404,20 @@ def main() -> int:
     p = argparse.ArgumentParser(prog="hydrate_canonical_market_data")
     p.add_argument("--skip-futures", action="store_true")
     p.add_argument("--skip-crypto", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
     p.add_argument("--force", action="store_true")
     args = p.parse_args()
 
     imported = skipped = 0
     if not args.skip_futures:
-        fut_imported, fut_skipped = _import_futures(force=args.force)
+        fut_imported, fut_skipped = _import_futures(force=args.force, dry_run=args.dry_run)
         imported += fut_imported
         skipped += fut_skipped
 
     if not args.skip_crypto:
-        price_written, price_skipped = _fetch_crypto_prices(force=args.force)
-        fund_written, fund_skipped = _fetch_crypto_funding(force=args.force)
-        support_written, support_skipped = _fetch_supporting_btc_series(force=args.force)
+        price_written, price_skipped = _fetch_crypto_prices(force=args.force, dry_run=args.dry_run)
+        fund_written, fund_skipped = _fetch_crypto_funding(force=args.force, dry_run=args.dry_run)
+        support_written, support_skipped = _fetch_supporting_btc_series(force=args.force, dry_run=args.dry_run)
         imported += price_written + fund_written + support_written
         skipped += price_skipped + fund_skipped + support_skipped
 

@@ -49,6 +49,22 @@ def test_solve_with_qaoa_raises_if_qiskit_missing() -> None:
         solve_with_qaoa(p)
 
 
+def test_qaoa_recovery_finds_nonzero_optimum_without_best_measurement() -> None:
+    from eta_engine.brain.jarvis_v3.quantum.qaoa_backend import (
+        _classical_recovery_solution,
+        _extract_best_measurement_x,
+    )
+    from eta_engine.brain.jarvis_v3.quantum.qubo_solver import QuboProblem
+
+    p = QuboProblem.from_matrix([[-2.0, 0.0], [0.0, -3.0]], labels=["mnq", "btc"])
+    result = _classical_recovery_solution(p, max_iter=50, seed=7)
+
+    assert _extract_best_measurement_x(object(), 2) is None
+    assert result.x == [1, 1]
+    assert result.energy == -5.0
+    assert result.selected_labels() == ["mnq", "btc"]
+
+
 # ─── D-Wave backend ───────────────────────────────────────────────
 
 

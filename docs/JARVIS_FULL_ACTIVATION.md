@@ -40,6 +40,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - Quantum remains budget/credential-gated. `/api/jarvis/health` tails
   `state/quantum/jobs.jsonl` and reports recent jobs, fallbacks, and estimated
   cost so classical fallback is visible instead of hidden.
+- Qiskit QAOA no longer fabricates an all-zero answer when the SDK returns no
+  usable best measurement. Small QUBOs recover through exact enumeration;
+  larger ones recover through the existing simulated-annealing verifier.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

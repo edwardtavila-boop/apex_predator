@@ -116,6 +116,9 @@ EXEMPT_PATH_FRAGMENTS = (
     "fix_editable_paths.py",
     "_record_onedrive_migration.py",
     "lint_stale_paths.py",  # this file itself
+    "test_lint_stale_paths.py",  # detection-pattern regression tests
+    "test_workspace_path_cleanup.py",  # asserts legacy paths are absent
+    "test_data_library.py",  # documents legacy fixture shapes
     "consolidate_mnq_apex_bot.ps1",  # migration helper
     "memory.md",  # auto-memory document
 )

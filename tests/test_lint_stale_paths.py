@@ -26,15 +26,16 @@ def _c_runtime_root(name: str, sep: str) -> str:
 
 
 def test_scan_file_blocks_current_forbidden_runtime_roots(tmp_path: Path) -> None:
-    sep = "\\"
-    forbidden_roots = [
-        _local_runtime_root(sep, env_style="percent"),
-        _local_runtime_root(sep, env_style="powershell"),
-        _c_runtime_root("mnq_" + "data", sep),
-        _c_runtime_root("crypto_" + "data", sep),
-        _c_runtime_root("The" + "Firm", sep),
-        _c_runtime_root("The_" + "Firm", sep),
-    ]
+    forbidden_roots = []
+    for sep in ("\\", "/"):
+        forbidden_roots.extend((
+            _local_runtime_root(sep, env_style="percent"),
+            _local_runtime_root(sep, env_style="powershell"),
+            _c_runtime_root("mnq_" + "data", sep),
+            _c_runtime_root("crypto_" + "data", sep),
+            _c_runtime_root("The" + "Firm", sep),
+            _c_runtime_root("The_" + "Firm", sep),
+        ))
 
     for root in forbidden_roots:
         path = _write_sample(tmp_path, root)
@@ -51,6 +52,13 @@ def test_scan_file_allows_same_line_historical_marker(tmp_path: Path) -> None:
     )
 
     assert lint_stale_paths.scan_file(path) == []
+
+
+def test_intentional_detection_fixture_files_are_exempt() -> None:
+    assert lint_stale_paths.is_exempt(Path("tests") / "test_lint_stale_paths.py")
+    assert lint_stale_paths.is_exempt(Path("tests") / "test_workspace_path_cleanup.py")
+    assert lint_stale_paths.is_exempt(Path("tests") / "test_data_library.py")
+    assert not lint_stale_paths.is_exempt(Path("scripts") / "runtime_writer.py")
 
 
 def test_active_data_operator_docs_do_not_advertise_forbidden_runtime_roots() -> None:

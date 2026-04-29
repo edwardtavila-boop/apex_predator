@@ -208,7 +208,9 @@ def _run_wf(symbol: str, timeframe: str, factory: Any, *,  # noqa: ANN401
     ds = default_library().get(symbol=symbol, timeframe=timeframe)
     if ds is None:
         return {"err": f"no dataset for {symbol}/{timeframe}"}
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not bars:
+        return {"err": f"no tradable positive-price bars for {symbol}/{timeframe}"}
 
     backtest_cfg = BacktestConfig(
         start_date=bars[0].timestamp, end_date=bars[-1].timestamp,

@@ -164,7 +164,10 @@ def main() -> int:
     if ds is None:
         print(f"ABORT: no dataset for {args.symbol}/{args.timeframe}.")
         return 1
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not bars:
+        print(f"ABORT: no tradable positive-price bars for {args.symbol}/{args.timeframe}.")
+        return 1
     print(
         f"[wf] {ds.symbol}/{ds.timeframe}: {ds.row_count} bars over "
         f"{ds.days_span():.1f} days "

@@ -150,7 +150,7 @@ def _run_recent(  # type: ignore[no-untyped-def]  # noqa: ANN202, ANN001
     ds = default_library().get(symbol=assignment.symbol, timeframe=assignment.timeframe)
     if ds is None:
         return None
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
     if not bars:
         return None
     cutoff = bars[-1].timestamp - timedelta(days=lookback_days)

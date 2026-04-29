@@ -68,7 +68,9 @@ def _build_daily_verdicts(symbol: str = "BTC") -> Any:  # noqa: ANN401
     ds = default_library().get(symbol=symbol, timeframe="D")
     if ds is None:
         raise SystemExit(f"ABORT: no daily dataset for {symbol}.")
-    daily_bars = default_library().load_bars(ds)
+    daily_bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not daily_bars:
+        raise SystemExit(f"ABORT: no tradable positive-price daily bars for {symbol}.")
     print(
         f"[sage-daily] consulting sage on {len(daily_bars)} {symbol} "
         f"daily bars ({daily_bars[0].timestamp.date()} -> "
@@ -256,7 +258,10 @@ def main() -> int:
     if ds is None:
         print(f"ABORT: no dataset for {args.symbol}/{args.timeframe}.")
         return 1
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not bars:
+        print(f"ABORT: no tradable positive-price bars for {args.symbol}/{args.timeframe}.")
+        return 1
     print(
         f"[wf] {ds.symbol}/{ds.timeframe}: {ds.row_count} bars over "
         f"{ds.days_span():.1f} days "

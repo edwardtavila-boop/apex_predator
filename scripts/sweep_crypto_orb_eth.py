@@ -121,6 +121,7 @@ def run_one(  # noqa: PLR0913
         ds,
         limit=max_bars,
         limit_from=bar_slice if max_bars is not None else "head",
+        require_positive_prices=True,
     )
     if not bars:
         return SweepResult(cell, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, False)

@@ -95,7 +95,9 @@ def _run_cell(cell: dict[str, Any]) -> dict[str, Any]:
     ds = default_library().get(symbol=symbol, timeframe=timeframe)
     if ds is None:
         return {"error": f"no dataset for {symbol}/{timeframe}"}
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not bars:
+        return {"error": f"no tradable positive-price bars for {symbol}/{timeframe}"}
 
     backtest_cfg = BacktestConfig(
         start_date=bars[0].timestamp, end_date=bars[-1].timestamp,

@@ -93,14 +93,20 @@ def _load_csv(path: Path, limit: int | None = None) -> list:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
             try:
+                open_ = float(row["open"])
+                high = float(row["high"])
+                low = float(row["low"])
+                close = float(row["close"])
+                if min(open_, high, low, close) <= 0.0:
+                    continue
                 bars.append(
                     BarData(
                         timestamp=ts,
                         symbol="MNQ",
-                        open=float(row["open"]),
-                        high=float(row["high"]),
-                        low=float(row["low"]),
-                        close=float(row["close"]),
+                        open=open_,
+                        high=high,
+                        low=low,
+                        close=close,
                         volume=float(row.get("volume", 0.0) or 0.0),
                     )
                 )
@@ -128,7 +134,10 @@ def _load_es_bars_aligned(_target_ts: object) -> list:
     try:
         from eta_engine.data.library import default_library
         ds = default_library().get(symbol="ES1", timeframe="5m")
-        bars = default_library().load_bars(ds) if ds else []
+        bars = (
+            default_library().load_bars(ds, require_positive_prices=True)
+            if ds else []
+        )
     except Exception:  # noqa: BLE001
         bars = []
     _ES_BARS_CACHE = bars  # type: ignore[name-defined]
@@ -315,10 +324,14 @@ def main() -> int:
             f"{ds.row_count} bars over {ds.days_span():.1f} days "
             f"({ds.start_ts.date()} -> {ds.end_ts.date()})"
         )
-        bars = default_library().load_bars(ds, limit=limit)
+        bars = default_library().load_bars(
+            ds,
+            limit=limit,
+            require_positive_prices=True,
+        )
     if not bars:
         print(
-            f"ABORT: zero bars loaded "
+            f"ABORT: zero tradable positive-price bars loaded "
             f"({'path=' + str(data_path) if data_path else 'via library'})"
         )
         return 1

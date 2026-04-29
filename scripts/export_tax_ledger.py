@@ -325,7 +325,7 @@ def _trades_from_backtest(  # type: ignore[no-untyped-def]  # noqa: ANN202
     ds = default_library().get(symbol=a.symbol, timeframe=a.timeframe)
     if ds is None:
         return None, a
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
     if start is not None:
         bars = [b for b in bars if b.timestamp >= start]
     if end is not None:

@@ -318,13 +318,13 @@ def _run_one(  # type: ignore[no-untyped-def]  # noqa: ANN202
             fold_dsr_median=0.0, fold_dsr_pass_fraction=0.0, pass_gate=False,
             error=f"no data for {plan.symbol}/{plan.timeframe}",
         )
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
     if not bars:
         return CellRunResult(
             bot_id=plan.bot_id, candidate=cand, n_windows=0, n_positive_oos=0,
             agg_is_sharpe=0.0, agg_oos_sharpe=0.0, avg_oos_degradation=0.0,
             fold_dsr_median=0.0, fold_dsr_pass_fraction=0.0, pass_gate=False,
-            error="empty bar list",
+            error="empty tradable bar list",
         )
 
     base_cfg = BacktestConfig(

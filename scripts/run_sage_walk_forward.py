@@ -167,7 +167,10 @@ def main() -> int:
     if ds is None:
         print(f"ABORT: no dataset for {symbol}/{timeframe} in the data library.")
         return 1
-    bars = default_library().load_bars(ds)
+    bars = default_library().load_bars(ds, require_positive_prices=True)
+    if not bars:
+        print(f"ABORT: no tradable positive-price bars for {symbol}/{timeframe}.")
+        return 1
     print(
         f"[sage-wf] using {ds.symbol}/{ds.timeframe}/{ds.schema_kind}: "
         f"{ds.row_count} bars over {ds.days_span():.1f} days "

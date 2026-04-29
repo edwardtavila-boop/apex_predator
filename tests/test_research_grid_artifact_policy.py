@@ -87,6 +87,42 @@ def test_research_grid_report_path_uses_microseconds(tmp_path) -> None:
     assert path.name == "research_grid_20260429_160229_123456.md"
 
 
+def test_bars_note_surfaces_positive_price_filtering() -> None:
+    class FakeDataset:
+        row_count = 10
+
+        def days_span(self) -> float:
+            return 2.0
+
+    note = run_research_grid._bars_note(FakeDataset(), [object()] * 7, None)
+
+    assert note == "7/10 total tradable positive-price bars / 2d"
+
+
+def test_bars_note_surfaces_capped_positive_price_filtering() -> None:
+    class FakeDataset:
+        row_count = 20
+
+        def days_span(self) -> float:
+            return 5.0
+
+    note = run_research_grid._bars_note(FakeDataset(), [object()] * 8, max_bars=10)
+
+    assert note == "8/10 latest capped tradable positive-price bars (20 raw) / 5d"
+
+
+def test_bars_note_preserves_clean_capped_note() -> None:
+    class FakeDataset:
+        row_count = 20
+
+        def days_span(self) -> float:
+            return 5.0
+
+    note = run_research_grid._bars_note(FakeDataset(), [object()] * 10, max_bars=10)
+
+    assert note == "10/20 latest bars / 5d capped"
+
+
 def test_daily_sage_provider_wrapper_attaches_provider(monkeypatch) -> None:
     provider = object()
     calls = []

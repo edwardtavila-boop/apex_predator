@@ -856,13 +856,15 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         strategy_kind="sage_daily_gated",
         rationale=(
             "REFRESHED 2026-04-29: run_research_grid now attaches real "
-            "daily sage verdicts for sage_daily_gated cells. Latest 720d "
-            "provider-backed retest: agg IS Sh +3.383, agg OOS Sh +3.877, "
-            "13/21 +OOS, DSR median 0.995, DSR pass 57.1%, degradation "
-            "41.0%, gate FAIL. Small retune sweep kept this legacy120 "
-            "base as the best honest candidate; 180m/v4-base variants "
-            "were weaker, and 240m cells showed flashy OOS with "
-            "negative/weak IS and poor DSR. Historical 2026-04-27 note: "
+            "daily sage verdicts for sage_daily_gated cells. Provider-backed "
+            "retune over the latest 720d ETH tape found the best honest "
+            "candidate at the legacy120 ORB base with loose daily-sage gate "
+            "and conv>=0.30: agg IS Sh +2.159, agg OOS Sh +4.888, 13/21 "
+            "+OOS, DSR pass 57.1%, degradation 40.6%, gate FAIL. "
+            "The registered ETH v4 ORB base was weaker under the overlay "
+            "(best OOS +2.882), so keep the legacy120 overlay as "
+            "research-only until degradation clears the 35% cap. "
+            "Historical 2026-04-27 note: "
             "Generalization test of the BTC sage-daily-gate breakthrough. "
             "Plain crypto_regime_trend on ETH baseline is NEGATIVE "
             "(IS -0.90, OOS -2.14, IS-negative in 7/9 windows), so we "
@@ -893,18 +895,21 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "ema_bias_period": 100,
                 "max_trades_per_day": 2,
             },
-            "sage_min_daily_conviction": 0.40,
-            "sage_strict_mode": True,
+            "sage_min_daily_conviction": 0.30,
+            "sage_strict_mode": False,
             "sage_lookback_daily_bars": 200,
             "research_tune": {
                 "refreshed_on": "2026-04-29",
-                "scope": "latest_20k_bar_provider_backed_retest",
+                "scope": "provider_backed_loose_sage_daily_retune",
                 "source_artifact": (
-                    "var/eta_engine/state/research_grid/"
-                    "research_grid_20260429_172238_763839.md"
+                    "docs/research_log/"
+                    "eth_sage_daily_retune_20260429T183030Z.md"
                 ),
-                "candidate_agg_oos_sharpe": 3.877,
+                "candidate_agg_oos_sharpe": 4.888,
                 "candidate_dsr_pass_fraction": 0.571,
+                "candidate_degradation": 0.406,
+                "candidate_windows": 21,
+                "candidate_oos_trades": 68,
                 "strict_gate": False,
                 "provider_backed": True,
             },

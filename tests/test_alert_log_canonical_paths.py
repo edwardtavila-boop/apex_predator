@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from eta_engine.scripts import _backup_state, _kill_switch_drift, _trade_journal_reconcile, workspace_roots
+from eta_engine.scripts import (
+    _backup_state,
+    _kill_switch_drift,
+    _repo_health,
+    _trade_journal_reconcile,
+    vps_failover_drill,
+    workspace_roots,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -60,3 +67,41 @@ def test_backup_state_tracks_resolved_alert_log_first(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_ALERTS_LOG_PATH", tmp_path / "legacy.jsonl")
 
     assert _backup_state.critical_files()[0] == canonical
+
+
+def test_repo_health_tracks_resolved_runtime_logs_first(monkeypatch, tmp_path: Path) -> None:
+    alerts = tmp_path / "logs" / "eta_engine" / "alerts_log.jsonl"
+    runtime = tmp_path / "logs" / "eta_engine" / "runtime_log.jsonl"
+    alerts.parent.mkdir(parents=True)
+    alerts.write_text('{"event":"runtime_start"}\n', encoding="utf-8")
+    runtime.write_text('{"kind":"tick"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_ALERTS_LOG_PATH", alerts)
+    monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_LOG_PATH", runtime)
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_ALERTS_LOG_PATH", tmp_path / "legacy_alerts.jsonl")
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_RUNTIME_LOG_PATH", tmp_path / "legacy_runtime.jsonl")
+
+    assert _repo_health.log_files()[:2] == [alerts, runtime]
+
+
+def test_vps_failover_tracks_workspace_runtime_logs(monkeypatch, tmp_path: Path) -> None:
+    alerts = tmp_path / "logs" / "eta_engine" / "alerts_log.jsonl"
+    runtime = tmp_path / "logs" / "eta_engine" / "runtime_log.jsonl"
+    alerts.parent.mkdir(parents=True)
+    alerts.write_text('{"event":"runtime_start"}\n', encoding="utf-8")
+    runtime.write_text('{"kind":"tick"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_ALERTS_LOG_PATH", alerts)
+    monkeypatch.setattr(workspace_roots, "ETA_RUNTIME_LOG_PATH", runtime)
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_ALERTS_LOG_PATH", tmp_path / "legacy_alerts.jsonl")
+    monkeypatch.setattr(workspace_roots, "ETA_LEGACY_DOCS_RUNTIME_LOG_PATH", tmp_path / "legacy_runtime.jsonl")
+
+    _, recommended = vps_failover_drill._state_file_paths()
+    recommended_paths = [path for _, path in recommended]
+    assert alerts in recommended_paths
+    assert runtime in recommended_paths
+
+
+def test_vps_failover_archives_workspace_paths_relative_to_workspace() -> None:
+    workspace_log = workspace_roots.WORKSPACE_ROOT / "logs" / "eta_engine" / "alerts_log.jsonl"
+    assert vps_failover_drill._archive_name(workspace_log) == "logs/eta_engine/alerts_log.jsonl"

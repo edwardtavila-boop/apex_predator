@@ -7,9 +7,10 @@ Catches the silent decay modes that no other sentinel covers:
    ``docs/repo_health_baseline.json``, something was deleted or
    silently disabled. The baseline self-updates UPWARDS only.
 
-2. **Bloated state files** -- ``docs/alerts_log.jsonl``,
-   ``docs/jarvis_live_log.jsonl``, and ``docs/decisions_v1.json`` over
-   ``--max-mb`` (default 25MB). Indicates rotation/pruning is missing.
+2. **Bloated state files** -- ``logs/eta_engine/alerts_log.jsonl``,
+   ``logs/eta_engine/runtime_log.jsonl``, ``docs/jarvis_live_log.jsonl``,
+   and ``docs/decisions_v1.json`` over ``--max-mb`` (default 25MB).
+   Indicates rotation/pruning is missing.
 
 3. **Pre-commit hook missing** -- ``.git/hooks/pre-commit`` does not
    exist or doesn't reference ``_pre_commit_check``. Catches fresh
@@ -44,14 +45,24 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eta_engine.scripts.workspace_roots import default_alerts_log_path, default_runtime_log_path
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "docs" / "repo_health_baseline.json"
 
-LOG_FILES = [
-    ROOT / "docs" / "alerts_log.jsonl",
+_STATIC_LOG_FILES = [
     ROOT / "docs" / "jarvis_live_log.jsonl",
     ROOT / "docs" / "decisions_v1.json",
 ]
+
+
+def log_files() -> list[Path]:
+    """Return state/log files for size checks, preferring live runtime logs."""
+    return [
+        default_alerts_log_path(),
+        default_runtime_log_path(),
+        *_STATIC_LOG_FILES,
+    ]
 
 
 def _collect_pytest_count() -> int | None:
@@ -102,7 +113,8 @@ def _check_log_sizes(max_mb: float) -> tuple[str, str]:
     cap = int(max_mb * 1024 * 1024)
     bloated = []
     very_bloated = []
-    for f in LOG_FILES:
+    files = log_files()
+    for f in files:
         if not f.exists():
             continue
         size = f.stat().st_size
@@ -116,7 +128,7 @@ def _check_log_sizes(max_mb: float) -> tuple[str, str]:
     if bloated:
         items = ", ".join(f"{n}={mb:.1f}MB" for n, mb in bloated)
         return ("YELLOW", f"log files >cap ({max_mb:.0f}MB): {items}")
-    sizes = ", ".join(f"{f.name}={f.stat().st_size / 1024 / 1024:.2f}MB" for f in LOG_FILES if f.exists())
+    sizes = ", ".join(f"{f.name}={f.stat().st_size / 1024 / 1024:.2f}MB" for f in files if f.exists())
     return ("GREEN", f"log sizes OK ({sizes})")
 
 

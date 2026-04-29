@@ -18,7 +18,8 @@ What it does (locally — safe to run anytime)
    - ``docs/strategy_baselines.json`` (the frozen baselines)
    - ``docs/decision_journal.jsonl`` (the audit trail)
    - ``docs/drift_watchdog.jsonl`` (drift history)
-   - ``docs/alerts_log.jsonl`` (alert history)
+   - ``logs/eta_engine/alerts_log.jsonl`` (alert history)
+   - ``logs/eta_engine/runtime_log.jsonl`` (runtime history)
    - ``.env`` (broker keys — checks file exists, NEVER reads contents)
 2. **Backup-restore round-trip**: tars the state dir into a temp
    tarball, untars it into a scratch dir, diffs to verify integrity.
@@ -75,6 +76,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import default_alerts_log_path, default_runtime_log_path  # noqa: E402
+
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -87,10 +90,8 @@ _STATE_FILES_REQUIRED: list[str] = [
     "docs/strategy_baselines.json",
     "docs/decision_journal.jsonl",
 ]
-_STATE_FILES_RECOMMENDED: list[str] = [
+_STATIC_STATE_FILES_RECOMMENDED: list[str] = [
     "docs/drift_watchdog.jsonl",
-    "docs/alerts_log.jsonl",
-    "docs/runtime_log.jsonl",
 ]
 # .env is special — we verify presence but NEVER read contents
 _SECRETS_FILE = ".env"
@@ -100,6 +101,37 @@ _DEPLOY_FILES_REQUIRED: list[str] = [
     "deploy/HOST_RUNBOOK.md",
     "deploy/README.md",
 ]
+
+
+def _display_path(path: Path) -> str:
+    """Return a stable workspace-relative display path when possible."""
+    workspace_root = ROOT.parent
+    try:
+        return path.relative_to(workspace_root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _state_file_paths() -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
+    """Return required/recommended DR state files as (label, path) pairs."""
+    required = [(rel, ROOT / rel) for rel in _STATE_FILES_REQUIRED]
+    recommended = [(rel, ROOT / rel) for rel in _STATIC_STATE_FILES_RECOMMENDED]
+    recommended.extend(
+        [
+            (_display_path(default_alerts_log_path()), default_alerts_log_path()),
+            (_display_path(default_runtime_log_path()), default_runtime_log_path()),
+        ]
+    )
+    return required, recommended
+
+
+def _archive_name(path: Path) -> str:
+    """Archive state files relative to the canonical workspace root."""
+    workspace_root = ROOT.parent
+    try:
+        return path.relative_to(workspace_root).as_posix()
+    except ValueError:
+        return path.name
 
 
 @dataclass
@@ -120,18 +152,17 @@ def _check_state_files_present() -> CheckResult:
     missing_required: list[str] = []
     missing_recommended: list[str] = []
     sizes: dict[str, int] = {}
-    for rel in _STATE_FILES_REQUIRED:
-        p = ROOT / rel
+    required, recommended = _state_file_paths()
+    for label, p in required:
         if not p.exists():
-            missing_required.append(rel)
+            missing_required.append(label)
         else:
-            sizes[rel] = p.stat().st_size
-    for rel in _STATE_FILES_RECOMMENDED:
-        p = ROOT / rel
+            sizes[label] = p.stat().st_size
+    for label, p in recommended:
         if not p.exists():
-            missing_recommended.append(rel)
+            missing_recommended.append(label)
         else:
-            sizes[rel] = p.stat().st_size
+            sizes[label] = p.stat().st_size
 
     if missing_required:
         return CheckResult(
@@ -162,13 +193,13 @@ def _check_state_files_fresh() -> CheckResult:
     """1b. State files have been touched within the last 24h."""
     stale: list[tuple[str, float]] = []
     now = datetime.now(UTC).timestamp()
-    for rel in _STATE_FILES_REQUIRED + _STATE_FILES_RECOMMENDED:
-        p = ROOT / rel
+    required, recommended = _state_file_paths()
+    for label, p in required + recommended:
         if not p.exists():
             continue
         age_h = (now - p.stat().st_mtime) / 3600
         if age_h > 24:
-            stale.append((rel, age_h))
+            stale.append((label, age_h))
     if stale:
         return CheckResult(
             name="state_files_fresh",
@@ -297,10 +328,8 @@ def _backup_restore_round_trip(skip: bool) -> CheckResult:
             severity="skip",
             summary="--no-backup-test passed",
         )
-    state_files = [
-        ROOT / rel for rel in _STATE_FILES_REQUIRED + _STATE_FILES_RECOMMENDED
-        if (ROOT / rel).exists()
-    ]
+    required, recommended = _state_file_paths()
+    state_files = [path for _, path in required + recommended if path.exists()]
     if not state_files:
         return CheckResult(
             name="backup_restore_round_trip",
@@ -312,7 +341,7 @@ def _backup_restore_round_trip(skip: bool) -> CheckResult:
         try:
             with tarfile.open(tar_path, "w:gz") as tar:
                 for f in state_files:
-                    tar.add(f, arcname=f.relative_to(ROOT).as_posix())
+                    tar.add(f, arcname=_archive_name(f))
         except OSError as exc:
             return CheckResult(
                 name="backup_restore_round_trip",
@@ -333,7 +362,7 @@ def _backup_restore_round_trip(skip: bool) -> CheckResult:
         size_match = 0
         size_mismatch = 0
         for f in state_files:
-            rel = f.relative_to(ROOT).as_posix()
+            rel = _archive_name(f)
             restored = restore_dir / rel
             if restored.exists() and restored.stat().st_size == f.stat().st_size:
                 size_match += 1

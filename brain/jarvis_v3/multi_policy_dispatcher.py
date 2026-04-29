@@ -63,7 +63,7 @@ def _verdict_pessimism_rank(verdict: str) -> int:
     }.get(verdict, 999)
 
 
-def dispatch_all(req: Any, ctx: Any, *, champion_arm: str = "v17") -> DispatchResult:
+def dispatch_all(req: object, ctx: object, *, champion_arm: str = "v17") -> DispatchResult:
     """Run every registered candidate against (req, ctx) and aggregate.
 
     Returns ``DispatchResult`` with per-arm verdict + consensus metrics.
@@ -76,7 +76,8 @@ def dispatch_all(req: Any, ctx: Any, *, champion_arm: str = "v17") -> DispatchRe
         logger.warning("policies package import failed: %s", exc)
 
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        get_candidate, list_candidates,
+        get_candidate,
+        list_candidates,
     )
 
     verdicts: list[PolicyVerdict] = []

@@ -50,9 +50,9 @@ class MarketProfileSchool(SchoolBase):
 
         vol_at: dict[float, float] = defaultdict(float)
         for b in bars:
-            o, h, l, c = float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])
+            o, h, low, c = float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])
             v = float(b.get("volume", 0))
-            mid = (o + h + l + c) / 4
+            mid = (o + h + low + c) / 4
             key = round(mid / bucket) * bucket
             vol_at[key] += v
 

@@ -10,13 +10,17 @@ and update the ``CHAMPION_NAME`` in ``policies/__init__.py``.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from eta_engine.brain.jarvis_admin import (
     ActionRequest,
     ActionResponse,
     evaluate_request,
 )
-from eta_engine.brain.jarvis_context import JarvisContext
 from eta_engine.brain.jarvis_v3.candidate_policy import register_candidate
+
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_context import JarvisContext
 
 
 def evaluate_v17(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:

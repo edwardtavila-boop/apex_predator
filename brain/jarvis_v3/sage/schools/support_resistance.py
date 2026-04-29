@@ -23,9 +23,7 @@ def _find_pivots(values: list[float], lookback: int = 3, *, kind: str = "high") 
     out: list[tuple[int, float]] = []
     for i in range(lookback, len(values) - lookback):
         window = values[i - lookback : i + lookback + 1]
-        if kind == "high" and values[i] == max(window):
-            out.append((i, values[i]))
-        elif kind == "low" and values[i] == min(window):
+        if kind == "high" and values[i] == max(window) or kind == "low" and values[i] == min(window):
             out.append((i, values[i]))
     return out
 
@@ -65,7 +63,7 @@ class SupportResistanceSchool(SchoolBase):
 
         # Closest resistance above + support below
         resistance_above = min((h for h in pivot_highs if h > last_close), default=None)
-        support_below = max((l for l in pivot_lows if l < last_close), default=None)
+        support_below = max((low for low in pivot_lows if low < last_close), default=None)
 
         # Distance to nearest level (as % of price)
         if resistance_above is not None and support_below is not None:

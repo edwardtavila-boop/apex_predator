@@ -29,14 +29,18 @@ v18a/v18b/v18c gives the bandit a multi-arm comparison.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from eta_engine.brain.jarvis_admin import (
     ActionRequest,
     ActionResponse,
     Verdict,
     evaluate_request,
 )
-from eta_engine.brain.jarvis_context import JarvisContext
 from eta_engine.brain.jarvis_v3.candidate_policy import register_candidate
+
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_context import JarvisContext
 
 #: Stress composite threshold above which we tighten CONDITIONAL caps.
 HIGH_STRESS_THRESHOLD: float = 0.70

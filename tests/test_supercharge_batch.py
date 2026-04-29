@@ -13,12 +13,8 @@ Covers the math-heavy / contract-critical modules:
 from __future__ import annotations
 
 import json
-import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
-
 
 # ─── jarvis_correlation ─────────────────────────────────────────────────
 
@@ -257,8 +253,8 @@ def test_diff_positions_treats_missing_as_zero() -> None:
 
 
 def test_kaizen_synthesizer_uses_realized_r_when_present() -> None:
-    from eta_engine.scripts.run_kaizen_close_cycle import synthesize_inputs
     from eta_engine.obs.decision_journal import Actor, JournalEvent, Outcome
+    from eta_engine.scripts.run_kaizen_close_cycle import synthesize_inputs
 
     events = [
         JournalEvent(actor=Actor.TRADE_ENGINE, intent="open_mnq_long",

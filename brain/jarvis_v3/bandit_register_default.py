@@ -23,11 +23,15 @@ epsilon-greedy split (10% v18, 90% v17 in the default config).
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_v3.bandit_harness import BanditHarness
 
 logger = logging.getLogger(__name__)
 
 
-def bandit_with_etas():
+def bandit_with_etas() -> BanditHarness:
     """Get the default singleton harness, lazy-registered with v17+v18.
 
     Idempotent: re-calls return the same singleton without re-registering.

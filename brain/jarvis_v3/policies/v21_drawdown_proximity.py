@@ -21,14 +21,18 @@ isn't deepening before adding fresh risk.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from eta_engine.brain.jarvis_admin import (
     ActionRequest,
     ActionResponse,
     Verdict,
     evaluate_request,
 )
-from eta_engine.brain.jarvis_context import JarvisContext
 from eta_engine.brain.jarvis_v3.candidate_policy import register_candidate
+
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_context import JarvisContext
 
 #: Substrings (lowercase) in binding_constraint that indicate the
 #: drawdown component is binding.

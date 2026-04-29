@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ─── synthetic tape generators ───────────────────────────────────
 
 
@@ -247,7 +246,6 @@ def test_confluence_neutral_when_split() -> None:
 
 
 def test_confluence_handles_empty_input() -> None:
-    from eta_engine.brain.jarvis_v3.sage import SchoolBase
     from eta_engine.brain.jarvis_v3.sage.base import Bias
     from eta_engine.brain.jarvis_v3.sage.confluence import aggregate
     report = aggregate({}, {}, entry_side="long")
@@ -260,7 +258,7 @@ def test_confluence_handles_empty_input() -> None:
 
 
 def test_consult_sage_runs_every_school_on_uptrend() -> None:
-    from eta_engine.brain.jarvis_v3.sage import MarketContext, SCHOOLS, consult_sage
+    from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage
     from eta_engine.brain.jarvis_v3.sage.base import Bias
 
     ctx = MarketContext(bars=_uptrend_bars(60), side="long",
@@ -291,8 +289,9 @@ def test_v22_sage_confluence_registered() -> None:
     is imported. We use importlib.reload to bypass Python's module cache
     in case clear_registry() emptied the registry mid-test."""
     import importlib
-    from eta_engine.brain.jarvis_v3 import policies as policies_pkg
+
     from eta_engine.brain.jarvis_v3 import candidate_policy
+    from eta_engine.brain.jarvis_v3 import policies as policies_pkg
     candidate_policy.clear_registry()
     importlib.reload(policies_pkg.v17_champion)
     importlib.reload(policies_pkg.v18_high_stress_tighten)
@@ -309,14 +308,16 @@ def test_v22_sage_confluence_registered() -> None:
 def test_v22_returns_v17_baseline_when_no_sage_bars() -> None:
     """Without sage_bars in payload, v22 == v17 (passthrough)."""
     from eta_engine.brain.jarvis_admin import (
-        ActionRequest, ActionType, SubsystemId,
-    )
-    from eta_engine.brain.jarvis_v3.policies.v22_sage_confluence import evaluate_v22
-    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
-    from eta_engine.brain.jarvis_admin import (
-        ActionResponse, Verdict, ActionSuggestion,
+        ActionRequest,
+        ActionResponse,
+        ActionSuggestion,
+        ActionType,
+        SubsystemId,
+        Verdict,
     )
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
+    from eta_engine.brain.jarvis_v3.policies.v22_sage_confluence import evaluate_v22
 
     # Stub v17 to return APPROVED. v22 should pass through unchanged.
     base = ActionResponse(

@@ -32,7 +32,12 @@ Doesn't replace ``_ask_jarvis`` -- the JARVIS gate inside
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from eta_engine.brain.jarvis_pre_flight import PreflightDecision
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +58,8 @@ class BotPreFlightMixin:
         confluence: float,
         fleet_positions: Mapping[str, float] | None = None,
         rationale: str = "",
-        extra_payload: dict[str, Any] | None = None,
-    ) -> Any:
+        extra_payload: dict[str, object] | None = None,
+    ) -> PreflightDecision:
         """Check pre-flight; if PER_BOT_PRE_FLIGHT flag is OFF, fall back
         to the bot's existing ``_ask_jarvis`` flow.
 

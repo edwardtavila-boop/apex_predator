@@ -16,13 +16,14 @@ from pathlib import Path
 
 import pytest
 
-
 # ─── candidate_policy registry ─────────────────────────────────────
 
 
 def test_candidate_register_and_get() -> None:
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, get_candidate, register_candidate,
+        clear_registry,
+        get_candidate,
+        register_candidate,
     )
     clear_registry()
 
@@ -40,7 +41,8 @@ def test_candidate_register_and_get() -> None:
 
 def test_candidate_register_rejects_non_callable() -> None:
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, register_candidate,
+        clear_registry,
+        register_candidate,
     )
     clear_registry()
     with pytest.raises(TypeError):
@@ -49,7 +51,8 @@ def test_candidate_register_rejects_non_callable() -> None:
 
 def test_candidate_register_rejects_duplicate_without_overwrite() -> None:
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, register_candidate,
+        clear_registry,
+        register_candidate,
     )
     clear_registry()
 
@@ -64,7 +67,9 @@ def test_candidate_register_rejects_duplicate_without_overwrite() -> None:
 
 def test_candidate_list_returns_metadata_not_callable() -> None:
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, list_candidates, register_candidate,
+        clear_registry,
+        list_candidates,
+        register_candidate,
     )
     clear_registry()
 
@@ -77,19 +82,20 @@ def test_candidate_list_returns_metadata_not_callable() -> None:
 
     listed = list_candidates()
     assert len(listed) == 2
-    assert {l["name"] for l in listed} == {"v18", "v19"}
+    assert {entry["name"] for entry in listed} == {"v18", "v19"}
     # No callable in the snapshot
     for entry in listed:
         assert "policy" not in entry
         assert "rationale" in entry
-    v18 = next(l for l in listed if l["name"] == "v18")
+    v18 = next(entry for entry in listed if entry["name"] == "v18")
     assert v18["parent_version"] == 17
     assert v18["metadata"] == {"author": "kaizen"}
 
 
 def test_candidate_get_unknown_raises_keyerror() -> None:
     from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, get_candidate,
+        clear_registry,
+        get_candidate,
     )
     clear_registry()
     with pytest.raises(KeyError):
@@ -141,7 +147,6 @@ def test_heartbeat_writer_stale_detects_old_file(tmp_path: Path) -> None:
 
 def test_basebot_no_ceiling_returns_state_equity() -> None:
     """Without a ceiling, effective_equity == state.equity."""
-    from eta_engine.bots.base_bot import BotConfig, BotState
     # Use a plain test stand-in via the base class -- instance won't be
     # "fully" usable (abstract methods unimplemented) but the equity
     # methods are concrete.
@@ -238,7 +243,9 @@ def test_position_reconciler_async_fetch_handles_empty_venues() -> None:
 def test_position_reconciler_diff_with_real_async_fetch_no_drift() -> None:
     """When both bot + broker are empty, no drift -> no diff."""
     from eta_engine.obs.position_reconciler import (
-        diff_positions, fetch_bot_positions, fetch_broker_positions,
+        diff_positions,
+        fetch_bot_positions,
+        fetch_broker_positions,
     )
     bot_pos = fetch_bot_positions()       # stub returns {}
     broker_pos = fetch_broker_positions()  # stub returns {}

@@ -20,7 +20,10 @@ quarterly with realized correlations from the burn-in journal.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # Pairwise correlation matrix. Symmetric; only the upper triangle is
 # stored. Values are 90-day rolling abs-correlation of daily returns,
@@ -118,13 +121,15 @@ def should_throttle_for_correlation(
 
     # Already long/short the SAME symbol => not this module's concern;
     # individual bots handle stacking limits internally.
-    if inc in (_canon(s) for s in fleet_positions if fleet_positions[s] != 0):
-        if fleet_positions.get(incoming_symbol, 0) != 0:
-            return CapDecision(
-                cap_mult=1.0,
-                reason_code="same_symbol_already_open",
-                detail="bot is already in this symbol; correlation throttle defers to bot's own stacking logic",
-            )
+    if (
+        inc in (_canon(s) for s in fleet_positions if fleet_positions[s] != 0)
+        and fleet_positions.get(incoming_symbol, 0) != 0
+    ):
+        return CapDecision(
+            cap_mult=1.0,
+            reason_code="same_symbol_already_open",
+            detail="bot is already in this symbol; correlation throttle defers to bot's own stacking logic",
+        )
 
     max_corr = 0.0
     binding_other: str | None = None

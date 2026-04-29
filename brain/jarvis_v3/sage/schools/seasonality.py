@@ -118,7 +118,8 @@ class SeasonalitySchool(SchoolBase):
         else:
             bias = Bias.NEUTRAL
             conv = 0.05
-            rationale = f"no notable seasonal bias at {et_hour:02d}:00 ET / {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][weekday]}"
+            weekday_name = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][weekday]
+            rationale = f"no notable seasonal bias at {et_hour:02d}:00 ET / {weekday_name}"
 
         if is_opex:
             rationale += " | OPEX day (pin risk)"

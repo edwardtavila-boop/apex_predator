@@ -25,6 +25,10 @@ def _c_runtime_root(name: str, sep: str) -> str:
     return "C:" + sep + name + sep + "state"
 
 
+def _onedrive_root(sep: str) -> str:
+    return "C:" + sep + "Users" + sep + "edwar" + sep + "OneDrive" + sep + "Anything"
+
+
 def test_scan_file_blocks_current_forbidden_runtime_roots(tmp_path: Path) -> None:
     forbidden_roots = []
     for sep in ("\\", "/"):
@@ -35,6 +39,7 @@ def test_scan_file_blocks_current_forbidden_runtime_roots(tmp_path: Path) -> Non
             _c_runtime_root("crypto_" + "data", sep),
             _c_runtime_root("The" + "Firm", sep),
             _c_runtime_root("The_" + "Firm", sep),
+            _onedrive_root(sep),
         ))
 
     for root in forbidden_roots:

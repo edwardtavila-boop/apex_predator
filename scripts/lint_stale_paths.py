@@ -51,6 +51,10 @@ from pathlib import Path
 # and case-insensitively.
 STALE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
+        r"C:\Users\edwar\OneDrive",
+        re.compile(r"C:[\\/]+Users[\\/]+edwar[\\/]+OneDrive(?:[\\/]|$)", re.IGNORECASE),
+    ),
+    (
         "OneDrive\\Desktop\\Base",
         re.compile(r"OneDrive[\\/]+Desktop[\\/]+Base", re.IGNORECASE),
     ),

@@ -78,7 +78,8 @@ operator never has to infer the failure mode from raw metrics.
 
 ## New: real-data MNQ walk-forward
 
-`scripts/run_walk_forward_mnq_real.py` — reads `C:\mnq_data\mnq_5m.csv`
+`scripts/run_walk_forward_mnq_real.py` — reads
+`C:\EvolutionaryTradingAlgo\mnq_data\mnq_5m.csv`
 (20,641 bars, 2025-12-28 → 2026-04-14), wires bars into the existing
 `WalkForwardEngine`, prints the same auto-explained gate verdict.
 

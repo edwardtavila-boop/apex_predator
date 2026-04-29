@@ -96,7 +96,8 @@ strong strategy that fails the per-fold consistency check.
 ## Next research session candidates
 
 - Replace synthetic demo data with the local parquet bars from
-  `C:\mnq_data\` and re-run walk-forward on real MNQ history.
+  `C:\EvolutionaryTradingAlgo\mnq_data\` and re-run walk-forward on
+  real MNQ history.
 - Run the same walk-forward on `bots/btc_hybrid` once Coinbase/Binance
   keys are in place.
 - Add a `degradation_breakdown` field to walk-forward output so the

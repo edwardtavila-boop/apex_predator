@@ -96,11 +96,30 @@ def test_windows_deploy_defaults_drop_legacy_install_and_localappdata_paths() ->
         "eta_engine/deploy/scripts/register_fleet_tasks.ps1",
         "eta_engine/deploy/scripts/register_operator_tasks.ps1",
         "eta_engine/deploy/scripts/register_tasks.ps1",
+        "eta_engine/deploy/scripts/set_vps_env_vars.ps1",
         "eta_engine/deploy/scripts/supercharge_vps.ps1",
+        "eta_engine/deploy/scripts/vps_supercharge_bootstrap.ps1",
     )
     for rel_path in targets:
         text = _read(rel_path)
         assert r"C:\eta_engine" not in text
+        assert r"LOCALAPPDATA\eta_engine" not in text
+
+
+def test_doc_cleanup_wave_drops_legacy_paths() -> None:
+    targets = (
+        "eta_engine/docs/research_log/2026-04-26_post_rebrand_baseline.md",
+        "eta_engine/docs/research_log/2026-04-26_supercharge.md",
+        "eta_engine/docs/research_log/paid_data_aggregator_landscape_20260427.md",
+        "eta_engine/docs/research_log/supercharge_full_stack_findings_20260427.md",
+        "eta_engine/docs/superpowers/plans/2026-04-28-cursor-dashboard-cutover.md",
+    )
+    for rel_path in targets:
+        text = _read(rel_path)
+        assert r"C:\mnq_data" not in text
+        assert "C:/mnq_data" not in text
+        assert r"C:\crypto_data" not in text
+        assert "C:/crypto_data" not in text
         assert r"LOCALAPPDATA\eta_engine" not in text
 
 

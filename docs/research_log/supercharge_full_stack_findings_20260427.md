@@ -186,12 +186,12 @@ expectation, not the +6 headline.
 
 ### New data
 
-* `C:/crypto_data/history/BTC_1h.csv` — 43,192 bars (5y)
-* `C:/crypto_data/history/BTC_4h.csv` — 10,800 bars
-* `C:/crypto_data/history/BTC_15m.csv` — 17,281 bars
-* `C:/crypto_data/history/BTC_1W.csv` — 258 bars
-* `C:/crypto_data/history/BTCFUND_8h.csv` — 5,475 rows (5y)
-* `C:/mnq_data/history/ETH_ETF_FLOWS.csv` — 452 days (already in 4f966c4)
+* `C:\EvolutionaryTradingAlgo\data\crypto\history\BTC_1h.csv` — 43,192 bars (5y)
+* `C:\EvolutionaryTradingAlgo\data\crypto\history\BTC_4h.csv` — 10,800 bars
+* `C:\EvolutionaryTradingAlgo\data\crypto\history\BTC_15m.csv` — 17,281 bars
+* `C:\EvolutionaryTradingAlgo\data\crypto\history\BTC_1W.csv` — 258 bars
+* `C:\EvolutionaryTradingAlgo\data\crypto\history\BTCFUND_8h.csv` — 5,475 rows (5y)
+* `C:\EvolutionaryTradingAlgo\mnq_data\history\ETH_ETF_FLOWS.csv` — 452 days (already in 4f966c4)
 
 ## Bottom line for the user
 

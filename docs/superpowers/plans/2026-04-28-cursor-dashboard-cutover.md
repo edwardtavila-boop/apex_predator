@@ -631,5 +631,5 @@ If something breaks after the cutover script:
    ```
 3. Debug dashboard_api logs:
    ```powershell
-   Get-Content $env:LOCALAPPDATA\eta_engine\logs\dashboard_api.log -Tail 50
+   Get-Content C:\EvolutionaryTradingAlgo\logs\eta_engine\dashboard_api.log -Tail 50
    ```

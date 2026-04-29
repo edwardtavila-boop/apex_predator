@@ -5,7 +5,7 @@
 # opening up on home computer". This script:
 #
 #   1. Verifies prerequisites (git, gh, python, eta_engine repo present)
-#   2. Optionally migrates a legacy C:\eta_engine install into the canonical
+#   2. Optionally migrates a legacy eta_engine install into the canonical
 #      C:\EvolutionaryTradingAlgo\eta_engine workspace path
 #   3. Clones the 3 satellite repos (mnq_backtest, mnq_eta_bot, jarvis_identity)
 #   4. Registers the 16 operator-tooling scheduled tasks (hidden, idempotent)
@@ -71,8 +71,8 @@ foreach ($cmd in $prereqs.Keys) {
 if (-not (Test-Path $EtaEngineDir)) {
     Write-Host ""
     Write-Host "  WARN: $EtaEngineDir does not exist." -ForegroundColor Yellow
-    $legacyEtaEngineDir = "C:\eta_engine"
-    # Older deploys put it at C:\eta_engine -- offer to move it into the
+    $legacyEtaEngineDir = Join-Path $env:SystemDrive "eta_engine"
+    # Older deploys put it under the system drive root -- offer to move it into the
     # canonical workspace root instead of keeping a parallel tree alive.
     if (Test-Path $legacyEtaEngineDir) {
         Write-Host "  Found $legacyEtaEngineDir -- looks like a pre-canonical install."

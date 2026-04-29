@@ -132,7 +132,8 @@ script (`scripts/fetch_btc_oi_coinglass.py`) + a provider class
    `time, oi_btc, oi_usd, funding_aggregate, liquidations_long,
    liquidations_short`.
 3. Run the fetcher to backfill 5y of OI + liquidations to
-   `C:/crypto_data/history/BTCOI_1h.csv` (and 8h variant).
+   `C:\EvolutionaryTradingAlgo\data\crypto\history\BTCOI_1h.csv`
+   (and 8h variant).
 4. Add `CoinglassOIProvider` + `LiquidationProvider` to
    `strategies/macro_confluence_providers.py`.
 5. Add new filter knobs to `MacroConfluenceConfig`:

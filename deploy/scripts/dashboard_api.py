@@ -349,11 +349,20 @@ def _dashboard_diagnostics_payload() -> dict:
     except Exception as exc:  # noqa: BLE001 -- diagnostics should fail soft.
         equity = {"series": [], "summary": {}, "source": "error", "_error": str(exc)}
 
+    readiness = _bot_strategy_readiness_payload()
     roster_bots = roster.get("bots") if isinstance(roster.get("bots"), list) else []
     roster_summary = roster.get("summary") if isinstance(roster.get("summary"), dict) else {}
     equity_series = equity.get("series") if isinstance(equity.get("series"), list) else []
     equity_summary = equity.get("summary") if isinstance(equity.get("summary"), dict) else {}
     card_summary = cards.get("summary") if isinstance(cards.get("summary"), dict) else {}
+    readiness_summary = readiness.get("summary") if isinstance(readiness.get("summary"), dict) else {}
+    readiness_lanes = readiness_summary.get("launch_lanes") if isinstance(readiness_summary, dict) else {}
+    readiness_lane_counts = readiness_lanes if isinstance(readiness_lanes, dict) else {}
+    readiness_blocked_data = int(
+        readiness_summary.get("blocked_data")
+        or readiness_lane_counts.get("blocked_data")
+        or 0
+    )
 
     return {
         **_dashboard_contract(),
@@ -405,11 +414,21 @@ def _dashboard_diagnostics_payload() -> dict:
             "today_pnl": equity_summary.get("today_pnl"),
             "error": equity.get("_error"),
         },
+        "bot_strategy_readiness": {
+            "status": str(readiness.get("status") or "unknown"),
+            "blocked_data": readiness_blocked_data,
+            "paper_ready": int(readiness_summary.get("can_paper_trade") or 0),
+            "can_live_any": bool(readiness_summary.get("can_live_any")),
+            "launch_lanes": readiness_lane_counts,
+            "top_action_count": len(readiness.get("top_actions") or []),
+            "error": readiness.get("error"),
+        },
         "checks": {
             "api_contract": True,
             "card_contract": int(card_summary.get("dead") or 0) == 0 and int(card_summary.get("stale") or 0) == 0,
             "bot_fleet_contract": isinstance(roster.get("bots"), list),
             "equity_contract": "series" in equity,
+            "bot_strategy_readiness_contract": readiness.get("status") == "ready" and not readiness.get("error"),
             "auth_contract": "auth_session" in DASHBOARD_REQUIRED_DATA,
         },
     }

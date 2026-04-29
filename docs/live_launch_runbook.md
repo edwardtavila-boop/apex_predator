@@ -171,7 +171,8 @@ python -m eta_engine.scripts.operator_queue_heartbeat --json --changed-only
 
 Those artifacts now include `bot_strategy_readiness_status`,
 `bot_strategy_blocked_data`, and `bot_strategy_paper_ready` alongside the
-operator blocker summary.
+operator blocker summary. `/api/dashboard/diagnostics` also includes a compact
+`bot_strategy_readiness` block and contract check for self-diagnostics.
 
 ---
 

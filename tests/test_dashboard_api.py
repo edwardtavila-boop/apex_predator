@@ -283,6 +283,35 @@ class TestDashboardAPI:
         assert data["checks"]["auth_contract"] is True
         assert "generated_at" in data
 
+    def test_dashboard_diagnostics_includes_bot_strategy_readiness(self, app_client, monkeypatch):
+        from eta_engine.scripts import jarvis_status
+
+        monkeypatch.setattr(
+            jarvis_status,
+            "build_bot_strategy_readiness_summary",
+            lambda **_kwargs: {
+                "source": "bot_strategy_readiness",
+                "status": "ready",
+                "summary": {
+                    "blocked_data": 0,
+                    "can_paper_trade": 10,
+                    "can_live_any": False,
+                    "launch_lanes": {"live_preflight": 6, "paper_soak": 4},
+                },
+                "top_actions": [],
+            },
+        )
+
+        r = app_client.get("/api/dashboard/diagnostics")
+
+        assert r.status_code == 200
+        readiness = r.json()["bot_strategy_readiness"]
+        assert readiness["status"] == "ready"
+        assert readiness["blocked_data"] == 0
+        assert readiness["paper_ready"] == 10
+        assert readiness["can_live_any"] is False
+        assert readiness["launch_lanes"]["live_preflight"] == 6
+
     def test_kaizen_summary(self, app_client):
         r = app_client.get("/api/kaizen")
         assert r.status_code == 200

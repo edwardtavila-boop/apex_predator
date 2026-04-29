@@ -168,6 +168,14 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         min_trades_per_window=3,
         strategy_kind="orb",
         rationale=(
+            "REFRESHED 2026-04-29 after the data library began filtering "
+            "non-positive back-adjusted futures rows for tradable backtests: "
+            "full-history smoke now evaluates 487,725/490,103 positive-price "
+            "MNQ1 5m bars without crashing, but plain ORB v2 fails "
+            "materially (83 windows, agg OOS Sh -2.958, DSR pass 13.2%). "
+            "Keep this as a plain-ORB research/soak baseline only; "
+            "mnq_futures_sage remains the stronger promoted MNQ lane. "
+            "Historical note: "
             "Switched from confluence-mean-reversion to ORB on "
             "2026-04-27 after the mean-reversion baseline "
             "(MNQ-tuned scorer + regime gate) failed to produce "
@@ -209,6 +217,18 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "previous_agg_oos_sharpe": -1.429,
                 "candidate_agg_oos_sharpe": 1.788,
                 "strict_gate": False,
+                "full_history_smoke": {
+                    "source_artifact": (
+                        "var/eta_engine/state/research_grid/"
+                        "research_grid_20260429_173608_610619.md"
+                    ),
+                    "tradable_bars": 487725,
+                    "raw_bars": 490103,
+                    "windows": 83,
+                    "agg_oos_sharpe": -2.958,
+                    "dsr_pass_fraction": 0.132,
+                    "strict_gate": False,
+                },
             },
             # Standardized promotion safeguards (added 2026-04-27 to
             # match the BTC/ETH/NQ-DRB rows). Half-size for first 30d

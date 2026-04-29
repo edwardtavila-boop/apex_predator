@@ -30,8 +30,8 @@ All results fold into a single ``ApexDecision`` pydantic envelope that
 the dashboard can render and the audit log can persist.
 
 Design: everything is dependency-injected. Default factory wires sane
-defaults so ``EtaEngineCore()`` "just works," but tests swap any
-component for a stub.
+defaults so ``EtaEngineCore()`` "just works," while tests can swap any
+component for a test double.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ class EtaEngineCore:
     """The Evolutionary Trading Algo Core meta-controller.
 
     All sub-components can be supplied at construction; any omitted is
-    built with a sensible default. This makes tests trivial (inject stubs)
+    built with a sensible default. This makes tests trivial (inject doubles)
     and production code tidy (just instantiate).
     """
 

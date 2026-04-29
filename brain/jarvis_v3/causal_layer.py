@@ -29,9 +29,9 @@ Use case (pre-trade veto layer):
         # Past data shows this signal-action combo lacks causal support
         return decision.deny(reason=f"causal_veto: {ev.reason}")
 
-This is a SCAFFOLD. The Granger test is a 1-lag pearson correlation
-shortcut; production would use full VAR / regression-residual tests.
-The intervention lookup is non-parametric (just bucket comparison)
+This is a lean estimator. The Granger leg is a 1-lag Pearson
+correlation shortcut; a richer research lane can graduate to full VAR /
+regression-residual tests. The intervention lookup is non-parametric
 and assumes the journal is large enough for stable estimates.
 """
 from __future__ import annotations

@@ -245,11 +245,16 @@ class SmartRouter:
         """Pick the primary venue for an order."""
         _ = quantity, urgency  # reserved for future size/urgency tuning
         if _is_futures(symbol):
-            if self._preferred_futures_venue == "ibkr":
+            preferred = _resolve_preferred_futures_venue(
+                self._preferred_futures_venue,
+            )
+            self._preferred_futures_venue = preferred
+            if preferred == "ibkr":
                 return self.ibkr
-            if self._preferred_futures_venue == "tastytrade":
+            if preferred == "tastytrade":
                 return self.tastytrade
-            return self.tradovate
+            msg = f"resolved futures venue has no active adapter: {preferred!r}"
+            raise RuntimeError(msg)
         if _is_crypto(symbol):
             return self.okx if self._preferred_crypto_venue == "okx" else self.bybit
         return self.bybit

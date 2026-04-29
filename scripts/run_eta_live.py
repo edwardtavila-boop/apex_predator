@@ -686,7 +686,7 @@ class ApexRuntime:
         # Router selection: --live AND creds present → real. Else mock.
         if router is not None:
             self.router = router
-        elif cfg.live and _tradovate_creds_present() and not cfg.dry_run:
+        elif cfg.live and _active_futures_broker_creds_present() and not cfg.dry_run:
             self.router = _build_real_router(cfg)
         else:
             self.router = MockRouter(log_path=cfg.log_path.with_name("runtime_mock_orders.jsonl"))
@@ -1206,6 +1206,29 @@ class ApexRuntime:
 def _tradovate_creds_present() -> bool:
     keys = ("TRADOVATE_CLIENT_ID", "TRADOVATE_CLIENT_SECRET", "TRADOVATE_USERNAME", "TRADOVATE_PASSWORD")
     return all(bool(os.environ.get(k)) for k in keys)
+
+
+def _active_futures_broker_creds_present() -> bool:
+    """Return true when IBKR or Tastytrade can back the live router.
+
+    Tradovate remains dormant, so old Tradovate secrets must not be
+    the condition that unlocks real order routing.
+    """
+    try:
+        from eta_engine.venues.ibkr import IbkrClientPortalVenue
+
+        if IbkrClientPortalVenue().has_credentials():
+            return True
+    except Exception as exc:  # pragma: no cover -- defensive env/file edge
+        logger.warning("broker router: IBKR readiness check failed (%s)", exc)
+    try:
+        from eta_engine.venues.tastytrade import TastytradeVenue
+
+        if TastytradeVenue().has_credentials():
+            return True
+    except Exception as exc:  # pragma: no cover -- defensive env/file edge
+        logger.warning("broker router: Tastytrade readiness check failed (%s)", exc)
+    return False
 
 
 def _build_real_router(cfg: RuntimeConfig) -> Any:

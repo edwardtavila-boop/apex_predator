@@ -72,8 +72,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-CRYPTO_DATA_ROOT = Path(r"C:\crypto_data")
-ONCHAIN_ROOT = CRYPTO_DATA_ROOT / "onchain"
+from eta_engine.scripts.workspace_roots import CRYPTO_ONCHAIN_ROOT as ONCHAIN_ROOT  # noqa: E402
 
 
 def _http_json(url: str, *, timeout: float = 10.0) -> object | None:
@@ -263,7 +262,7 @@ def main() -> int:
     )
     p.add_argument(
         "--root", type=Path, default=ONCHAIN_ROOT,
-        help=r"output directory (default: C:\crypto_data\onchain)",
+        help="output directory (default: canonical ETA crypto on-chain root)",
     )
     args = p.parse_args()
 

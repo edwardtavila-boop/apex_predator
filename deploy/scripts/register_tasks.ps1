@@ -2,10 +2,18 @@
 # to avoid ErrorActionPreference issues with git.
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "C:\eta_engine",
-    [string]$StateDir = "$env:LOCALAPPDATA\eta_engine\state",
-    [string]$LogDir = "$env:LOCALAPPDATA\eta_engine\logs"
+    [string]$InstallDir = "C:\EvolutionaryTradingAlgo\eta_engine",
+    [string]$StateDir = "",
+    [string]$LogDir = ""
 )
+
+$workspaceRoot = Split-Path -Parent $InstallDir
+if (-not $StateDir) {
+    $StateDir = Join-Path $workspaceRoot "var\eta_engine\state"
+}
+if (-not $LogDir) {
+    $LogDir = Join-Path $workspaceRoot "logs\eta_engine"
+}
 
 $venvPython = Join-Path $InstallDir ".venv\Scripts\python.exe"
 

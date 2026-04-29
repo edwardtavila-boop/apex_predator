@@ -22,9 +22,10 @@ the early-summary pending list:
   bars from the local IBKR Client Portal Gateway via the
   `/iserver/marketdata/history` endpoint. Uses the same conids
   (`venues.ibkr._DEFAULT_CONIDS`) as live trading routing. Writes
-  to `C:\crypto_data\ibkr\history\<SYMBOL>_<TF>.csv` — sibling
-  of the Coinbase root, deliberately separate so the drift
-  comparator can pair the two.
+  to the canonical ETA IBKR crypto history root
+  (`data\crypto\ibkr\history\<SYMBOL>_<TF>.csv`) — sibling of the
+  Coinbase root, deliberately separate so the drift comparator can
+  pair the two.
 * **`scripts/compare_coinbase_vs_ibkr.py`** — closes the loop.
   For a named bot, runs the registered strategy on both Coinbase
   and IBKR tapes, builds a `BaselineSnapshot` from Coinbase
@@ -50,8 +51,8 @@ Together these implement the **pre-live data-source gate** from
   uses a synthetic-symbol convention (`<X>ONCHAIN`, `<X>SENT`,
   `<X>MACRO`) parallel to the existing `<X>FUND` pattern.
 * **`data/library.py`** — `DEFAULT_ROOTS` now includes
-  `C:\crypto_data\onchain\`, `C:\crypto_data\sentiment\`,
-  `C:\crypto_data\macro\`, plus the IBKR root from item 1.
+  the canonical ETA crypto on-chain, sentiment, macro, and IBKR
+  history roots under `data\crypto\...`.
 * **`scripts/fetch_onchain_history.py`** — pulls daily on-chain
   time series from free APIs (CoinGecko market-chart, mempool.
   space difficulty adjustments, Defillama Ethereum chain TVL).

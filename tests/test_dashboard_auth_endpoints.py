@@ -1,6 +1,7 @@
 """Tests for dashboard auth endpoints."""
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import pytest
@@ -88,6 +89,12 @@ def test_step_up_endpoint_requires_login(client) -> None:
     assert r.status_code == 401
 
 
+def test_mutating_route_requires_session(client) -> None:
+    r = client.post("/api/tasks/SELF_TEST/fire", json={})
+    assert r.status_code == 401
+    assert r.json()["detail"]["error_code"] == "no_session"
+
+
 def test_step_up_endpoint_marks_session(client, auth_paths, monkeypatch) -> None:
     monkeypatch.setenv("ETA_DASHBOARD_STEP_UP_PIN", "1234")
     client.post("/api/auth/login", json={
@@ -151,3 +158,37 @@ def test_login_rate_limit_isolated_per_user(client) -> None:
         "username": "edward", "password": "test-pass-123",
     })
     assert r.status_code == 200
+
+
+def test_login_with_missing_bcrypt_dependency_returns_401_not_500(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bcrypt = pytest.importorskip("bcrypt")
+
+    users = tmp_path / "users.json"
+    sessions = tmp_path / "sessions.json"
+    monkeypatch.setenv("ETA_DASHBOARD_USERS_PATH", str(users))
+    monkeypatch.setenv("ETA_DASHBOARD_SESSIONS_PATH", str(sessions))
+
+    users.write_text(
+        json.dumps(
+            {
+                "edward": {
+                    "bcrypt_hash": bcrypt.hashpw(b"test-pass-123", bcrypt.gensalt()).decode("ascii"),
+                    "created_at": 0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from eta_engine.deploy.scripts import dashboard_auth as da
+    from eta_engine.deploy.scripts.dashboard_api import app
+
+    monkeypatch.setattr(da, "_bcrypt", None)
+
+    client = TestClient(app)
+    r = client.post("/api/auth/login", json={"username": "edward", "password": "test-pass-123"})
+
+    assert r.status_code == 401
+    assert r.json()["detail"]["error_code"] == "bad_credentials"

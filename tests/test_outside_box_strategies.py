@@ -255,6 +255,44 @@ def test_ensemble_size_by_agreement_scales_qty() -> None:
     assert out.qty == pytest.approx(3.0, rel=1e-3)
 
 
+def test_ensemble_confidence_weighting_biases_entry_toward_stronger_vote() -> None:
+    """Confidence-weighting should pull aggregate entry toward stronger proposal."""
+    s = EnsembleVotingStrategy(
+        sub_strategies=[
+            ("trend_a", _StubStrategy(_open("BUY", 100.0, 1.0, 100.0))),
+            ("trend_b", _StubStrategy(_open("BUY", 110.0, 1.0, 300.0))),
+        ],
+        config=EnsembleVotingConfig(
+            min_agreement_count=2,
+            use_confidence_weighting=True,
+            use_regime_router=False,
+        ),
+    )
+    out = s.maybe_enter(_bar(0, h=101, low=99, c=100.0), [], 10_000.0, _config())
+    assert out is not None
+    # Arithmetic mean would be 105; weighted aggregate should lean higher.
+    assert out.entry_price > 105.0
+
+
+def test_ensemble_fail_safe_abstains_on_toxic_wick_bar() -> None:
+    """Adversarial fail-safe should block entries on toxic wick conditions."""
+    s = EnsembleVotingStrategy(
+        sub_strategies=[
+            ("trend_a", _StubStrategy(_open("BUY", 100.0, 1.0, 100.0))),
+            ("trend_b", _StubStrategy(_open("BUY", 100.0, 1.0, 100.0))),
+        ],
+        config=EnsembleVotingConfig(min_agreement_count=2, enable_fail_safe=True),
+    )
+    hist = [
+        _bar(i, h=101.0 + i * 0.1, low=99.0 + i * 0.1, c=100.0 + i * 0.1)
+        for i in range(8)
+    ]
+    # Tiny body, huge wicks -> should trigger abstain.
+    toxic = _bar(99, h=112.0, low=88.0, c=100.01)
+    out = s.maybe_enter(toxic, hist, 10_000.0, _config())
+    assert out is None
+
+
 def test_ensemble_empty_substrategies_rejected() -> None:
     with pytest.raises(ValueError, match="at least one"):
         EnsembleVotingStrategy(sub_strategies=[])

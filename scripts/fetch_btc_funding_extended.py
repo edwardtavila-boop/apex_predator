@@ -39,6 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT  # noqa: E402
 
 # Binance + Bybit are US-geo-blocked. BitMEX is fully US-friendly
 # AND has the longest history (XBTUSD funding back to 2016-05-13).
@@ -257,7 +258,7 @@ def main() -> int:
     p.add_argument("--symbol", default="BTCUSDT")
     p.add_argument("--years", type=int, default=5)
     p.add_argument("--out", type=Path,
-                   default=Path(r"C:\crypto_data\history\BTCFUND_8h.csv"))
+                   default=CRYPTO_HISTORY_ROOT / "BTCFUND_8h.csv")
     args = p.parse_args()
 
     end = datetime.now(UTC)

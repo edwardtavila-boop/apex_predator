@@ -3,20 +3,19 @@ FeatureFlags, BotPreFlightMixin (2026-04-27).
 """
 from __future__ import annotations
 
-import os
-from typing import Any
+from typing import TYPE_CHECKING
 
-import pytest
-
+if TYPE_CHECKING:
+    import pytest
 
 # ─── v22 sage candidate ───────────────────────────────────────────
 
 
 def test_v22_passes_through_when_no_sage_bars() -> None:
     """v22 = identical to v17 when payload doesn't include sage_bars."""
-    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
     from eta_engine.brain.jarvis_admin import ActionResponse, ActionSuggestion, Verdict
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
 
     base_resp = ActionResponse(
         request_id="r0",
@@ -51,9 +50,9 @@ def test_v22_passes_through_when_no_sage_bars() -> None:
 
 def test_v22_passes_through_for_non_risk_adding_verdicts() -> None:
     """v22 doesn't try to modulate DENIED/DEFERRED."""
-    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
     from eta_engine.brain.jarvis_admin import ActionResponse, ActionSuggestion, Verdict
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
 
     base_resp = ActionResponse(
         request_id="r0",
@@ -120,9 +119,11 @@ def test_dispatch_all_returns_per_arm_verdicts() -> None:
 def test_diff_matrix_is_json_serializable() -> None:
     """diff_matrix should produce a flat dict ready for JSON output."""
     import json
+
     from eta_engine.brain.jarvis_v3 import policies  # noqa: F401
     from eta_engine.brain.jarvis_v3.multi_policy_dispatcher import (
-        diff_matrix, dispatch_all,
+        diff_matrix,
+        dispatch_all,
     )
 
     class _StubReq:

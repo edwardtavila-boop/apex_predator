@@ -1,7 +1,6 @@
 # eta_engine/deploy/scripts/run_dashboard_8421.ps1
-# Stage 0 of the dashboard rebuild rollout.
-# Runs the new dashboard on port 8421 ALONGSIDE the existing one on 8420
-# so the operator can QA before cutover.
+# Primary ETA command center launcher (port 8421).
+# This is now treated as the canonical operator surface.
 #
 # Usage:
 #   .\eta_engine\deploy\scripts\run_dashboard_8421.ps1
@@ -33,8 +32,15 @@ if (-not $env:ETA_DASHBOARD_STEP_UP_PIN) {
     }
 }
 
-Write-Host "Starting Stage 0 dashboard on http://127.0.0.1:8421/"
-Write-Host "  (existing 8420 dashboard is unaffected; this runs in parallel)"
+Write-Host "Checking port 8421 availability..."
+$existing = Get-NetTCPConnection -LocalPort 8421 -State Listen -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Host "Port 8421 already in use. Stop conflicting service before launching dashboard." -ForegroundColor Red
+    $existing | Select-Object -First 5 LocalAddress,LocalPort,OwningProcess,State | Format-Table
+    exit 1
+}
+
+Write-Host "Starting ETA command center on http://127.0.0.1:8421/"
 Write-Host "  Press Ctrl+C to stop."
 Write-Host ""
 

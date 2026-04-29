@@ -4,10 +4,10 @@ Wraps the LunarCrush + BigData MCP feeds into a unified sentiment
 score that ETA bots can consume as a confluence input. Returns a
 single ``SentimentSnapshot`` with bounded scores in ``[-1.0, +1.0]``.
 
-This is the SCAFFOLD: actual MCP calls are made by the operator's
-agent layer (since MCP tool invocations belong to the agent runtime,
-not the deterministic bot loop). Bots read from a JSON state file the
-agent layer drops at ``state/sentiment/<symbol>.json`` every N minutes.
+External MCP calls are made by the operator's agent layer because MCP
+tool invocations belong outside the deterministic bot loop. Bots read
+the normalized JSON state file the agent layer drops at
+``state/sentiment/<symbol>.json`` every N minutes.
 
 Bot integration::
 

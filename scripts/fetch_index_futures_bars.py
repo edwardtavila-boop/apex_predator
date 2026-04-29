@@ -21,8 +21,8 @@ Data sources tried
 
 Output
 ------
-Writes CSVs to ``C:/mnq_data/history/{SYMBOL}_{TF}.csv`` matching
-the existing schema:
+Writes CSVs to the canonical ETA MNQ history root, matching the
+existing schema:
 
     time,open,high,low,close,volume
 
@@ -51,6 +51,8 @@ parity automatically.
 
 from __future__ import annotations
 
+# ruff: noqa: E402, I001 -- standalone script amends sys.path before eta_engine imports.
+
 import argparse
 import csv
 import sys
@@ -59,6 +61,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
+
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT  # noqa: E402
 
 
 # Symbol → yfinance ticker mapping. Continuous-front-month for futures.
@@ -182,16 +186,14 @@ def main() -> int:
                    choices=["yfinance", "ibkr"])
     p.add_argument(
         "--out", type=Path, default=None,
-        help="Output CSV path. Default: C:/mnq_data/history/{SYMBOL}1_{TF}.csv",
+        help="Output CSV path. Default: canonical ETA MNQ history root/{SYMBOL}1_{TF}.csv",
     )
     p.add_argument("--no-merge", action="store_true",
                    help="Overwrite existing file instead of merging")
     args = p.parse_args()
 
     period = args.period or _YF_PERIOD_BY_TF[args.timeframe]
-    out_path = args.out or Path(
-        rf"C:\mnq_data\history\{args.symbol}1_{args.timeframe}.csv",
-    )
+    out_path = args.out or (MNQ_HISTORY_ROOT / f"{args.symbol}1_{args.timeframe}.csv")
 
     print(f"[index-futures] {args.symbol} {args.timeframe}  source={args.source}")
     print(f"[index-futures] period={period}  out={out_path}")

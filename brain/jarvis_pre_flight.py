@@ -9,7 +9,8 @@ them with a one-line call instead of duplicating the wiring 7 times:
   1. Cross-bot correlation throttle
      (``jarvis_correlation.should_throttle_for_correlation``)
   2. Standard ``ActionType.ORDER_PLACE`` request through JARVIS
-  3. ``realized_r`` plumbing for the kaizen P&L feedback (bots call
+  3. Optional online-learning size shrink for cold feature buckets
+  4. ``realized_r`` plumbing for the kaizen P&L feedback (bots call
      ``record_fill_with_realized_r`` when a trade closes -- the journal
      event then carries the metadata the kaizen synthesizer reads)
 
@@ -71,6 +72,7 @@ def bot_pre_flight(
     Bot must have ``self._ask_jarvis(action, **payload) -> (allowed, cap, code)``
     available (every base bot already does -- see ``bots/mnq/bot.py``).
     """
+    from eta_engine.brain.feature_flags import is_enabled
     from eta_engine.brain.jarvis_admin import ActionType
     from eta_engine.brain.jarvis_correlation import should_throttle_for_correlation
 
@@ -130,12 +132,34 @@ def bot_pre_flight(
     final_cap = corr.cap_mult
     if jarvis_cap is not None and jarvis_cap < final_cap:
         final_cap = jarvis_cap
+    online_reason = ""
+    online_binding = False
+    if is_enabled("ONLINE_LEARNING"):
+        updater = getattr(bot, "_online_updater", None)
+        if updater is not None and hasattr(updater, "sizing_decision"):
+            try:
+                bucket = str(
+                    payload.get("feature_bucket")
+                    or f"{symbol}:{side}:conf_{int(float(confluence))}"
+                )
+                online_decision = updater.sizing_decision(bucket)
+                if online_decision.multiplier < final_cap:
+                    final_cap = online_decision.multiplier
+                    online_binding = True
+                online_reason = (
+                    f", online={online_decision.status}"
+                    f"/{online_decision.multiplier:.2f}"
+                    f" ({online_decision.expected_r:+.2f}R,"
+                    f" n={online_decision.samples})"
+                )
+            except Exception as exc:  # noqa: BLE001 -- never break order flow
+                logger.warning("online learning pre-flight failed (non-fatal): %s", exc)
     return PreflightDecision(
         allowed=True,
         size_cap_mult=final_cap,
-        reason=f"approved (corr={corr.cap_mult:.2f}, jarvis_cap={jarvis_cap})",
+        reason=f"approved (corr={corr.cap_mult:.2f}, jarvis_cap={jarvis_cap}{online_reason})",
         reason_code="approved",
-        binding="approved" if final_cap >= 1.0 else (
+        binding="online_learning" if online_binding else "approved" if final_cap >= 1.0 else (
             "correlation" if final_cap == corr.cap_mult else "jarvis"
         ),
     )

@@ -44,6 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT  # noqa: E402
 
 # Farside endpoints in priority order. The HTML-table URL is the
 # stable one; the CSV export URL has changed historically.
@@ -182,7 +183,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--out", type=Path,
-        default=Path(r"C:\mnq_data\history\BTC_ETF_FLOWS.csv"),
+        default=MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv",
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()

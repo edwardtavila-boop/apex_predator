@@ -12,8 +12,11 @@ Wave-5 enhancements (2026-04-27):
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import threading
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from eta_engine.brain.jarvis_v3.sage.base import (
@@ -83,17 +86,53 @@ SCHOOLS: dict[str, SchoolBase] = {
 }
 
 
-# Wave-5 #25 (memoization). Keyed on (symbol, last bar ts, side, n_bars).
-_CACHE: dict[tuple, SageReport] = {}
+# Wave-5 #25 (memoization). Keyed on a stable digest of the full context so
+# live consultations don't accidentally reuse a report across different
+# risk, order-flow, or optional telemetry inputs.
+_CACHE: OrderedDict[str, SageReport] = OrderedDict()
 _CACHE_LOCK = threading.Lock()
 _CACHE_MAX = 256
 
 
-def _cache_key(ctx: MarketContext, enabled: frozenset[str] | None) -> tuple:
-    last_bar = ctx.bars[-1] if ctx.bars else {}
-    last_ts = last_bar.get("ts") or last_bar.get("timestamp") or last_bar.get("time")
-    return (ctx.symbol, str(last_ts), ctx.side, ctx.n_bars,
-            enabled if enabled else None)
+def _cache_key(ctx: MarketContext, enabled: frozenset[str] | None) -> str:
+    payload = {
+        "bars": ctx.bars,
+        "bars_by_tf": ctx.bars_by_tf,
+        "side": ctx.side,
+        "entry_price": ctx.entry_price,
+        "symbol": ctx.symbol,
+        "order_book_imbalance": ctx.order_book_imbalance,
+        "cumulative_delta": ctx.cumulative_delta,
+        "realized_vol": ctx.realized_vol,
+        "session_phase": ctx.session_phase,
+        "account_equity_usd": ctx.account_equity_usd,
+        "risk_per_trade_pct": ctx.risk_per_trade_pct,
+        "stop_distance_pct": ctx.stop_distance_pct,
+        "detected_regime": ctx.detected_regime,
+        "instrument_class": ctx.instrument_class,
+        "onchain": ctx.onchain,
+        "funding": ctx.funding,
+        "options": ctx.options,
+        "peer_returns": ctx.peer_returns,
+        "enabled": sorted(enabled) if enabled else None,
+    }
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        default=str,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.blake2s(encoded, digest_size=16).hexdigest()
+
+
+def _observe_health(report: SageReport) -> None:
+    """Feed the best-effort health monitor without touching the fast path."""
+    try:
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        monitor = default_monitor()
+        monitor.observe(report)
+    except Exception as exc:  # noqa: BLE001 -- health is best-effort
+        logger.debug("sage health monitor.observe raised %s (non-fatal)", exc)
 
 
 def consult_sage(
@@ -125,7 +164,10 @@ def consult_sage(
         with _CACHE_LOCK:
             cached = _CACHE.get(key)
             if cached is not None:
-                return cached
+                _CACHE.move_to_end(key)
+        if cached is not None:
+            _observe_health(cached)
+            return cached
 
     # Wave-5 #2: auto-detect regime if not already tagged
     if ctx.detected_regime is None and ctx.n_bars >= 25:
@@ -145,10 +187,11 @@ def consult_sage(
             stop_distance_pct=ctx.stop_distance_pct,
             detected_regime=regime.value,
             instrument_class=ctx.instrument_class,
-            # Wave-6 pre-live: preserve scaffold-school payloads on rebuild
+            # Wave-6 pre-live: preserve optional telemetry payloads on rebuild
             onchain=ctx.onchain,
             funding=ctx.funding,
             options=ctx.options,
+            peer_returns=ctx.peer_returns,
         )
 
     # Filter to applicable schools (instrument/regime gates + enabled set)
@@ -193,18 +236,14 @@ def consult_sage(
     # health monitor so silently-broken schools (e.g. always NEUTRAL,
     # always raising) get flagged automatically. Lazy import + try/except
     # so health bugs never crash the consultation loop.
-    try:
-        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
-        monitor = default_monitor()
-        monitor.observe(report)
-    except Exception as exc:  # noqa: BLE001 -- health is best-effort
-        logger.debug("sage health monitor.observe raised %s (non-fatal)", exc)
+    _observe_health(report)
 
     if use_cache:
         with _CACHE_LOCK:
-            if len(_CACHE) > _CACHE_MAX:
-                _CACHE.clear()  # simple eviction
             _CACHE[key] = report
+            _CACHE.move_to_end(key)
+            while len(_CACHE) > _CACHE_MAX:
+                _CACHE.popitem(last=False)
 
     return report
 

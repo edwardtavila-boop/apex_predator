@@ -711,3 +711,52 @@ class TestDashboardAPI:
         assert mnq["tier"] == "orb"
 
         assert data["confirmed_bots"] == 2
+
+    def test_fleet_equity_uses_supervisor_when_curves_are_missing(self, app_client):
+        """Fleet equity stays live from supervisor heartbeat when curve files are absent."""
+        import json
+        import os
+        from datetime import UTC, datetime
+        from pathlib import Path
+
+        state = Path(os.environ["APEX_STATE_DIR"])
+        sup_dir = state / "jarvis_intel" / "supervisor"
+        sup_dir.mkdir(parents=True, exist_ok=True)
+        now = datetime.now(UTC).isoformat()
+        hb = {
+            "ts": now,
+            "mode": "paper_sim",
+            "bots": [
+                {
+                    "bot_id": "mnq_futures",
+                    "symbol": "MNQ1",
+                    "strategy_kind": "orb",
+                    "direction": "long",
+                    "n_entries": 1,
+                    "n_exits": 1,
+                    "realized_pnl": 2.0,
+                    "last_bar_ts": now,
+                },
+                {
+                    "bot_id": "btc_hybrid",
+                    "symbol": "BTC",
+                    "strategy_kind": "hybrid",
+                    "direction": "long",
+                    "n_entries": 1,
+                    "n_exits": 1,
+                    "realized_pnl": -0.5,
+                    "last_bar_ts": now,
+                },
+            ],
+        }
+        (sup_dir / "heartbeat.json").write_text(json.dumps(hb), encoding="utf-8")
+
+        r = app_client.get("/api/fleet-equity")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["source"] == "supervisor_heartbeat"
+        assert data["summary"]["today_pnl"] == 1.5
+        assert data["summary"]["current_equity"] == 10001.5
+        assert len(data["series"]) == 2
+        assert data["session_truth_status"] == "live"
+        assert data["truth_summary_line"] == "Live ETA truth: 2/2 bot heartbeat(s) are fresh."

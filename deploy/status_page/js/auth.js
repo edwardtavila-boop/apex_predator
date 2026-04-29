@@ -13,6 +13,17 @@ export const session = {
 
 let _afterLoginCallbacks = [];
 
+function renderUserChip() {
+  const el = document.getElementById('top-user-chip');
+  if (!el) return;
+  if (!session.authenticated) {
+    el.textContent = 'signed out';
+    return;
+  }
+  const suffix = session.steppedUp ? ' • step-up' : '';
+  el.textContent = `${session.user || 'operator'}${suffix}`;
+}
+
 export function onAuthenticated(cb) {
   if (session.authenticated) cb();
   else _afterLoginCallbacks.push(cb);
@@ -26,6 +37,7 @@ export async function checkSession() {
     session.authenticated = !!body.authenticated;
     session.user = body.user || null;
     session.steppedUp = !!body.stepped_up;
+    renderUserChip();
     return session.authenticated;
   } catch (e) {
     console.error('session check failed', e);
@@ -57,13 +69,17 @@ async function doLogin(username, password) {
       body: JSON.stringify({ username, password }),
     });
     if (!r.ok) {
-      errEl.textContent = `login failed (${r.status})`;
+      const body = await r.json().catch(() => ({}));
+      const code = body?.detail?.error_code || `http_${r.status}`;
+      errEl.textContent = `login failed (${code})`;
       errEl.classList.remove('hidden');
       return false;
     }
     const body = await r.json();
     session.authenticated = true;
     session.user = body.user;
+    session.steppedUp = false;
+    renderUserChip();
     hideLoginModal();
     _afterLoginCallbacks.forEach(cb => { try { cb(); } catch(e) { console.error(e); }});
     _afterLoginCallbacks = [];
@@ -82,6 +98,7 @@ export async function logout() {
   session.authenticated = false;
   session.user = null;
   session.steppedUp = false;
+  renderUserChip();
   showLoginModal();
 }
 
@@ -121,6 +138,7 @@ async function doStepUp(pin) {
       return false;
     }
     session.steppedUp = true;
+    renderUserChip();
     hideStepUpModal();
     if (_stepUpResolver) { _stepUpResolver(true); _stepUpResolver = null; }
     return true;
@@ -142,6 +160,10 @@ export async function authedPost(url, body, opts = {}) {
       body: JSON.stringify(body || {}),
     });
     if (r.status === 401) {
+      session.authenticated = false;
+      session.user = null;
+      session.steppedUp = false;
+      renderUserChip();
       showLoginModal();
       throw new Error('not authenticated');
     }
@@ -185,7 +207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!ok) {
     showLoginModal();
   } else {
-    document.getElementById('top-user-chip').textContent = session.user;
+    renderUserChip();
     _afterLoginCallbacks.forEach(cb => { try { cb(); } catch(e) { console.error(e); }});
     _afterLoginCallbacks = [];
   }

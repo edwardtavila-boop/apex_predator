@@ -56,12 +56,13 @@ class MarketContext:
     detected_regime: str | None = None  # one of {trending, ranging, volatile, quiet}
     # Wave-5 #6: per-instrument activation -- the symbol class
     instrument_class: str | None = None  # one of {equity, crypto, futures, fx, options}
-    # Wave-6 pre-live (2026-04-27): scaffold-school payloads. Each is
+    # Wave-6 pre-live (2026-04-27): optional telemetry payloads. Each is
     # a free-form dict that the corresponding school reads. None means
     # the school skips with a "missing" verdict (NEUTRAL, conv 0).
     onchain: dict[str, Any] | None = None     # for OnChainSchool (BTC/ETH metrics)
     funding: dict[str, Any] | None = None     # for FundingBasisSchool (perp funding + basis)
     options: dict[str, Any] | None = None     # for OptionsGreeksSchool (IV / skew / GEX)
+    peer_returns: dict[str, list[float]] | None = None  # for CrossAssetCorrelationSchool
 
     @property
     def n_bars(self) -> int:

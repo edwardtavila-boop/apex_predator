@@ -25,6 +25,12 @@ function Write-Log { param($m) Write-Host "[cf-setup] $m" -ForegroundColor Cyan 
 function Write-OK  { param($m) Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Die       { param($m) Write-Host "[FATAL] $m" -ForegroundColor Red; exit 1 }
 
+$workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
+$logDir = Join-Path $workspaceRoot "logs"
+$stateDir = Join-Path $workspaceRoot "var\cloudflare"
+New-Item -ItemType Directory -Force -Path $logDir, $stateDir | Out-Null
+$logPath = Join-Path $logDir "cloudflare-tunnel.log"
+
 $cfDir = Join-Path $env:USERPROFILE ".cloudflared"
 New-Item -ItemType Directory -Force -Path $cfDir | Out-Null
 $certPath   = Join-Path $cfDir "cert.pem"
@@ -129,7 +135,7 @@ $credsFile = Join-Path $cfDir "$tunnelId.json"
 $configYml = @"
 tunnel: $tunnelId
 credentials-file: $credsFile
-logfile: $env:LOCALAPPDATA\eta_engine\logs\cloudflare-tunnel.log
+logfile: $logPath
 no-autoupdate: true
 ingress:
   - hostname: $fqdn
@@ -140,9 +146,6 @@ Set-Content -Path $configPath -Value $configYml -Encoding ASCII
 Write-OK "wrote config.yml"
 
 # ---------- 4. Register scheduled task ----------
-$stateDir = Join-Path $env:LOCALAPPDATA "eta_engine\state"
-New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-
 $stateFile = Join-Path $stateDir "cloudflare_tunnel.json"
 @{
     kind       = "named_tunnel"

@@ -8,15 +8,15 @@ import asyncio
 import csv
 import json
 import sys
-import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import websockets
 
 CDP_URL = "http://localhost:9222"
-OUT_DIR = Path(r"C:\mnq_data")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+OUT_DIR = WORKSPACE_ROOT / "mnq_data"
 
 
 # --- RTH/ETH session classification for CME MNQ ---
@@ -30,12 +30,12 @@ def _is_us_dst(dt_utc: datetime) -> bool:
     """US DST: 2nd Sun Mar 07:00 UTC -> 1st Sun Nov 06:00 UTC (approx)."""
     y = dt_utc.year
     # second Sunday of March
-    d = datetime(y, 3, 8, 7, 0, tzinfo=timezone.utc)
+    d = datetime(y, 3, 8, 7, 0, tzinfo=UTC)
     while d.weekday() != 6:
         d = d.replace(day=d.day + 1)
     dst_start = d
     # first Sunday of November
-    d = datetime(y, 11, 1, 6, 0, tzinfo=timezone.utc)
+    d = datetime(y, 11, 1, 6, 0, tzinfo=UTC)
     while d.weekday() != 6:
         d = d.replace(day=d.day + 1)
     dst_end = d
@@ -44,7 +44,7 @@ def _is_us_dst(dt_utc: datetime) -> bool:
 
 def session_flag(epoch_s: int) -> str:
     """Return 'RTH' / 'ETH' / 'CLOSED'."""
-    dt = datetime.fromtimestamp(epoch_s, tz=timezone.utc)
+    dt = datetime.fromtimestamp(epoch_s, tz=UTC)
     dst = _is_us_dst(dt)
     # ET offset: -4 in DST, -5 otherwise
     et_offset = -4 if dst else -5
@@ -155,6 +155,7 @@ async def cdp_eval(ws_url: str, expression: str) -> dict:
 
 def write_csv(data: dict, timeframe_label: str) -> Path:
     csv_lines = data["csv"].split("\n") if data["csv"] else []
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"mnq_{timeframe_label}.csv"
     with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -164,13 +165,13 @@ def write_csv(data: dict, timeframe_label: str) -> Path:
             if len(parts) != 6:
                 continue
             t = int(parts[0])
-            iso = datetime.fromtimestamp(t, tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            iso = datetime.fromtimestamp(t, tz=UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
             sess = session_flag(t)
             w.writerow([iso, t, parts[1], parts[2], parts[3], parts[4], parts[5], sess])
     return out
 
 
-async def main():
+async def main() -> None:
     timeframe = sys.argv[1] if len(sys.argv) > 1 else "5m"
     label = timeframe
     ws_url = get_chart_target_ws()

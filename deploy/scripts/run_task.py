@@ -34,6 +34,7 @@ from eta_engine.brain.avengers import (
     TASK_OWNERS,
     BackgroundTask,
 )
+from eta_engine.scripts import workspace_roots
 
 # brain.avengers.push may or may not be exported (depends on whether the
 # push subsystem has been committed). Fall back to the Telegram adapter
@@ -64,8 +65,8 @@ except ImportError:
 logger = logging.getLogger("deploy.run_task")
 
 
-DEFAULT_STATE_DIR = Path.home() / ".local" / "state" / "eta_engine"
-DEFAULT_LOG_DIR = Path.home() / ".local" / "log" / "eta_engine"
+DEFAULT_STATE_DIR = workspace_roots.ETA_RUNTIME_STATE_DIR
+DEFAULT_LOG_DIR = workspace_roots.ETA_RUNTIME_LOG_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +335,7 @@ def _task_meta_upgrade(state_dir: Path) -> dict:
     import shutil
     import subprocess
 
-    repo_dir = Path(os.environ.get("APEX_REPO_DIR", r"C:\eta_engine"))
+    repo_dir = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     if not (repo_dir / ".git").exists():
         return {"skipped": True, "reason": f"{repo_dir} is not a git repo"}
 
@@ -678,7 +679,7 @@ def _task_disk_cleanup(state_dir: Path) -> dict:
                 continue
 
     # Also blow away pyc caches older than 14 days
-    repo = Path(os.environ.get("APEX_REPO_DIR", r"C:\eta_engine"))
+    repo = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     if repo.exists():
         pyc_cutoff = datetime.now(UTC).timestamp() - 14 * 86400
         for pycache in repo.rglob("__pycache__"):
@@ -705,7 +706,7 @@ def _task_backup(state_dir: Path) -> dict:
     import tarfile
 
     report: dict = {"ts": datetime.now(UTC).isoformat()}
-    repo = Path(os.environ.get("APEX_REPO_DIR", r"C:\eta_engine"))
+    repo = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     backup_dir = state_dir / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")

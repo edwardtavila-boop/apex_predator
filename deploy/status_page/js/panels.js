@@ -3,6 +3,39 @@
 // Wave-7 dashboard, 2026-04-27.
 
 const STALE_AFTER_MS = 30_000;
+let PANEL_SEQ = 0;
+
+function panelIcon(containerId) {
+  const id = String(containerId || '');
+  if (id.includes('verdict')) return '◉';
+  if (id.includes('stress')) return '≈';
+  if (id.includes('toggle')) return '⌁';
+  if (id.includes('explain')) return '✧';
+  if (id.includes('health')) return '✦';
+  if (id.includes('disagreement')) return '⬢';
+  if (id.includes('edge')) return '⬡';
+  if (id.includes('policy')) return '⟠';
+  if (id.includes('model')) return '◈';
+  if (id.includes('kaizen')) return '✶';
+  if (id.includes('roster')) return '▦';
+  if (id.includes('drill')) return '⌬';
+  if (id.includes('equity')) return '◍';
+  if (id.includes('drawdown')) return '◔';
+  if (id.includes('correlation')) return '⟗';
+  if (id.includes('position')) return '⟂';
+  if (id.includes('risk')) return '△';
+  if (id.includes('controls')) return '⚙';
+  return '◈';
+}
+
+function panelTone(containerId) {
+  const id = String(containerId || '');
+  if (id.includes('risk') || id.includes('drawdown') || id.includes('kill')) return 'tone-risk';
+  if (id.includes('health') || id.includes('reconciler')) return 'tone-health';
+  if (id.includes('equity') || id.includes('edge') || id.includes('policy')) return 'tone-alpha';
+  if (id.includes('verdict') || id.includes('fills') || id.includes('roster') || id.includes('drill')) return 'tone-execution';
+  return 'tone-neutral';
+}
 
 export class Panel {
   /**
@@ -18,9 +51,15 @@ export class Panel {
     this.lastError = null;
     this.element = document.querySelector(`[data-panel-id="${containerId}"]`);
     if (this.element) {
-      this.element.innerHTML = `<div class="panel-title">${title}</div><div data-panel-body></div><div class="panel-refresh"></div>`;
+      const icon = panelIcon(containerId);
+      this.element.innerHTML = `<div class="panel-title"><span class="panel-badge">${icon}</span>${title}</div><div data-panel-body></div><div class="panel-refresh"></div>`;
       this.body = this.element.querySelector('[data-panel-body]');
       this.refreshLabel = this.element.querySelector('.panel-refresh');
+      this.element.classList.add(panelTone(containerId));
+      this.element.classList.add('panel-enter');
+      this.element.style.setProperty('--panel-enter-delay', `${Math.min(PANEL_SEQ * 24, 420)}ms`);
+      PANEL_SEQ += 1;
+      requestAnimationFrame(() => this.element?.classList.add('panel-enter-visible'));
     }
   }
 
@@ -34,8 +73,11 @@ export class Panel {
     if (!this.element) return;
     this.element.classList.add('error');
     this.element.classList.remove('loading');
-    this.body.innerHTML = `<div class="text-red-400 text-xs">${escapeHtml(message)}</div>`;
+    this.body.innerHTML = `<div class="text-red-400 text-xs">error: ${escapeHtml(message)}</div>`;
     this.lastError = message;
+    window.dispatchEvent(new CustomEvent('eta-panel-error', {
+      detail: { panelId: this.containerId, at: Date.now(), message: String(message || '') },
+    }));
   }
 
   markStale() {
@@ -52,23 +94,39 @@ export class Panel {
   /** Called by Poller. Fetches + renders + handles errors. */
   async refresh() {
     if (!this.element) return;
+    const startedAt = Date.now();
+    this._requestSeq = (this._requestSeq || 0) + 1;
+    const requestSeq = this._requestSeq;
     this.setLoading();
     try {
       const resp = await fetch(this.endpoint, {
         credentials: 'same-origin',
+        cache: 'no-store',
       });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
         const code = body?.detail?.error_code || body?.error_code || `http_${resp.status}`;
-        this.setError(`${code}`);
+        const detail = body?.detail?.detail || body?.detail || '';
+        this.setError(`${code}${detail ? ` (${detail})` : ''}`);
         return;
       }
       const data = await resp.json();
+      // Replay-safe guard: ignore responses older than the newest in-flight request.
+      if (requestSeq !== this._requestSeq) return;
       try {
         this.render(data);
         this.element.classList.remove('loading', 'error', 'stale');
         this.lastRefreshAt = Date.now();
+        this.element.dataset.lastRefreshAt = String(this.lastRefreshAt);
         this.updateRefreshLabel();
+        window.dispatchEvent(new CustomEvent('eta-panel-refresh', {
+          detail: {
+            panelId: this.containerId,
+            endpoint: this.endpoint,
+            at: this.lastRefreshAt,
+            latencyMs: Math.max(0, this.lastRefreshAt - startedAt),
+          },
+        }));
       } catch (e) {
         console.error(`render failed for ${this.containerId}`, e);
         this.setError(`render: ${e.message}`);
@@ -133,6 +191,20 @@ export function escapeHtml(s) {
 
 export function initTabs() {
   const tabBtns = document.querySelectorAll('.tab-btn');
+  const nav = document.querySelector('nav');
+  if (nav && !nav.querySelector('.tab-indicator')) {
+    const indicator = document.createElement('div');
+    indicator.className = 'tab-indicator';
+    nav.appendChild(indicator);
+  }
+  const indicator = nav?.querySelector('.tab-indicator');
+  const moveIndicator = (btn) => {
+    if (!indicator || !btn || !nav) return;
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    indicator.style.setProperty('--tab-left', `${btnRect.left - navRect.left}px`);
+    indicator.style.setProperty('--tab-width', `${btnRect.width}px`);
+  };
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.dataset.tab;
@@ -146,7 +218,27 @@ export function initTabs() {
       document.querySelectorAll('section[id^="view-"]').forEach(sec => {
         sec.classList.toggle('hidden', sec.id !== `view-${target}`);
       });
+      moveIndicator(btn);
     });
+  });
+  const selected = Array.from(tabBtns).find((b) => b.getAttribute('aria-selected') === 'true') || tabBtns[0];
+  if (selected) moveIndicator(selected);
+  window.addEventListener('resize', () => moveIndicator(
+    Array.from(tabBtns).find((b) => b.getAttribute('aria-selected') === 'true') || tabBtns[0],
+  ));
+
+  const compactBtn = document.getElementById('top-compact-toggle');
+  const compactKey = 'eta.command_center.compact_mode';
+  const applyCompact = (enabled) => {
+    document.body.classList.toggle('compact', enabled);
+    if (compactBtn) compactBtn.textContent = enabled ? 'compact on' : 'compact off';
+  };
+  const savedCompact = localStorage.getItem(compactKey) === '1';
+  applyCompact(savedCompact);
+  compactBtn?.addEventListener('click', () => {
+    const next = !document.body.classList.contains('compact');
+    localStorage.setItem(compactKey, next ? '1' : '0');
+    applyCompact(next);
   });
 }
 

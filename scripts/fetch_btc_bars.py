@@ -76,8 +76,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-CRYPTO_DATA_ROOT = Path(r"C:\crypto_data")
-HISTORY_ROOT = CRYPTO_DATA_ROOT / "history"
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT as HISTORY_ROOT  # noqa: E402
 
 # Coinbase Exchange (formerly Pro) public REST. No auth needed for
 # /products/{id}/candles — rate limits are generous.
@@ -202,7 +201,7 @@ def main() -> int:
     p.add_argument("--start", help="ISO date YYYY-MM-DD")
     p.add_argument("--end", help="ISO date YYYY-MM-DD; default = today")
     p.add_argument("--root", type=Path, default=HISTORY_ROOT,
-                   help="output directory (default: C:\\crypto_data\\history)")
+                   help="output directory (default: canonical ETA crypto history root)")
     args = p.parse_args()
 
     if args.start:

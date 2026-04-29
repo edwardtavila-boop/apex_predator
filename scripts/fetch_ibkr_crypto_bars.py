@@ -75,8 +75,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-CRYPTO_DATA_ROOT = Path(r"C:\crypto_data")
-IBKR_HISTORY_ROOT = CRYPTO_DATA_ROOT / "ibkr" / "history"
+from eta_engine.scripts.workspace_roots import CRYPTO_IBKR_HISTORY_ROOT as IBKR_HISTORY_ROOT  # noqa: E402
 
 # Default Client Portal Gateway URL. Override via --base-url or the
 # IBKR_CP_BASE_URL env var. The gateway serves a self-signed cert on
@@ -371,7 +370,7 @@ def main() -> int:
     p.add_argument("--end", help="ISO date YYYY-MM-DD; default = today")
     p.add_argument(
         "--root", type=Path, default=IBKR_HISTORY_ROOT,
-        help=r"output directory (default: C:\crypto_data\ibkr\history)",
+        help="output directory (default: canonical ETA IBKR crypto history root)",
     )
     p.add_argument(
         "--base-url", default=_DEFAULT_BASE_URL,

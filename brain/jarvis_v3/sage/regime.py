@@ -19,9 +19,10 @@ confluence layer applies the weight modulators.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from eta_engine.brain.jarvis_v3.sage.base import MarketContext
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_v3.sage.base import MarketContext
 
 
 class Regime(StrEnum):
@@ -38,9 +39,9 @@ def _atr_pct(bars: list[dict[str, Any]], period: int = 14) -> float:
     trs: list[float] = []
     for i in range(len(bars) - period, len(bars)):
         h = float(bars[i]["high"])
-        l = float(bars[i]["low"])
+        low = float(bars[i]["low"])
         prev_c = float(bars[i - 1]["close"])
-        trs.append(max(h - l, abs(h - prev_c), abs(l - prev_c)))
+        trs.append(max(h - low, abs(h - prev_c), abs(low - prev_c)))
     atr = sum(trs) / len(trs)
     last_close = float(bars[-1]["close"])
     if last_close <= 0:

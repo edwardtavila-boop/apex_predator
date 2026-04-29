@@ -98,6 +98,19 @@ class TestDormantBrokerSubstitution:
         router = SmartRouter(preferred_futures_venue="TRADOVATE")
         assert router._preferred_futures_venue == DEFAULT_FUTURES_VENUE
 
+    def test_mutated_dormant_preference_is_resubstituted_at_routing_time(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING, logger=router_mod.__name__)
+        router = SmartRouter(preferred_futures_venue="ibkr")
+        router._preferred_futures_venue = "tradovate"  # noqa: SLF001
+
+        assert isinstance(router.choose_venue("MNQM5", 1), IbkrClientPortalVenue)
+        assert router._preferred_futures_venue == DEFAULT_FUTURES_VENUE
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("tradovate" in m and "DORMANT" in m for m in messages)
+
 
 # --- Config.json canonical policy -------------------------------------------
 

@@ -474,6 +474,29 @@ async def test_runtime_uses_mock_router_in_dry_run(tmp_path):
     assert isinstance(runtime.router, mod.MockRouter)
 
 
+def test_runtime_uses_real_router_in_live_when_active_broker_ready(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = _cfg_factory(
+        tmp_path,
+        live=True,
+        dry_run=False,
+        go_state={"tier_a_mnq_live": True},
+    )
+    sentinel_router = object()
+    monkeypatch.setattr(mod, "_active_futures_broker_creds_present", lambda: True)
+    monkeypatch.setattr(mod, "_build_real_router", lambda _cfg: sentinel_router)
+
+    runtime = mod.ApexRuntime(
+        cfg,
+        bindings=_fake_bindings(),
+        trailing_dd_tracker=object(),  # constructor only checks presence
+    )
+
+    assert runtime.router is sentinel_router
+
+
 # --------------------------------------------------------------------------- #
 # Config loader
 # --------------------------------------------------------------------------- #
@@ -597,6 +620,35 @@ def test_tradovate_creds_present_with_env(monkeypatch):
     monkeypatch.setenv("TRADOVATE_USERNAME", "x")
     monkeypatch.setenv("TRADOVATE_PASSWORD", "x")
     assert mod._tradovate_creds_present() is True
+
+
+def test_active_futures_broker_creds_present_with_ibkr(monkeypatch):
+    from eta_engine.venues.ibkr import IbkrClientPortalVenue
+    from eta_engine.venues.tastytrade import TastytradeVenue
+
+    monkeypatch.setattr(IbkrClientPortalVenue, "has_credentials", lambda self: True)
+    monkeypatch.setattr(TastytradeVenue, "has_credentials", lambda self: False)
+
+    assert mod._active_futures_broker_creds_present() is True
+
+
+def test_active_futures_broker_creds_ignore_tradovate_only(
+    monkeypatch,
+):
+    from eta_engine.venues.ibkr import IbkrClientPortalVenue
+    from eta_engine.venues.tastytrade import TastytradeVenue
+
+    for key in (
+        "TRADOVATE_CLIENT_ID",
+        "TRADOVATE_CLIENT_SECRET",
+        "TRADOVATE_USERNAME",
+        "TRADOVATE_PASSWORD",
+    ):
+        monkeypatch.setenv(key, "legacy-secret")
+    monkeypatch.setattr(IbkrClientPortalVenue, "has_credentials", lambda self: False)
+    monkeypatch.setattr(TastytradeVenue, "has_credentials", lambda self: False)
+
+    assert mod._active_futures_broker_creds_present() is False
 
 
 # --------------------------------------------------------------------------- #

@@ -9,11 +9,12 @@ Covers:
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ─── contextual_bandit ────────────────────────────────────────────
 
@@ -42,8 +43,9 @@ def test_contextual_bandit_register_then_choose(tmp_path: Path) -> None:
 
 
 def test_contextual_bandit_observe_updates_posterior(tmp_path: Path) -> None:
-    from eta_engine.brain.jarvis_v3.contextual_bandit import ContextualBandit
     import random
+
+    from eta_engine.brain.jarvis_v3.contextual_bandit import ContextualBandit
     cb = ContextualBandit(state_path=tmp_path / "post.json", rng=random.Random(0))
     cb.register_arm("v17")
     cb.register_arm("v18")

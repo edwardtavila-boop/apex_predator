@@ -22,13 +22,13 @@
 #   powershell -File register_operator_tasks.ps1 -OnlyTask mnq_daily_pipeline  # one task only
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = "C:\",
-    [string]$EtaEngineDir = "C:\eta_engine",
-    [string]$MnqBacktestDir = "C:\mnq_backtest",
-    [string]$MnqEtaBotDir = "C:\mnq_eta_bot",
-    [string]$JarvisIdentityDir = "C:\jarvis_identity",
+    [string]$InstallRoot = "C:\EvolutionaryTradingAlgo",
+    [string]$EtaEngineDir = "C:\EvolutionaryTradingAlgo\eta_engine",
+    [string]$MnqBacktestDir = "C:\EvolutionaryTradingAlgo\mnq_backtest",
+    [string]$MnqEtaBotDir = "C:\EvolutionaryTradingAlgo\mnq_eta_bot",
+    [string]$JarvisIdentityDir = "C:\EvolutionaryTradingAlgo\jarvis_identity",
     [string]$Python = "C:\Python314\python.exe",
-    [string]$VenvPython = "C:\mnq_backtest\.venv\Scripts\python.exe",
+    [string]$VenvPython = "C:\EvolutionaryTradingAlgo\mnq_backtest\.venv\Scripts\python.exe",
     [switch]$KeepDisabled,
     [switch]$DryRun,
     [string]$OnlyTask = ""

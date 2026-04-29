@@ -1,7 +1,7 @@
 """Cross-asset correlation school (Wave-5 #13, 2026-04-27).
 
-SCAFFOLD: detects correlation breaks across the fleet's tracked assets.
-When ``ctx.peer_returns`` is supplied (a dict of symbol -> recent
+Detects correlation breaks across the fleet's tracked assets. When
+``ctx.peer_returns`` is supplied (a dict of symbol -> recent
 returns list), computes rolling correlation vs current symbol and
 flags break points.
 

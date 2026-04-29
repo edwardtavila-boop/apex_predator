@@ -3,18 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Evolutionary Trading Algo | Command Center</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Evolutionary Trading Algo | Live Dashboard</title>
   <meta name="theme-color" content="#020406" />
-  <link rel="stylesheet" href="/theme.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/theme.css?v=20260428e" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col antialiased">
 
   <!-- Login modal (hidden by default; shown by auth.js when unauthenticated) -->
   <div id="login-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur hidden items-center justify-center">
     <form id="login-form" class="bg-zinc-900 border border-zinc-700 rounded p-6 w-96 space-y-3">
-      <h2 class="text-lg font-semibold">JARVIS Command Center</h2>
+      <h2 class="text-lg font-semibold">ETA Live Dashboard</h2>
       <input id="login-username" type="text" placeholder="username"
              class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2" autocomplete="username" />
       <input id="login-password" type="password" placeholder="password"
@@ -42,13 +48,21 @@
   </div>
 
   <!-- Top bar -->
-  <header id="top-bar" class="border-b border-zinc-800 bg-zinc-900 px-4 py-2 flex items-center gap-4 text-sm">
-    <div class="font-bold text-emerald-400">ETA</div>
+  <header id="top-bar" class="border-b border-zinc-800 px-4 py-2 flex flex-wrap items-center gap-3 text-sm">
+    <div class="font-bold tracking-[0.24em] text-cyan-300 uppercase">ETA // Live Dashboard</div>
     <div id="top-kill-switch" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500"></span><span>kill</span></div>
     <div id="top-v22-toggle" class="flex items-center gap-1"></div>
     <div id="top-stress" class="flex items-center gap-1"></div>
     <div id="top-fleet-equity" class="flex items-center gap-1"></div>
     <div id="top-alerts" class="flex items-center gap-1"></div>
+    <button id="top-compact-toggle" class="flex items-center gap-1 text-cyan-300">compact off</button>
+    <button id="top-theme-toggle" class="header-advanced flex items-center gap-1 text-cyan-300">theme: neon</button>
+    <button id="top-export-btn" class="header-advanced flex items-center gap-1 text-cyan-300">export</button>
+    <button id="top-command-palette-btn" class="flex items-center gap-1 text-cyan-300">controls</button>
+    <button id="top-minimal-toggle" class="flex items-center gap-1 text-cyan-300">minimal: off</button>
+    <div id="top-data-freshness" class="header-advanced flex items-center gap-1 text-emerald-300">data: fresh</div>
+    <div id="top-autopilot" class="header-advanced flex items-center gap-1 text-cyan-300">autopilot: armed</div>
+    <div id="top-v6-queue" class="header-advanced flex items-center gap-1 text-fuchsia-300">v7-v9 live</div>
     <div class="flex-1"></div>
     <div id="top-sse-status" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500"></span><span>sse</span></div>
     <div id="top-user-chip" class="flex items-center gap-2"></div>
@@ -57,11 +71,25 @@
 
   <!-- Toast container (top-right) -->
   <div id="toast-container" class="fixed top-12 right-4 z-40 space-y-2 w-80 pointer-events-none"></div>
+  <aside id="alert-dock" class="fixed right-3 top-28 z-30 w-56 panel p-3 hidden lg:block">
+    <div class="panel-title"><span class="panel-badge">⚑</span>Alert Dock</div>
+    <div id="alert-severity-timeline" class="mb-2"></div>
+    <div id="alert-dock-body" class="space-y-1 text-xs text-zinc-300"></div>
+  </aside>
+  <aside id="macro-tray" class="fixed left-3 top-28 z-30 w-56 panel p-3 hidden lg:block">
+    <div class="panel-title"><span class="panel-badge">⚙</span>Macro Tray</div>
+    <div class="space-y-2 text-xs">
+      <button id="macro-pause-all" class="macro-btn">Pause All Bots</button>
+      <button id="macro-resume-all" class="macro-btn">Resume All Bots</button>
+      <button id="macro-flatten-all" class="macro-btn macro-warn">Flatten All</button>
+      <button id="macro-kill-all" class="macro-btn macro-danger">Kill All (Step-Up)</button>
+    </div>
+  </aside>
 
   <!-- Tab nav -->
-  <nav class="border-b border-zinc-800 bg-zinc-900 px-4 flex gap-1 text-sm">
+  <nav class="border-b border-zinc-800 bg-zinc-900/80 px-4 flex gap-1 text-sm backdrop-blur">
     <button data-tab="jarvis" class="tab-btn px-4 py-2 border-b-2 border-emerald-500 text-emerald-400">
-      JARVIS Command Center
+      JARVIS Policy
     </button>
     <button data-tab="fleet" class="tab-btn px-4 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-100">
       Bot Fleet
@@ -69,56 +97,74 @@
   </nav>
 
   <!-- Main content -->
-  <main class="flex-1 overflow-y-auto p-4 pb-24">
+  <main class="flex-1 overflow-y-auto p-3 sm:p-4 pb-24">
 
     <!-- JARVIS view (visible by default) -->
-    <section id="view-jarvis" class="grid grid-cols-3 gap-4">
-      <div data-panel-id="cc-verdict-stream" class="panel col-span-2 row-span-2"></div>
+    <section id="view-jarvis" class="section-rail section-jarvis grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div data-panel-id="cc-verdict-stream" class="panel scanline lg:col-span-2 lg:row-span-2"></div>
       <div data-panel-id="cc-stress-mood" class="panel"></div>
       <div data-panel-id="cc-v22-toggle" class="panel"></div>
-      <div data-panel-id="cc-sage-explain" class="panel col-span-2"></div>
+      <div data-panel-id="cc-sage-explain" class="panel lg:col-span-2"></div>
       <div data-panel-id="cc-sage-health" class="panel"></div>
-      <div data-panel-id="cc-disagreement-heatmap" class="panel col-span-2"></div>
+      <div data-panel-id="cc-disagreement-heatmap" class="panel lg:col-span-2"></div>
       <div data-panel-id="cc-edge-leaderboard" class="panel"></div>
-      <div data-panel-id="cc-policy-diff" class="panel col-span-2"></div>
+      <div data-panel-id="cc-policy-diff" class="panel lg:col-span-2"></div>
       <div data-panel-id="cc-model-tier" class="panel"></div>
-      <div data-panel-id="cc-kaizen-latest" class="panel col-span-3"></div>
+      <div data-panel-id="cc-kaizen-latest" class="panel lg:col-span-3"></div>
     </section>
 
     <!-- Fleet view (hidden until tab click) -->
-    <section id="view-fleet" class="hidden space-y-4">
+    <section id="view-fleet" class="section-rail section-fleet hidden space-y-4">
       <div data-panel-id="fl-roster" class="panel"></div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div data-panel-id="fl-drilldown" class="panel"></div>
-        <div data-panel-id="fl-equity-curve" class="panel"></div>
+        <div data-panel-id="fl-equity-curve" class="panel scanline"></div>
       </div>
-      <div class="grid grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div data-panel-id="fl-drawdown" class="panel"></div>
         <div data-panel-id="fl-sage-effect" class="panel"></div>
         <div data-panel-id="fl-correlation" class="panel"></div>
       </div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div data-panel-id="fl-edge-per-bot" class="panel"></div>
         <div data-panel-id="fl-position-reconciler" class="panel"></div>
       </div>
       <div data-panel-id="fl-risk-ladder" class="panel"></div>
       <div data-panel-id="fl-controls" class="panel"></div>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div data-panel-id="fl-fill-quality" class="panel"></div>
+        <div data-panel-id="fl-risk-sim" class="panel"></div>
+        <div data-panel-id="fl-performance-os" class="panel"></div>
+      </div>
       <div data-panel-id="fl-health-badges" class="panel"></div>
     </section>
   </main>
 
   <!-- Live fill tape (fixed bottom) -->
   <footer id="fl-fill-tape" class="fixed bottom-0 left-0 right-0 border-t border-zinc-800 bg-zinc-900 px-4 py-2 h-20 overflow-hidden">
-    <div class="text-xs text-zinc-500 mb-1">live fills</div>
+    <div class="text-xs text-zinc-500 mb-1">Live Fills</div>
     <div id="fl-fill-tape-rows" class="flex gap-2 overflow-x-auto text-xs font-mono whitespace-nowrap"></div>
   </footer>
+  <div id="v6-rail" class="fixed left-3 bottom-24 z-30 panel p-3 w-72">
+    <div class="panel-title"><span class="panel-badge">⟡</span>V6 Queued</div>
+    <div class="text-xs text-zinc-300">Layout memory, pin/reorder panels, severity timeline, and command macros are queued for the next supercharge cycle.</div>
+  </div>
+  <div id="command-palette-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur hidden items-start justify-center pt-24">
+    <div class="panel w-[min(680px,92vw)] p-3">
+      <div class="panel-title"><span class="panel-badge">⌘</span>Command Palette</div>
+      <input id="command-palette-input" type="text" placeholder="Type a command..." class="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm" />
+      <div id="command-palette-results" class="mt-2 space-y-1 text-xs max-h-72 overflow-y-auto"></div>
+    </div>
+  </div>
+  <div id="update-audit-strip" class="hidden lg:flex"></div>
 
   <!-- JS modules (load order matters) -->
-  <script type="module" src="/js/panels.js"></script>
-  <script type="module" src="/js/auth.js"></script>
-  <script type="module" src="/js/live.js"></script>
-  <script type="module" src="/js/command_center.js"></script>
-  <script type="module" src="/js/bot_fleet.js"></script>
+  <script type="module" src="/js/panels.js?v=20260428e"></script>
+  <script type="module" src="/js/auth.js?v=20260428e"></script>
+  <script type="module" src="/js/live.js?v=20260428e"></script>
+  <script type="module" src="/js/supercharge.js?v=20260428e"></script>
+  <script type="module" src="/js/command_center.js?v=20260428e"></script>
+  <script type="module" src="/js/bot_fleet.js?v=20260428e"></script>
   <script type="module">
     import { initTabs } from '/js/panels.js';
     initTabs();

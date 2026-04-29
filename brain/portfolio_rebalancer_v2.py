@@ -31,7 +31,10 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 

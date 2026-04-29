@@ -49,6 +49,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT  # noqa: E402
 
 # Binance is US-geo-blocked; Bybit is the US-friendly default.
 # Bybit OI history: https://api.bybit.com/v5/market/open-interest
@@ -233,7 +234,7 @@ def main() -> int:
     p.add_argument("--start", type=str, default=None)
     p.add_argument("--end", type=str, default=None)
     p.add_argument("--out", type=Path,
-                   default=Path(r"C:\crypto_data\history\BTCOI_1h.csv"))
+                   default=CRYPTO_HISTORY_ROOT / "BTCOI_1h.csv")
     args = p.parse_args()
 
     end = (

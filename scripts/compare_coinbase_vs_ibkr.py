@@ -57,8 +57,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-COINBASE_HISTORY_ROOT = Path(r"C:\crypto_data\history")
-IBKR_HISTORY_ROOT = Path(r"C:\crypto_data\ibkr\history")
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT as COINBASE_HISTORY_ROOT  # noqa: E402
+from eta_engine.scripts.workspace_roots import CRYPTO_IBKR_HISTORY_ROOT as IBKR_HISTORY_ROOT  # noqa: E402
 
 
 @dataclass(frozen=True)

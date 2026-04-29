@@ -55,7 +55,8 @@ across the available history. But two findings push us forward:
 New module: `data/library.py` + 30/30 tests in
 `tests/test_data_library.py`.
 
-`DataLibrary` walks `C:\mnq_data\` and `C:\mnq_data\history\`,
+`DataLibrary` walks the canonical ETA `mnq_data\` and
+`mnq_data\history\` roots under `C:\EvolutionaryTradingAlgo`,
 parses two filename schemes (`mnq_<asset>_<digits>.csv` "main"
 shape, `<SYMBOL>_<TF>.csv` "history" shape), probes each file for
 row count + first/last timestamps without loading the whole CSV,

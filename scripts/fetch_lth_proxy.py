@@ -50,6 +50,8 @@ the same provider hook when paid access is available.
 
 from __future__ import annotations
 
+# ruff: noqa: E402, I001 -- standalone script amends sys.path before eta_engine imports.
+
 import argparse
 import csv
 import sys
@@ -59,9 +61,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT  # noqa: E402
 
-_DEFAULT_INPUT = Path(r"C:\mnq_data\history\BTC_D.csv")
-_DEFAULT_OUTPUT = Path(r"C:\mnq_data\history\BTC_LTH_PROXY.csv")
+
+_DEFAULT_INPUT = CRYPTO_HISTORY_ROOT / "BTC_D.csv"
+_DEFAULT_OUTPUT = CRYPTO_HISTORY_ROOT / "BTC_LTH_PROXY.csv"
 _SMA_PERIOD = 200          # Mayer Multiple denominator
 _PCT_LOOKBACK_DAYS = 365   # rolling-percentile window
 

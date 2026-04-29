@@ -114,24 +114,11 @@ def _load_env_file() -> None:
 _load_env_file()
 
 
-# Symbol → required broker env vars. Bot's venue is resolved from
-# the bot's symbol; the env vars listed here MUST be populated for
-# the bot to fire real-money orders.
-_VENUE_ENV_REQUIREMENTS: dict[str, list[str]] = {
-    "futures": [
-        # IBKR Client Portal (primary)
-        "IBKR_ACCOUNT_ID", "IBKR_CP_BASE_URL",
-        # Tastytrade (fallback)
-        "TASTY_ACCOUNT_NUMBER", "TASTY_SESSION_TOKEN", "TASTY_API_BASE_URL",
-    ],
-    "crypto": [
-        # IBKR (preferred path per eta_data_source_policy memory)
-        "IBKR_ACCOUNT_ID", "IBKR_CP_BASE_URL",
-        # Coinbase (alt path, not venue-wired yet but env-tracked)
-        # NOTE: COINBASE_API_KEY / SECRET are commented in .env.example
-        # because the venue module isn't shipped yet; the preflight
-        # records this as amber rather than red.
-    ],
+# Bot promotion uses the same broker config loaders as the live router so
+# env vars, *_FILE secrets, and canonical runtime secret defaults agree.
+_VENUE_BROKER_LABELS: dict[str, tuple[str, ...]] = {
+    "futures": ("IBKR", "Tastytrade"),
+    "crypto": ("IBKR",),
 }
 
 
@@ -456,7 +443,7 @@ def _check_bot_dir_exists(bot_id: str):  # type: ignore[no-untyped-def]  # noqa:
 
 
 def _check_broker_keys(bot_id: str):  # type: ignore[no-untyped-def]  # noqa: ANN202
-    """7. Required env vars for the bot's venue are set + non-empty."""
+    """7. Required broker config for the bot's venue is set + non-empty."""
     from eta_engine.strategies.per_bot_registry import get_for_bot
 
     a = get_for_bot(bot_id)
@@ -472,16 +459,24 @@ def _check_broker_keys(bot_id: str):  # type: ignore[no-untyped-def]  # noqa: AN
             severity="amber",
             summary=f"unknown venue class for symbol {a.symbol}",
         )
-    required = _VENUE_ENV_REQUIREMENTS.get(venue_class, [])
-    missing = [k for k in required if not (os.environ.get(k) or "").strip()]
+    missing_by_broker = _broker_config_missing(venue_class, os.environ)
+    missing = [
+        f"{broker}: {item}"
+        for broker, items in missing_by_broker.items()
+        for item in items
+    ]
     if missing:
         return CheckResult(
             name="broker_keys",
             severity="red",
             summary=(
-                f"{venue_class} venue keys missing: {missing} "
-                "(set in .env, never commit)"
+                f"{venue_class} broker config missing: {missing} "
+                "(set env vars or *_FILE secrets under the canonical workspace)"
             ),
+            details={
+                "active_brokers": list(_VENUE_BROKER_LABELS.get(venue_class, ())),
+                "dormant_brokers": ["Tradovate"],
+            },
         )
     extras_amber: str | None = None
     if venue_class == "crypto":
@@ -492,20 +487,42 @@ def _check_broker_keys(bot_id: str):  # type: ignore[no-untyped-def]  # noqa: AN
             "live-capable for crypto bots. Coinbase keys reserved for "
             "research data fetcher only."
         )
-    summary = (
-        f"{venue_class} keys present: " + ", ".join(required)
-    )
+    active = list(_VENUE_BROKER_LABELS.get(venue_class, ()))
+    summary = f"{venue_class} broker config ready: " + ", ".join(active)
     if extras_amber:
         return CheckResult(
             name="broker_keys",
             severity="amber",
             summary=summary + " — " + extras_amber,
+            details={"active_brokers": active, "dormant_brokers": ["Tradovate"]},
         )
     return CheckResult(
         name="broker_keys",
         severity="green",
         summary=summary,
+        details={"active_brokers": active, "dormant_brokers": ["Tradovate"]},
     )
+
+
+def _broker_config_missing(
+    venue_class: str,
+    env: dict[str, str] | None = None,
+) -> dict[str, list[str]]:
+    """Return config gaps for active brokers in a venue class."""
+
+    from eta_engine.venues import IbkrClientPortalConfig, TastytradeConfig
+
+    factories = {
+        "IBKR": IbkrClientPortalConfig.from_env,
+        "Tastytrade": TastytradeConfig.from_env,
+    }
+    missing: dict[str, list[str]] = {}
+    for broker in _VENUE_BROKER_LABELS.get(venue_class, ()):
+        try:
+            missing[broker] = list(factories[broker](env).missing_requirements())
+        except Exception as exc:  # noqa: BLE001 -- promotion preflight must fail closed
+            missing[broker] = [f"config load failed: {exc}"]
+    return missing
 
 
 def _check_ibkr_drift_gate(bot_id: str):  # type: ignore[no-untyped-def]  # noqa: ANN202

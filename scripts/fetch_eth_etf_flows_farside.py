@@ -37,6 +37,7 @@ from eta_engine.scripts.fetch_etf_flows_farside import (  # noqa: E402
     _parse_farside_html,
     _write_csv,
 )
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT  # noqa: E402
 
 _ENDPOINTS: tuple[str, ...] = (
     "https://farside.co.uk/ethereum-etf-flow-all-data/",
@@ -77,7 +78,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--out", type=Path,
-        default=Path(r"C:\mnq_data\history\ETH_ETF_FLOWS.csv"),
+        default=MNQ_HISTORY_ROOT / "ETH_ETF_FLOWS.csv",
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()

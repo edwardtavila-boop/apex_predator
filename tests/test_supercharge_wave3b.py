@@ -10,8 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
-
 
 # Reuse the duck-typed ctx stub from wave-3a tests
 def _ctx(composite: float, *, binding: str = "vol", session: str = "OPEN_DRIVE"):
@@ -95,8 +93,8 @@ def test_v19_passes_through_when_no_drift_binding() -> None:
 def test_v19_promotes_approved_to_conditional_when_tightening() -> None:
     """If v17 said APPROVED (no cap) and v19 tightens, the verdict
     should become CONDITIONAL since cap < 1.0."""
-    from eta_engine.brain.jarvis_v3.policies import v19_drift_aware as v19_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v19_drift_aware as v19_mod
     from eta_engine.brain.jarvis_v3.policies.v19_drift_aware import DRIFT_CAP
 
     base = _stub_resp("APPROVED", binding="drift", cap=None, composite=0.55)
@@ -142,8 +140,8 @@ def test_v20_does_not_touch_rth() -> None:
 
 
 def test_v20_skips_non_conditional() -> None:
-    from eta_engine.brain.jarvis_v3.policies import v20_overnight_tighten as v20_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v20_overnight_tighten as v20_mod
 
     base = _stub_resp("APPROVED", session="OVERNIGHT", cap=None)
     orig = v20_mod.evaluate_request
@@ -160,8 +158,8 @@ def test_v20_skips_non_conditional() -> None:
 
 
 def test_v21_defers_on_drawdown_binding() -> None:
-    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
 
     base = _stub_resp("APPROVED", binding="drawdown_dominant", cap=None)
     orig = v21_mod.evaluate_request
@@ -176,8 +174,8 @@ def test_v21_defers_on_drawdown_binding() -> None:
 
 
 def test_v21_defers_on_kill_keyword() -> None:
-    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
 
     base = _stub_resp("CONDITIONAL", binding="approaching_kill_switch", cap=0.4)
     orig = v21_mod.evaluate_request
@@ -190,8 +188,8 @@ def test_v21_defers_on_kill_keyword() -> None:
 
 
 def test_v21_passes_through_non_dd_binding() -> None:
-    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
 
     base = _stub_resp("CONDITIONAL", binding="vol", cap=0.55)
     orig = v21_mod.evaluate_request
@@ -204,8 +202,8 @@ def test_v21_passes_through_non_dd_binding() -> None:
 
 
 def test_v21_does_not_modify_already_denied() -> None:
-    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
     from eta_engine.brain.jarvis_admin import Verdict
+    from eta_engine.brain.jarvis_v3.policies import v21_drawdown_proximity as v21_mod
 
     base = _stub_resp("DENIED", binding="dd")
     orig = v21_mod.evaluate_request

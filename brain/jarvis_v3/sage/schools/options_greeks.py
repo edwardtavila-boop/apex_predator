@@ -1,7 +1,7 @@
 """Options / Greeks school (Wave-5 #7, 2026-04-27).
 
-SCAFFOLD: returns NEUTRAL with conviction=0 unless the bot supplies
-options telemetry in MarketContext via attached fields:
+Returns NEUTRAL with conviction=0 unless the bot supplies options
+telemetry in MarketContext via attached fields:
 
     ctx.options = {
         "dealer_gamma_exposure": float,    # GEX in $millions

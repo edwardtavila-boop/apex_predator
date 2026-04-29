@@ -45,7 +45,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-_DEFAULT_HISTORY_ROOT = Path(r"C:\crypto_data\history")
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT  # noqa: E402
+
+_DEFAULT_HISTORY_ROOT = CRYPTO_HISTORY_ROOT
 
 # (target_tf, default_source_tf): synthesizing 15m from 1m is more
 # accurate but slower; from 5m is faster but coarser. Pick 5m for

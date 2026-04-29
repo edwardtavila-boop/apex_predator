@@ -81,13 +81,19 @@ _FLAGS: list[_FlagDef] = [
              description="Use Thompson-sampling per-context bandit instead of global epsilon-greedy. Default OFF."),
     _FlagDef("AUTO_PROMOTE",
              default=False,
-             description="When promotion-check finds a winner, auto-flip the champion (skip operator approval). Default OFF: HUMAN IN THE LOOP."),
+             description=(
+                 "When promotion-check finds a winner, auto-flip the champion "
+                 "(skip operator approval). Default OFF: HUMAN IN THE LOOP."
+             )),
     _FlagDef("PER_BOT_PRE_FLIGHT",
              default=False,
-             description="Bots route through bot_pre_flight() instead of legacy _ask_jarvis() direct. Default OFF: opt-in."),
+             description=(
+                 "Bots route through bot_pre_flight() instead of legacy "
+                 "_ask_jarvis() direct. Default OFF: opt-in."
+             )),
     _FlagDef("ONLINE_LEARNING",
              default=False,
-             description="Per-bot OnlineUpdater observes fills + influences sizing. Default OFF: still in scaffold."),
+             description="Per-bot OnlineUpdater observes fills and can safely shrink cold setup buckets. Default OFF."),
     _FlagDef("PORTFOLIO_REBALANCER",
              default=False,
              description="Weekly Sharpe-rank reallocation across bots via set_equity_ceiling. Default OFF."),

@@ -1,7 +1,7 @@
 """On-chain school (Wave-5 #9, 2026-04-27).
 
-SCAFFOLD: Glassnode/Coinmetrics-style on-chain metrics for BTC + ETH.
-Returns NEUTRAL when ``ctx.onchain`` is absent. When supplied:
+Glassnode/Coinmetrics-style on-chain metrics for BTC + ETH. Returns
+NEUTRAL when ``ctx.onchain`` is absent. When supplied:
 
     ctx.onchain = {
         "sopr": float,           # Spent Output Profit Ratio (>1 = profit-taking)

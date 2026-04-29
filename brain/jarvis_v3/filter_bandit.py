@@ -140,7 +140,7 @@ class FilterBandit:
             for arm_name, arm_data in data.get("arms", {}).items():
                 arm = _FilterArm(
                     name=arm_name,
-                    callable_fn=lambda **_: True,  # placeholder; bots re-register
+                    callable_fn=lambda **_: True,  # restored arms are metadata until bots re-register
                     pulls=int(arm_data.get("pulls", 0)),
                     rewards=[float(r) for r in arm_data.get("rewards", [])],
                 )

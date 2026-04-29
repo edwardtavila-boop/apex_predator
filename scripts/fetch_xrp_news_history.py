@@ -74,8 +74,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-CRYPTO_DATA_ROOT = Path(r"C:\crypto_data")
-SENTIMENT_ROOT = CRYPTO_DATA_ROOT / "sentiment"
+from eta_engine.scripts.workspace_roots import CRYPTO_SENTIMENT_ROOT as SENTIMENT_ROOT  # noqa: E402
 
 # SEC EDGAR full-text search endpoint. Public, no auth required, but
 # requires a custom User-Agent identifying the requester (per SEC's
@@ -210,7 +209,7 @@ def main() -> int:
     p.add_argument("--days", type=int, default=365)
     p.add_argument(
         "--root", type=Path, default=SENTIMENT_ROOT,
-        help=r"output directory (default: C:\crypto_data\sentiment)",
+        help="output directory (default: canonical ETA crypto sentiment root)",
     )
     p.add_argument(
         "--queries", nargs="+", default=["ripple", "XRP"],

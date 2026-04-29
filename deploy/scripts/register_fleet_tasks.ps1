@@ -14,15 +14,15 @@
 #
 # Usage (run elevated):
 #   powershell.exe -ExecutionPolicy Bypass -File `
-#     C:\eta_engine\deploy\scripts\register_fleet_tasks.ps1 `
-#     -BtcAutoSubmit -McpRoot C:\eta_engine
+#     C:\EvolutionaryTradingAlgo\eta_engine\deploy\scripts\register_fleet_tasks.ps1 `
+#     -BtcAutoSubmit -McpRoot C:\EvolutionaryTradingAlgo\eta_engine
 #
 # Idempotent: existing tasks with the same name are updated in place.
 
 [CmdletBinding()]
 param(
-    [string]$McpRoot = "C:\eta_engine",
-    [string]$PythonExe = "C:\eta_engine\.venv\Scripts\python.exe",
+    [string]$McpRoot = "C:\EvolutionaryTradingAlgo\eta_engine",
+    [string]$PythonExe = "C:\EvolutionaryTradingAlgo\eta_engine\.venv\Scripts\python.exe",
     [string]$RunAsUser = "",  # e.g. "trader"; auto-detects from Apex-Dashboard if empty
     [switch]$BtcAutoSubmit,
     [string]$PaperLaneAnchorPrice = "90000",

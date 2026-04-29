@@ -22,6 +22,48 @@ collect_ignore = [
 ]
 
 
+def _ensure_policies_registry_populated() -> None:
+    """Evict + re-import the policies package so its side-effect
+    submodule imports re-fire and re-populate the candidate registry.
+
+    Tests in the supercharge series freely call ``clear_registry()``
+    expecting subsequent ``import eta_engine.brain.jarvis_v3.policies``
+    to re-register candidates. Python's module cache makes that a
+    no-op unless we manually evict. This helper does the eviction.
+    """
+    import sys
+    try:
+        from eta_engine.brain.jarvis_v3.candidate_policy import list_candidates
+    except ImportError:
+        return
+    if "v17" in list_candidates():
+        return
+    prefix = "eta_engine.brain.jarvis_v3.policies"
+    for name in [k for k in sys.modules if k == prefix or k.startswith(prefix + ".")]:
+        del sys.modules[name]
+    import eta_engine.brain.jarvis_v3.policies  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def _heal_policies_registry_pollution() -> None:
+    """Heal cross-test pollution of the policy candidate registry.
+
+    Runs both pre and post each test:
+    - **Setup**: if the previous test left the registry empty (e.g.
+      via ``clear_registry()`` with no restore), repopulate now so
+      the current test sees the full v17..v22 set.
+    - **Teardown**: same check, in case the current test was the
+      polluter and the next test would otherwise inherit an empty
+      registry.
+
+    The cost is two cheap registry reads per test plus one re-import
+    per polluting test, not per test.
+    """
+    _ensure_policies_registry_populated()
+    yield
+    _ensure_policies_registry_populated()
+
+
 @pytest.fixture
 def bypass_m2_us_person(monkeypatch: pytest.MonkeyPatch) -> None:
     """Bypass the M2 IS_US_PERSON gate for tests that exercise the

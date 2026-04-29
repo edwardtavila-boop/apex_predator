@@ -11,6 +11,9 @@ export class LiveStream {
     this.reconnectDelayMs = 1000;
     this.maxReconnectDelayMs = 30_000;
     this.statusEl = document.getElementById('top-sse-status');
+    this.lastEventAt = null;
+    this.reconnectTimer = null;
+    this.connected = false;
   }
 
   on(event, handler) {
@@ -19,6 +22,10 @@ export class LiveStream {
   }
 
   connect() {
+    if (this.es) {
+      this.es.close();
+      this.es = null;
+    }
     this._setStatus('reconnecting');
     try {
       this.es = new EventSource('/api/live/stream');
@@ -29,11 +36,13 @@ export class LiveStream {
     }
     this.es.onopen = () => {
       this.reconnectDelayMs = 1000;  // reset backoff on success
+      this.connected = true;
       this._setStatus('connected');
     };
     this.es.onerror = () => {
+      this.connected = false;
       this._setStatus('reconnecting');
-      this.es.close();
+      if (this.es) this.es.close();
       this._scheduleReconnect();
     };
     ['verdict', 'fill'].forEach(eventType => {
@@ -41,6 +50,7 @@ export class LiveStream {
         let data;
         try { data = JSON.parse(msg.data); }
         catch (e) { console.warn(`bad SSE ${eventType} JSON`, e); return; }
+        this.lastEventAt = Date.now();
         (this.handlers[eventType] || []).forEach(h => {
           try { h(data); } catch (e) { console.error(`SSE ${eventType} handler`, e); }
         });
@@ -49,7 +59,8 @@ export class LiveStream {
   }
 
   _scheduleReconnect() {
-    setTimeout(() => this.connect(), this.reconnectDelayMs);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelayMs);
     this.reconnectDelayMs = Math.min(
       this.reconnectDelayMs * 2,
       this.maxReconnectDelayMs,
@@ -62,9 +73,16 @@ export class LiveStream {
     const dot = this.statusEl.querySelector('span');
     if (!dot) return;
     dot.classList.remove('sse-connected', 'sse-reconnecting', 'sse-down', 'bg-zinc-500');
-    if (s === 'connected') dot.classList.add('sse-connected');
-    else if (s === 'reconnecting') dot.classList.add('sse-reconnecting');
-    else dot.classList.add('sse-down');
+    if (s === 'connected') {
+      dot.classList.add('sse-connected');
+      this.statusEl.title = 'Live stream connected';
+    } else if (s === 'reconnecting') {
+      dot.classList.add('sse-reconnecting');
+      this.statusEl.title = 'Live stream reconnecting';
+    } else {
+      dot.classList.add('sse-down');
+      this.statusEl.title = 'Live stream down';
+    }
   }
 }
 
@@ -95,6 +113,9 @@ export class Poller {
 
   async _tick() {
     if (!this.active) return;
+    if (liveStream.connected && liveStream.lastEventAt && (Date.now() - liveStream.lastEventAt) > 20_000) {
+      liveStream._setStatus('reconnecting');
+    }
     for (const panel of this.panels) {
       panel.refresh().catch(e => console.error(`poller refresh ${panel.containerId}`, e));
     }

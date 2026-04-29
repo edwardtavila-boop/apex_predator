@@ -8,15 +8,15 @@
 # Safe to re-run.
 #
 # Usage on the VPS (as the operator user, any PowerShell):
-#   cd C:\eta_engine
+#   cd C:\EvolutionaryTradingAlgo\eta_engine
 #   powershell -ExecutionPolicy Bypass -File .\deploy\install_windows.ps1
 #
 # Or from a remote shell:
-#   powershell -ExecutionPolicy Bypass -File C:\eta_engine\deploy\install_windows.ps1 -RepoUrl https://github.com/you/eta_engine.git
+#   powershell -ExecutionPolicy Bypass -File C:\EvolutionaryTradingAlgo\eta_engine\deploy\install_windows.ps1 -RepoUrl https://github.com/you/eta_engine.git
 #
 # What it does:
 #   1. Verifies prereqs (Python 3.12, Git)
-#   2. Clones/pulls the repo to -InstallDir (default C:\eta_engine)
+#   2. Clones/pulls the repo to -InstallDir (default C:\EvolutionaryTradingAlgo\eta_engine)
 #   3. Creates .venv + installs deps
 #   4. Writes .env from .env.example (if missing, appends Claude layer stanza)
 #   5. Runs the test suite -- aborts on failure
@@ -26,7 +26,7 @@
 # ============================================================================
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "C:\eta_engine",
+    [string]$InstallDir = "C:\EvolutionaryTradingAlgo\eta_engine",
     [string]$RepoUrl = "https://github.com/edwardtavila-boop/eta_engine.git",
     [string]$Branch = "main",
     [switch]$SkipTests,
@@ -129,8 +129,9 @@ JARVIS_DISTILL_SKIP_THRESHOLD=0.92
 # ----------------------------------------------------------------------------
 # 5. State + log directories
 # ----------------------------------------------------------------------------
-$stateDir = Join-Path $env:LOCALAPPDATA "eta_engine\state"
-$logDir   = Join-Path $env:LOCALAPPDATA "eta_engine\logs"
+$workspaceRoot = Split-Path -Parent $InstallDir
+$stateDir = Join-Path $workspaceRoot "var\eta_engine\state"
+$logDir   = Join-Path $workspaceRoot "logs\eta_engine"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 Write-OK "state + log dirs ready"

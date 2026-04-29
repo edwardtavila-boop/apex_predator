@@ -53,6 +53,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Daily sage verdict pre-computation (mirrors run_eth_sage_daily_walk_forward)
@@ -323,7 +324,7 @@ def main() -> int:
     parser.add_argument("--step-days", type=int, default=30)
     parser.add_argument(
         "--etf-path", type=Path,
-        default=Path(r"C:\mnq_data\history\BTC_ETF_FLOWS.csv"),
+        default=MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv",
     )
     parser.add_argument(
         "--compare", action="store_true",
@@ -448,7 +449,8 @@ def main() -> int:
 
     # Default: just run the regime-gated variant
     gated_factory = _build_regime_gated_factory(
-        provider, args.etf_path, strict_long_only=args.strict_long_only,
+        provider, regime_provider, args.etf_path,
+        strict_long_only=args.strict_long_only,
     )
     res_g = _run_one(
         "regime-gated +6.00 champion", gated_factory, bars,

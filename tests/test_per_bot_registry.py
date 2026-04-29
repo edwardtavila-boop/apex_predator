@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from eta_engine.scripts import workspace_roots
 from eta_engine.strategies.per_bot_registry import (
     ASSIGNMENTS,
     StrategyAssignment,
@@ -133,3 +134,11 @@ def test_known_bots_present() -> None:
         assert get_for_bot(required) is not None, (
             f"{required} missing from registry"
         )
+
+
+def test_btc_etf_assignments_use_canonical_history_root() -> None:
+    expected = str(workspace_roots.MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv")
+    for bot_id in ("btc_sage_daily_etf", "btc_ensemble_2of3", "btc_regime_trend_etf"):
+        assignment = get_for_bot(bot_id)
+        assert assignment is not None
+        assert assignment.extras.get("etf_csv_path") == expected

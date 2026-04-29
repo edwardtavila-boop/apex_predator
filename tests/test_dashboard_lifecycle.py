@@ -98,6 +98,38 @@ def test_kill_with_step_up_trips_latch(stepped_up_client, auth_paths) -> None:
     assert body["mnq"]["reason"] == "operator_kill"
 
 
+def test_task_fire_requires_step_up(authed_client) -> None:
+    r = authed_client.post("/api/tasks/SELF_TEST/fire", json={})
+    assert r.status_code == 403
+    assert r.json()["detail"]["error_code"] == "step_up_required"
+
+
+def test_task_fire_with_step_up_success(stepped_up_client, monkeypatch) -> None:
+    from subprocess import CompletedProcess
+
+    monkeypatch.setattr(
+        "eta_engine.deploy.scripts.dashboard_api.run_background_task",
+        lambda *_args, **_kwargs: CompletedProcess(args=["x"], returncode=0, stdout="ok", stderr=""),
+    )
+    r = stepped_up_client.post("/api/tasks/SELF_TEST/fire", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["task"] == "SELF_TEST"
+    assert body["returncode"] == 0
+
+
+def test_task_fire_with_step_up_failure(stepped_up_client, monkeypatch) -> None:
+    from subprocess import CompletedProcess
+
+    monkeypatch.setattr(
+        "eta_engine.deploy.scripts.dashboard_api.run_background_task",
+        lambda *_args, **_kwargs: CompletedProcess(args=["x"], returncode=9, stdout="", stderr="boom"),
+    )
+    r = stepped_up_client.post("/api/tasks/SELF_TEST/fire", json={})
+    assert r.status_code == 500
+    assert r.json()["detail"]["error_code"] == "task_failed"
+
+
 def test_pause_rejects_bad_bot_id(authed_client) -> None:
     """Path-traversal guard."""
     r = authed_client.post("/api/bot/..%2Fevil/pause")

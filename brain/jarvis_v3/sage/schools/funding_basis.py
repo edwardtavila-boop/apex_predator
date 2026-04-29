@@ -1,8 +1,8 @@
 """Funding / Basis school (Wave-5 #8, 2026-04-27).
 
-SCAFFOLD: returns NEUTRAL when funding_rate / basis fields are absent.
-When provided on MarketContext (via getattr ``ctx.funding`` or
-``ctx.basis``), produces a positioning-based verdict:
+Returns NEUTRAL when funding-rate / basis fields are absent. When
+provided on MarketContext via ``ctx.funding`` or legacy direct attrs,
+produces a positioning-based verdict:
 
   * elevated positive funding rate = longs paying = crowded long
     -> contrarian SHORT bias
@@ -36,8 +36,11 @@ class FundingBasisSchool(SchoolBase):
     EXTREME_FUNDING_BPS = 15.0
 
     def analyze(self, ctx: MarketContext) -> SchoolVerdict:
-        funding = getattr(ctx, "funding_rate_bps", None)  # bps per period
-        basis = getattr(ctx, "perp_spot_basis_pct", None)
+        telemetry = getattr(ctx, "funding", None)
+        if not isinstance(telemetry, dict):
+            telemetry = {}
+        funding = telemetry.get("funding_rate_bps", getattr(ctx, "funding_rate_bps", None))
+        basis = telemetry.get("perp_spot_basis_pct", getattr(ctx, "perp_spot_basis_pct", None))
 
         if funding is None and basis is None:
             return SchoolVerdict(

@@ -328,6 +328,8 @@ def test_v22_infer_instrument_class_futures() -> None:
     assert _infer_instrument_class("MNQ") == "futures"
     assert _infer_instrument_class("NQ") == "futures"
     assert _infer_instrument_class("ES") == "futures"
+    assert _infer_instrument_class("MBT") == "futures"
+    assert _infer_instrument_class("MET") == "futures"
 
 
 def test_v22_infer_instrument_class_unknown() -> None:
@@ -398,3 +400,87 @@ def test_v22_auto_fetches_onchain_for_crypto(monkeypatch) -> None:
     out = ofm.fetch_onchain("BTCUSDT")
     assert out == {"sopr": 1.0, "_source": "fake"}
     assert fetch_calls == ["BTCUSDT"]
+
+
+def test_v22_market_context_uses_scaffold_payloads_and_modulates(monkeypatch) -> None:
+    from eta_engine.brain.jarvis_admin import (
+        ActionRequest,
+        ActionResponse,
+        ActionSuggestion,
+        ActionType,
+        SubsystemId,
+        Verdict,
+    )
+    from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3 import sage as sage_pkg
+    from eta_engine.brain.jarvis_v3.policies import v22_sage_confluence as v22_mod
+    from eta_engine.brain.jarvis_v3.sage import SageReport, SchoolVerdict
+    from eta_engine.brain.jarvis_v3.sage.base import Bias
+
+    base = ActionResponse(
+        request_id="r",
+        verdict=Verdict.CONDITIONAL,
+        reason="base conditional",
+        reason_code="base_conditional",
+        jarvis_action=ActionSuggestion.TRADE,
+        stress_composite=0.2,
+        session_phase=SessionPhase.OPEN_DRIVE,
+        binding_constraint="",
+        size_cap_mult=0.5,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_consult(ctx):
+        captured["ctx"] = ctx
+        return SageReport(
+            per_school={
+                "stub": SchoolVerdict(
+                    school="stub",
+                    bias=Bias.LONG,
+                    conviction=0.9,
+                    aligned_with_entry=True,
+                    rationale="aligned",
+                ),
+            },
+            composite_bias=Bias.LONG,
+            conviction=0.9,
+            schools_consulted=1,
+            schools_aligned_with_entry=1,
+            schools_disagreeing_with_entry=0,
+            schools_neutral=0,
+            rationale="aligned",
+        )
+
+    monkeypatch.setattr(v22_mod, "evaluate_request", lambda req, ctx: base)
+    monkeypatch.setattr(sage_pkg, "consult_sage", fake_consult)
+
+    bars = [{
+        "open": 1.0,
+        "high": 2.0,
+        "low": 0.5,
+        "close": 1.5,
+        "volume": 100.0,
+        "ts": f"2026-04-27T{i:02d}:00:00Z",
+    } for i in range(40)]
+    req = ActionRequest(
+        subsystem=SubsystemId.BOT_MNQ,
+        action=ActionType.ORDER_PLACE,
+        payload={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "entry_price": 1.5,
+            "sage_bars": bars,
+            "onchain": {"sopr": 1.01},
+            "funding_basis": {"funding_rate_8h": 0.0002},
+            "options_greeks": {"iv_25d_skew": 0.04},
+        },
+    )
+
+    out = v22_mod.evaluate_v22(req, ctx=None)  # type: ignore[arg-type]
+
+    ctx = captured["ctx"]
+    assert ctx.onchain == {"sopr": 1.01}
+    assert ctx.funding == {"funding_rate_8h": 0.0002}
+    assert ctx.options == {"iv_25d_skew": 0.04}
+    assert out.size_cap_mult == pytest.approx(0.6)
+    assert "v22_sage_loosened" in out.conditions

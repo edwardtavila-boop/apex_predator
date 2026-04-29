@@ -21,10 +21,10 @@ Operator-level observability:
   * Result caching by problem hash so repeat invocations don't pay
     the cloud bill twice within the cache TTL
 
-This is a SCAFFOLD with the right shape. It does NOT call real cloud
-APIs in this commit -- those calls require credentials + a non-zero
-quantum budget and live behind a feature flag. The classical_sa
-backend IS fully exercised by the tests.
+Cloud API calls stay behind credentials plus explicit budget flags.
+Without those, the adapter records a classical_sa fallback with the
+same audit shape, so every path remains observable and safe. The
+classical_sa backend is fully exercised by the tests.
 
 Caveats baked into the design:
   * NEVER call cloud quantum on the trade-decision hot path (latency)
@@ -243,7 +243,7 @@ class QuantumCloudAdapter:
           1. If cloud disabled -> classical_sa
           2. If cached result exists & still fresh -> return it
           3. If preferred cloud backend installed AND budget allows
-             -> dispatch (logged but not actually called in scaffold)
+             -> dispatch; otherwise fall back to classical_sa with audit
           4. Always validate cloud results against classical_sa when
              ``classical_validate_cloud`` is set
           5. Persist result + audit record
@@ -268,25 +268,15 @@ class QuantumCloudAdapter:
         )
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
-        cost = self._estimate_cost_usd(backend=backend, n_vars=problem.n_vars)
+        billed_backend = (
+            backend
+            if backend != QuantumBackend.CLASSICAL_SA and not fell_back
+            else QuantumBackend.CLASSICAL_SA
+        )
+        cost = self._estimate_cost_usd(
+            backend=billed_backend, n_vars=problem.n_vars,
+        )
         self._daily_spend_usd += cost
-
-        record = QuantumJobRecord(
-            ts=datetime.now(UTC).isoformat(),
-            backend=backend.value,
-            problem_hash=h,
-            n_vars=problem.n_vars,
-            runtime_ms=round(elapsed_ms, 2),
-            cost_estimate_usd=round(cost, 4),
-            objective_value=result.energy,
-            n_iterations=result.n_iterations,
-            used_cache=False,
-            fell_back_to_classical=fell_back,
-        )
-        self._append_job_log(record)
-        self.cache.put(
-            h, result=asdict(result), backend=backend.value,
-        )
 
         # Validate cloud result if requested
         if (
@@ -304,7 +294,35 @@ class QuantumCloudAdapter:
                     backend.value, result.energy, sa_check.energy,
                 )
                 result = sa_check
-                record.note = "cloud beaten by classical SA cross-check"
+                fell_back = True
+
+        record = QuantumJobRecord(
+            ts=datetime.now(UTC).isoformat(),
+            backend=(
+                QuantumBackend.CLASSICAL_SA.value if fell_back else backend.value
+            ),
+            problem_hash=h,
+            n_vars=problem.n_vars,
+            runtime_ms=round(elapsed_ms, 2),
+            cost_estimate_usd=round(cost, 4),
+            objective_value=result.energy,
+            n_iterations=result.n_iterations,
+            used_cache=False,
+            fell_back_to_classical=fell_back,
+            note=(
+                f"{backend.value} beaten by classical SA cross-check"
+                if (
+                    backend != QuantumBackend.CLASSICAL_SA
+                    and self.cfg.classical_validate_cloud
+                    and fell_back
+                )
+                else ""
+            ),
+        )
+        self._append_job_log(record)
+        self.cache.put(
+            h, result=asdict(result), backend=record.backend,
+        )
 
         return result, record
 
@@ -427,6 +445,8 @@ class QuantumCloudAdapter:
     ) -> tuple[SolverResult, QuantumJobRecord]:
         from eta_engine.brain.jarvis_v3.quantum.qubo_solver import SolverResult
         result = SolverResult(**cached.result)
+        if problem.labels:
+            result.labels = list(problem.labels)
         record = QuantumJobRecord(
             ts=datetime.now(UTC).isoformat(),
             backend=cached.backend,

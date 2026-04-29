@@ -86,8 +86,8 @@ def _infer_instrument_class(symbol: str) -> str | None:
            or s.startswith(p + "H") or s.startswith(p + "M")
            or s.startswith(p + "U") for p in _FUTURES_PREFIXES):
         return "futures"
-    # Bare BTC / ETH (no suffix) -> crypto
-    if s in _CRYPTO_PREFIXES:
+    # Bare spot-ish crypto tickers remain crypto, but MBT/MET are CME micros.
+    if s in _CRYPTO_PREFIXES and s not in _FUTURES_PREFIXES:
         return "crypto"
     return None
 
@@ -117,6 +117,8 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
     # The fetcher caches for 5 min so this is a cheap dict lookup once
     # the warmer task has run. Falls back silently to {} on failure.
     onchain = req.payload.get("onchain") or {}
+    funding = req.payload.get("funding") or req.payload.get("funding_basis")
+    options = req.payload.get("options") or req.payload.get("options_greeks")
     if instrument_class == "crypto" and not onchain:
         try:
             from eta_engine.brain.jarvis_v3.sage.onchain_fetcher import fetch_onchain
@@ -140,8 +142,8 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
             risk_per_trade_pct=req.payload.get("risk_per_trade_pct"),
             stop_distance_pct=req.payload.get("stop_distance_pct"),
             onchain=onchain or None,
-            funding_basis=req.payload.get("funding_basis"),
-            options_greeks=req.payload.get("options_greeks"),
+            funding=funding,
+            options=options,
         )
         report = consult_sage(m_ctx)
     except Exception as exc:  # noqa: BLE001

@@ -15,9 +15,10 @@ Covers:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _bars(n: int, *, trend: str = "up", base: float = 21000) -> list[dict]:
@@ -176,10 +177,11 @@ def test_disagreement_detect_topping_pattern() -> None:
 
 
 def test_strongest_clash_modifier_defer_wins() -> None:
-    from eta_engine.brain.jarvis_v3.sage.disagreement import (
-        ClashPattern, strongest_clash_modifier,
-    )
     from eta_engine.brain.jarvis_v3.sage.base import Bias
+    from eta_engine.brain.jarvis_v3.sage.disagreement import (
+        ClashPattern,
+        strongest_clash_modifier,
+    )
 
     matches = [
         ClashPattern(name="t", school_a="x", bias_a=Bias.LONG, school_b="y",
@@ -200,7 +202,8 @@ def test_dependency_graph_boosts_target_when_predicate_fires() -> None:
     from eta_engine.brain.jarvis_v3.sage import SchoolVerdict
     from eta_engine.brain.jarvis_v3.sage.base import Bias
     from eta_engine.brain.jarvis_v3.sage.dependency_graph import (
-        DependencyRule, apply_dependency_boosts,
+        DependencyRule,
+        apply_dependency_boosts,
     )
 
     verdicts = {
@@ -281,6 +284,49 @@ def test_sage_cache_returns_same_report_on_repeat() -> None:
     r2 = consult_sage(ctx, parallel=False, use_cache=True, apply_edge_weights=False)
     # SAME object returned from cache
     assert r1 is r2
+
+
+def test_sage_cache_key_includes_risk_inputs() -> None:
+    from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage
+    from eta_engine.brain.jarvis_v3.sage.consultation import clear_sage_cache
+
+    clear_sage_cache()
+    bars = _bars(60, trend="up")
+    compliant = MarketContext(
+        bars=bars,
+        side="long",
+        symbol="MNQ",
+        account_equity_usd=10_000.0,
+        risk_per_trade_pct=0.01,
+        stop_distance_pct=0.005,
+    )
+    over_risk = MarketContext(
+        bars=bars,
+        side="long",
+        symbol="MNQ",
+        account_equity_usd=10_000.0,
+        risk_per_trade_pct=0.05,
+        stop_distance_pct=0.005,
+    )
+
+    r1 = consult_sage(
+        compliant,
+        enabled={"risk_management"},
+        parallel=False,
+        use_cache=True,
+        apply_edge_weights=False,
+    )
+    r2 = consult_sage(
+        over_risk,
+        enabled={"risk_management"},
+        parallel=False,
+        use_cache=True,
+        apply_edge_weights=False,
+    )
+
+    assert r1 is not r2
+    assert r1.per_school["risk_management"].conviction > r2.per_school["risk_management"].conviction
+    assert r2.per_school["risk_management"].conviction == 0.0
 
 
 def test_sage_parallel_and_serial_produce_same_keys() -> None:

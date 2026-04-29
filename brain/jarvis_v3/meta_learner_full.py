@@ -18,8 +18,9 @@ Upgrades over the lean random-mutation evolutionary loop in
     so the meta-loop doesn't burn through journal observations
 
 This is what the audit list called "meta-RL with self-architecture
-evolution" -- with the deep-learning components stubbed out as
-finite differences (the hyperparameter sensitivity proxy).
+evolution" in a production-safe form: bounded shadow challengers,
+finite-difference sensitivity probes, and Pareto promotion gates
+instead of unconstrained model rewrites.
 
 Pure stdlib + math.
 """
@@ -35,7 +36,6 @@ from typing import TYPE_CHECKING
 from eta_engine.brain.jarvis_v3.meta_learner import (
     CandidateConfig,
     ParamBounds,
-    mutate,
 )
 
 if TYPE_CHECKING:
@@ -248,6 +248,26 @@ def probe_sensitivity(
     )
 
 
+def _mutate_single_param(
+    cfg: CandidateConfig,
+    param_name: str,
+    *,
+    bounds: ParamBounds,
+    rng: random.Random,
+    step_pct: float = 0.10,
+) -> CandidateConfig:
+    """Mutate exactly the parameter selected by the importance bandit."""
+    values = cfg.to_dict()
+    if param_name not in values:
+        raise KeyError(f"unknown mutable parameter: {param_name}")
+    cur = float(values[param_name])
+    lo, hi = getattr(bounds, param_name)
+    scale = cur if cur != 0 else max(abs(hi - lo), 1.0)
+    delta = rng.uniform(-step_pct, step_pct) * scale
+    values[param_name] = max(lo, min(hi, cur + delta))
+    return CandidateConfig.from_dict(values)
+
+
 # ─── Multi-objective meta-learner ────────────────────────────────
 
 
@@ -338,9 +358,11 @@ class MetaLearnerFull:
             if self._experiments_today >= self.cfg.max_experiments_per_day:
                 break
             param = self._param_bandit.pick(rng=rng)
-            mutated = mutate(
-                self._champion, bounds=self.bounds,
-                n_mutations=1, rng=rng,
+            mutated = _mutate_single_param(
+                self._champion,
+                param,
+                bounds=self.bounds,
+                rng=rng,
             )
             cid = f"c_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}_{i}"
             trial = _Trial(

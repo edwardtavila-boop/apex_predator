@@ -34,6 +34,8 @@ Usage
 
 from __future__ import annotations
 
+# ruff: noqa: E402, I001 -- standalone script amends sys.path before eta_engine imports.
+
 import argparse
 import sys
 from datetime import UTC, datetime
@@ -42,6 +44,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
+
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +198,7 @@ def main() -> int:
     parser.add_argument("--step-days", type=int, default=30)
     parser.add_argument(
         "--funding-path", type=Path,
-        default=Path(r"C:\crypto_data\history\BTCFUND_8h.csv"),
+        default=CRYPTO_HISTORY_ROOT / "BTCFUND_8h.csv",
     )
     parser.add_argument(
         "--threshold-sweep", default="0.0005,0.00075,0.001",

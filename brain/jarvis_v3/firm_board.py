@@ -14,8 +14,9 @@ Roles:
   AUDITOR -- compares against historical analogs in memory
 
 The agents are deterministic functions, NOT LLMs. They turn structured
-input into structured arguments. This is the SCAFFOLD; LLM-backed
-agents are an obvious upgrade path. Even deterministic, the value is:
+input into structured arguments; LLM-backed agents can be layered in
+later, but the deterministic desk is the live-safe policy path. The
+value is:
 
   * Forces the system to consider 5 perspectives instead of 1
   * Each role has a stable bias (RISK_COMMITTEE always skeptical)

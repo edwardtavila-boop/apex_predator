@@ -6,7 +6,7 @@ bot from PAPER to LIVE.
 
 Checks (each returns ok=True/False + reason):
 
-  1. .env files exist + required keys populated for each repo
+  1. Active broker config is present for IBKR + Tastytrade
   2. IBKR + Tastytrade venues respond to a handshake (connection ping)
   3. Bybit/OKX/Deribit/Hyperliquid venues are NOT reachable for live
      orders (would be a US-person violation; M2 gate must hold)
@@ -34,9 +34,13 @@ import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = ROOT.parent
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
@@ -56,33 +60,49 @@ class CheckResult:
 
 
 def check_env_files() -> CheckResult:
-    workspace = Path(r"C:\EvolutionaryTradingAlgo")
-    required = {
-        "mnq_eta_bot/.env":       ["TRADOVATE_USERNAME", "RISK_PER_TRADE"],
-        "firm/eta_engine_batman/.env": ["TASTYTRADE_USERNAME", "IBKR_USERNAME", "WEBHOOK_HMAC_SECRET"],
-    }
-    missing: list[str] = []
-    for rel, keys in required.items():
-        p = workspace / rel
-        if not p.exists():
-            missing.append(f"{rel}: file missing")
-            continue
-        text = p.read_text(encoding="utf-8")
-        for k in keys:
-            for line in text.splitlines():
-                if line.startswith(k + "="):
-                    val = line.split("=", 1)[1].strip()
-                    if not val:
-                        missing.append(f"{rel}: {k} empty")
-                    break
-            else:
-                missing.append(f"{rel}: {k} not present")
+    """Verify active broker credentials via env vars or canonical secret files."""
+
+    missing_by_broker = _active_broker_missing_requirements()
+    missing = [
+        f"{broker}: {item}"
+        for broker, items in missing_by_broker.items()
+        for item in items
+    ]
     return CheckResult(
         name="env_files",
         ok=not missing,
         severity="critical",
-        detail="; ".join(missing) if missing else f"all required env keys populated across {len(required)} files",
+        detail=(
+            "; ".join(missing)
+            if missing
+            else "active broker config ready from env/secret files; Tradovate dormant and not required"
+        ),
+        metadata={
+            "active_brokers": ["IBKR", "Tastytrade"],
+            "dormant_brokers": ["Tradovate"],
+            "workspace_root": str(WORKSPACE_ROOT),
+        },
     )
+
+
+def _active_broker_missing_requirements(
+    env: Mapping[str, str] | None = None,
+) -> dict[str, list[str]]:
+    """Return missing requirements for active futures brokers only."""
+
+    from eta_engine.venues import IbkrClientPortalConfig, TastytradeConfig
+
+    checks = {
+        "IBKR": IbkrClientPortalConfig.from_env,
+        "Tastytrade": TastytradeConfig.from_env,
+    }
+    missing: dict[str, list[str]] = {}
+    for broker, factory in checks.items():
+        try:
+            missing[broker] = list(factory(env).missing_requirements())
+        except Exception as exc:  # noqa: BLE001 -- preflight must fail closed
+            missing[broker] = [f"config load failed: {exc}"]
+    return missing
 
 
 def check_venue_handshakes() -> CheckResult:
@@ -143,13 +163,8 @@ def check_us_person_gate() -> CheckResult:
 
 def check_kill_switch() -> CheckResult:
     """Kill switch must not be pre-armed at preflight time."""
-    kill_paths = [
-        Path(r"C:\mnq_data\firm_kill.json"),
-        ROOT.parent / "data" / "firm_kill.json",
-        ROOT / "state" / "kill.json",
-    ]
     armed_paths: list[str] = []
-    for p in kill_paths:
+    for p in _kill_switch_paths():
         if not p.exists():
             continue
         try:
@@ -163,7 +178,18 @@ def check_kill_switch() -> CheckResult:
         ok=not armed_paths,
         severity="critical",
         detail=("kill switch armed at: " + "; ".join(armed_paths)) if armed_paths
-                else "kill switch not pre-armed at any known path",
+                else "kill switch not pre-armed at canonical workspace paths",
+        metadata={"paths_checked": [str(p) for p in _kill_switch_paths()]},
+    )
+
+
+def _kill_switch_paths() -> tuple[Path, ...]:
+    """Canonical kill-switch state surfaces under C:\\EvolutionaryTradingAlgo."""
+
+    return (
+        WORKSPACE_ROOT / "data" / "firm_kill.json",
+        WORKSPACE_ROOT / "state" / "kill.json",
+        ROOT / "state" / "kill.json",
     )
 
 

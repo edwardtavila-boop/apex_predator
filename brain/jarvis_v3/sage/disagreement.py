@@ -25,12 +25,14 @@ This module exposes two things:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 from eta_engine.brain.jarvis_v3.sage.base import (
     Bias,
     SageReport,
-    SchoolVerdict,
 )
 
 
@@ -152,10 +154,14 @@ def detect_clashes(report: SageReport) -> list[ClashPattern]:
         # Risk-management special-case: NEUTRAL + conviction=0 = violation
         if pat.school_a == "risk_management" and pat.bias_a == Bias.NEUTRAL:
             risk_v = verdicts.get("risk_management")
-            if risk_v is not None and risk_v.bias == Bias.NEUTRAL and risk_v.conviction == 0.0:
-                if v_b.bias == pat.bias_b:
-                    matches.append(pat)
-                    continue
+            if (
+                risk_v is not None
+                and risk_v.bias == Bias.NEUTRAL
+                and risk_v.conviction == 0.0
+                and v_b.bias == pat.bias_b
+            ):
+                matches.append(pat)
+                continue
 
         if match_forward or match_reverse:
             matches.append(pat)

@@ -50,6 +50,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT
+
 if TYPE_CHECKING:
     from eta_engine.obs.drift_monitor import BaselineSnapshot
 
@@ -452,7 +454,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "min_daily_conviction": 0.50,
             "strict_mode": False,
             "sage_lookback_daily_bars": 200,
-            "etf_csv_path": "C:/mnq_data/history/BTC_ETF_FLOWS.csv",
+            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
         },
     ),
     # BTC ENSEMBLE VOTING — second BTC strategy to PASS the gate.
@@ -500,7 +502,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "min_agreement_count": 2,
             "voters": ["regime_trend", "regime_trend_etf", "sage_daily_gated"],
             "size_by_agreement": False,
-            "etf_csv_path": "C:/mnq_data/history/BTC_ETF_FLOWS.csv",
+            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
         },
     ),
     # BTC ETF-flow confluence (prior champion, now demoted to research
@@ -541,7 +543,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         extras={
             "research_candidate": True,
             "tier_4_filters": ["etf_flow"],
-            "etf_csv_path": "C:/mnq_data/history/BTC_ETF_FLOWS.csv",
+            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
         },
     ),
     # BTC hybrid (sage research candidate). 180-cell sweep on BTC 1h

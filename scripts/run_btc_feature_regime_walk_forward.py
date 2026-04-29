@@ -44,6 +44,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT, MNQ_HISTORY_ROOT  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Sage verdict pre-compute
@@ -154,7 +155,7 @@ def _build_feature_regime_provider(  # noqa: PLR0913
         classifier.attach_etf_flow_provider(EtfFlowProvider(etf_path))
     if use_fear_greed:
         # F&G CSV path (canonical location)
-        fg_path = Path(r"C:\mnq_data\history\BTC_FEAR_GREED.csv")
+        fg_path = MNQ_HISTORY_ROOT / "BTC_FEAR_GREED.csv"
         if fg_path.exists():
             classifier.attach_fear_greed_provider(FearGreedProvider(fg_path))
     if use_sage_daily and sage_provider is not None:
@@ -264,11 +265,11 @@ def main() -> int:
     p.add_argument("--step-days", type=int, default=30)
     p.add_argument(
         "--etf-path", type=Path,
-        default=Path(r"C:\mnq_data\history\BTC_ETF_FLOWS.csv"),
+        default=MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv",
     )
     p.add_argument(
         "--funding-path", type=Path,
-        default=Path(r"C:\crypto_data\history\BTCFUND_8h.csv"),
+        default=CRYPTO_HISTORY_ROOT / "BTCFUND_8h.csv",
     )
     p.add_argument(
         "--variants", default="baseline,full,sage_only,no_funding",

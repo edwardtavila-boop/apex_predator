@@ -2,13 +2,14 @@
 REM =============================================================================
 REM apex.cmd -- Evolutionary Trading Algo launcher for the JARVIS + Avengers stack.
 REM The existing jarvis.cmd launches hermes-agent. This launcher points at our
-REM deterministic risk-gate + Avengers fleet at C:\eta_engine\.
+REM deterministic risk-gate + Avengers fleet inside the canonical ETA workspace.
 REM =============================================================================
 setlocal
-set "APEX_ROOT=C:\eta_engine"
+for %%I in ("%~dp0..\..") do set "APEX_ROOT=%%~fI"
+for %%I in ("%APEX_ROOT%\..") do set "WORKSPACE_ROOT=%%~fI"
 set "APEX_PY=%APEX_ROOT%\.venv\Scripts\python.exe"
-set "APEX_STATE=%LOCALAPPDATA%\eta_engine\state"
-set "APEX_LOG=%LOCALAPPDATA%\eta_engine\logs"
+set "APEX_STATE=%WORKSPACE_ROOT%\var\eta_engine\state"
+set "APEX_LOG=%WORKSPACE_ROOT%\logs\eta_engine"
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 

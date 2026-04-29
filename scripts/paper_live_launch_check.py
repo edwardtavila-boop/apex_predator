@@ -51,6 +51,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT, MNQ_HISTORY_ROOT  # noqa: E402
 
 # Strategy kinds we know how to resolve at runtime
 _RESOLVABLE_KINDS: frozenset[str] = frozenset({
@@ -66,8 +67,8 @@ def _check_data_available(symbol: str, timeframe: str) -> bool:
     """True if a bar CSV exists for this symbol/timeframe."""
     # Try crypto root first, then mnq root
     for root in (
-        Path(r"C:\crypto_data\history"),
-        Path(r"C:\mnq_data\history"),
+        CRYPTO_HISTORY_ROOT,
+        MNQ_HISTORY_ROOT,
     ):
         for variant in (f"{symbol}_{timeframe}.csv",
                         f"{symbol}1_{timeframe}.csv"):

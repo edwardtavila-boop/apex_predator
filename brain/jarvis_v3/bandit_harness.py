@@ -1,8 +1,8 @@
 """Bandit allocation harness for policy A/B testing (Tier-2 #8, 2026-04-27).
 
-SCAFFOLD: hooks ``brain/jarvis_v3/bandit.py`` (the existing multi-armed
-bandit) into the verdict pipeline so that some fraction of decisions
-flow through a CANDIDATE policy alongside the CHAMPION.
+Hooks ``brain/jarvis_v3/bandit.py``-style allocation into the verdict
+pipeline so that a gated fraction of decisions can flow through a
+CANDIDATE policy alongside the CHAMPION.
 
 Workflow once activated::
 
@@ -18,10 +18,9 @@ Workflow once activated::
   5. When confidence on the candidate exceeds a threshold, operator
      promotes it via the Tier-1 promotion gate (#4)
 
-This module is a SCAFFOLD: the multi-arm dispatch + reward-feedback
-plumbing is sketched out, but wiring it into the live JarvisAdmin path
-is gated behind an env flag (``ETA_BANDIT_ENABLED=true``) and the
-operator's explicit go-ahead.
+The multi-arm dispatch and reward-feedback plumbing is implemented,
+but live routing is fail-closed behind ``ETA_BANDIT_ENABLED=true`` and
+the operator's explicit go-ahead.
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ import logging
 import os
 import random
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,10 @@
 """Tests for dashboard auth (Wave-7, 2026-04-27)."""
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
+
+import pytest
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,6 +21,47 @@ def test_create_user_and_verify_password(tmp_path: Path) -> None:
     assert verify_password(users_path, "edward", "correct horse battery staple") is True
     assert verify_password(users_path, "edward", "wrong") is False
     assert verify_password(users_path, "nobody", "anything") is False
+
+
+def test_verify_password_without_bcrypt_dependency_for_pbkdf2_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eta_engine.deploy.scripts import dashboard_auth as da
+
+    users_path = tmp_path / "users.json"
+    da.create_user(users_path, "edward", "correct horse battery staple")
+
+    monkeypatch.setattr(da, "_bcrypt", None)
+
+    assert da.verify_password(users_path, "edward", "correct horse battery staple") is True
+    assert da.verify_password(users_path, "edward", "wrong") is False
+
+
+def test_verify_password_migrates_legacy_bcrypt_hash(tmp_path: Path) -> None:
+    bcrypt = pytest.importorskip("bcrypt")
+
+    from eta_engine.deploy.scripts.dashboard_auth import verify_password
+
+    users_path = tmp_path / "users.json"
+    users_path.write_text(
+        json.dumps(
+            {
+                "edward": {
+                    "bcrypt_hash": bcrypt.hashpw(
+                        b"correct horse battery staple",
+                        bcrypt.gensalt(),
+                    ).decode("ascii"),
+                    "created_at": 0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert verify_password(users_path, "edward", "correct horse battery staple") is True
+
+    payload = json.loads(users_path.read_text(encoding="utf-8"))
+    assert payload["edward"]["password_hash"].startswith("pbkdf2_sha256$")
 
 
 def test_create_session_and_lookup(tmp_path: Path) -> None:

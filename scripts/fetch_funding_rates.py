@@ -56,8 +56,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-CRYPTO_DATA_ROOT = Path(r"C:\crypto_data")
-HISTORY_ROOT = CRYPTO_DATA_ROOT / "history"
+from eta_engine.scripts.workspace_roots import CRYPTO_HISTORY_ROOT as HISTORY_ROOT  # noqa: E402
 
 _BASE = "https://www.okx.com/api/v5/public/funding-rate-history"
 

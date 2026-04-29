@@ -20,6 +20,27 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
   - D-Wave (`dwave.samplers.SimulatedAnnealingSampler`)
   - Qiskit (QAOA via `StatevectorSampler`)
 
+## Finish-Line Hardening Added 2026-04-29
+
+- JARVIS remains the live policy authority. The health endpoint now reports
+  `policy_authority: JARVIS` plus the active feature-flag state for online
+  learning, Sage modulation, and bandit live routing.
+- `OnlineUpdater` is persistence-backed and fail-safe by default. With
+  `ETA_FF_ONLINE_LEARNING=true`, bot pre-flight can shrink cold setup buckets
+  after enough realized-R samples; it does not expand size unless a caller
+  opts in explicitly.
+- Sage ML no longer silently returns a neutral placeholder when no model file
+  is present. It falls back to a deterministic conservative classifier and
+  labels the verdict source as `deterministic_fallback`.
+- Sage replay now accepts JSON/JSONL closed-trade journals and file-backed
+  bar sources so school weights can be audited against real historical trades.
+- Optional telemetry paths are wired through `MarketContext`: on-chain,
+  funding/basis, options, and peer-return payloads survive memoization and
+  regime rebuilds before reaching their schools.
+- Quantum remains budget/credential-gated. `/api/jarvis/health` tails
+  `state/quantum/jobs.jsonl` and reports recent jobs, fallbacks, and estimated
+  cost so classical fallback is visible instead of hidden.
+
 ## Activation: Wave-12 Intelligence Layer
 
 The full intelligence stack (memory_rag, causal, world_model,

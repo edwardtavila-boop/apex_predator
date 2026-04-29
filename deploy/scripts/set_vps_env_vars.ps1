@@ -14,7 +14,7 @@
 #     # Option 2: bring a secrets file via RDP file-transfer to a
 #     # Windows protected dir and point at it
 #     powershell -File deploy\scripts\set_vps_env_vars.ps1 `
-#         -SecretsFile C:\eta_engine\.secrets\vps_env.txt
+#         -SecretsFile C:\EvolutionaryTradingAlgo\eta_engine\.secrets\vps_env.txt
 #
 # Verifies that nothing logs the values; only key names are echoed.
 [CmdletBinding()]

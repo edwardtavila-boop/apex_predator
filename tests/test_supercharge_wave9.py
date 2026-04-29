@@ -264,6 +264,36 @@ def test_cloud_adapter_caches_repeat_calls(tmp_path: Path) -> None:
     assert rec2.used_cache is True
 
 
+def test_cloud_adapter_cache_rebinds_labels_to_current_problem(tmp_path: Path) -> None:
+    from eta_engine.brain.jarvis_v3.quantum.cloud_adapter import (
+        CloudConfig,
+        QuantumCloudAdapter,
+        _ResultCache,
+    )
+    from eta_engine.brain.jarvis_v3.quantum.qubo_solver import QuboProblem
+
+    adapter = QuantumCloudAdapter(
+        cfg=CloudConfig(enable_cloud=False),
+        jobs_log_path=tmp_path / "jobs.jsonl",
+        result_cache=_ResultCache(path=tmp_path / "cache.json"),
+    )
+    p1 = QuboProblem.from_matrix(
+        [[-1.0, 0.0], [0.0, -1.0]],
+        labels=["alpha", "beta"],
+    )
+    p2 = QuboProblem.from_matrix(
+        [[-1.0, 0.0], [0.0, -1.0]],
+        labels=["omega", "sigma"],
+    )
+
+    adapter.solve(p1, n_iterations=500)
+    result2, rec2 = adapter.solve(p2, n_iterations=500)
+
+    assert rec2.used_cache is True
+    assert result2.labels == ["omega", "sigma"]
+    assert result2.selected_labels() == ["omega", "sigma"]
+
+
 def test_cloud_adapter_appends_to_jobs_log(tmp_path: Path) -> None:
     from eta_engine.brain.jarvis_v3.quantum.cloud_adapter import (
         CloudConfig,

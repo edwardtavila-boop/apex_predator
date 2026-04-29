@@ -13,23 +13,25 @@ Covers:
 from __future__ import annotations
 
 import json
-import tempfile
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
-
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ─── policies/v17 + v18 auto-registration ────────────────────────────
 
 
 def test_policies_package_auto_registers_v17_and_v18() -> None:
-    from eta_engine.brain.jarvis_v3.candidate_policy import (
-        clear_registry, get_candidate, list_candidates,
-    )
-    clear_registry()
-    # Side-effect import auto-registers
+    # Side-effect import auto-registers (fires on FIRST import of the
+    # package; subsequent imports are no-ops thanks to Python's module
+    # cache). The conftest healing fixture guarantees the registry is
+    # populated before the test runs even if a prior test cleared it.
     from eta_engine.brain.jarvis_v3 import policies  # noqa: F401
+    from eta_engine.brain.jarvis_v3.candidate_policy import (
+        get_candidate,
+        list_candidates,
+    )
     names = {c["name"] for c in list_candidates()}
     assert "v17" in names
     assert "v18" in names
@@ -74,11 +76,13 @@ def _build_minimal_req():
 def test_v18_passes_through_when_verdict_not_conditional() -> None:
     """v18 only modifies CONDITIONAL verdicts; APPROVED/DENIED/DEFERRED
     pass through with no v18 conditions added."""
-    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
     from eta_engine.brain.jarvis_admin import (
-        ActionResponse, Verdict, ActionSuggestion,
+        ActionResponse,
+        ActionSuggestion,
+        Verdict,
     )
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
 
     base_resp = ActionResponse(
         request_id="r0",
@@ -105,15 +109,16 @@ def test_v18_passes_through_when_verdict_not_conditional() -> None:
 def test_v18_tightens_high_stress_conditional_cap() -> None:
     """When v17 returns CONDITIONAL with cap=0.5 in stress=0.85, v18
     tightens to 0.35."""
-    from eta_engine.brain.jarvis_v3.policies.v18_high_stress_tighten import (
-        HIGH_STRESS_CAP, evaluate_v18,
-    )
-    from eta_engine.brain.jarvis_admin import (
-        ActionResponse, Verdict, ActionRequest, ActionType, SubsystemId,
-    )
     # Synthesize a v17 response we control
-    from eta_engine.brain.jarvis_admin import ActionSuggestion
+    from eta_engine.brain.jarvis_admin import (
+        ActionResponse,
+        ActionSuggestion,
+        Verdict,
+    )
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies.v18_high_stress_tighten import (
+        HIGH_STRESS_CAP,
+    )
 
     base_resp = ActionResponse(
         request_id="r1",
@@ -143,11 +148,13 @@ def test_v18_tightens_high_stress_conditional_cap() -> None:
 
 def test_v18_does_not_tighten_in_normal_stress() -> None:
     """When stress is below the threshold, v18 leaves the cap alone."""
-    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
     from eta_engine.brain.jarvis_admin import (
-        ActionResponse, Verdict, ActionSuggestion,
+        ActionResponse,
+        ActionSuggestion,
+        Verdict,
     )
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
 
     base_resp = ActionResponse(
         request_id="r2",
@@ -174,11 +181,13 @@ def test_v18_does_not_tighten_in_normal_stress() -> None:
 def test_v18_never_relaxes_a_tighter_cap() -> None:
     """If v17 already returned cap=0.20 (tighter than 0.35), v18 must NOT
     relax to 0.35 -- defensive ratchet."""
-    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
     from eta_engine.brain.jarvis_admin import (
-        ActionResponse, Verdict, ActionSuggestion,
+        ActionResponse,
+        ActionSuggestion,
+        Verdict,
     )
     from eta_engine.brain.jarvis_context import SessionPhase
+    from eta_engine.brain.jarvis_v3.policies import v18_high_stress_tighten as v18_mod
 
     base_resp = ActionResponse(
         request_id="r3",
@@ -247,13 +256,14 @@ def test_replay_metrics_shape(tmp_path: Path) -> None:
     one. The v18 mutation logic itself is unit-tested above; this test
     just verifies the replay machinery returns the expected metrics shape.
     """
-    from datetime import datetime, timezone
+
     from eta_engine.scripts.score_policy_candidate import (
-        candidate_metrics, load_audit_records,
+        candidate_metrics,
+        load_audit_records,
     )
 
     record = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "policy_version": 17,
         "request": {
             "subsystem": "bot.mnq",
@@ -282,7 +292,7 @@ def test_replay_metrics_shape(tmp_path: Path) -> None:
 
     records = load_audit_records(
         [audit],
-        since=datetime.now(timezone.utc) - timedelta(days=1),
+        since=datetime.now(UTC) - timedelta(days=1),
     )
     assert len(records) == 1
 

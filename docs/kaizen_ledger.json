@@ -1,0 +1,36 @@
+{
+  "retrospectives": [
+    {
+      "ts": "2026-04-29T01:45:50.154497Z",
+      "cycle_kind": "DAILY",
+      "window_start": "2026-04-28T01:45:50.154497Z",
+      "window_end": "2026-04-29T01:45:50.154497Z",
+      "went_well": [
+        "fleet_corr:eth_perp+btc_hybrid (\u00d750)",
+        "fleet_corr:sol_perp+btc_hybrid (\u00d750)"
+      ],
+      "went_poorly": [],
+      "surprises": [],
+      "kpis": {
+        "outcome_noted": 100.0,
+        "override_rate": 0.0,
+        "total_events": 100.0
+      },
+      "lessons": []
+    }
+  ],
+  "tickets": [
+    {
+      "id": "KZN-20260429-0145-tighten-observability",
+      "parent_retrospective_ts": "2026-04-29T01:45:50.154497Z",
+      "title": "Tighten observability",
+      "rationale": "Default +1 when nothing is broken: raise telemetry bar (log coverage, alert resolution time, dashboard freshness)",
+      "status": "OPEN",
+      "impact": "small",
+      "owner": "operator.edward",
+      "opened_at": "2026-04-29T01:45:50.154497Z",
+      "shipped_at": null,
+      "drop_reason": ""
+    }
+  ]
+}

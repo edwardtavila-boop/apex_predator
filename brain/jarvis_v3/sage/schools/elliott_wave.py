@@ -38,8 +38,6 @@ class ElliottWaveSchool(SchoolBase):
                 rationale=f"insufficient bars ({n} < 30)",
             )
         closes = ctx.closes()
-        highs = ctx.highs()
-        lows = ctx.lows()
         # Last-3-bar return vs lookback's biggest 3-bar return
         last3_move = closes[-1] - closes[-4] if n >= 4 else 0
         max_3bar_up = max(

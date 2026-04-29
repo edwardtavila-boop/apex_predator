@@ -25,6 +25,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import MNQ_DATA_ROOT  # noqa: E402
+
 
 def main() -> int:
     from eta_engine.backtest import (
@@ -37,7 +39,7 @@ def main() -> int:
     from eta_engine.features.pipeline import FeaturePipeline
     from eta_engine.scripts.run_walk_forward_mnq_real import _ctx, _load_csv
 
-    data_path = Path(os.environ.get("MNQ_DATA_PATH", r"C:\mnq_data\mnq_5m.csv"))
+    data_path = Path(os.environ.get("MNQ_DATA_PATH", str(MNQ_DATA_ROOT / "mnq_5m.csv")))
     bars = _load_csv(data_path)
     if not bars:
         print(f"ABORT: zero bars at {data_path}")

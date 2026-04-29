@@ -24,10 +24,12 @@ Everything before this was building blocks; this is the assembly.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from eta_engine.brain.jarvis_v3.firm_board import Proposal
@@ -37,6 +39,34 @@ if TYPE_CHECKING:
     from eta_engine.brain.jarvis_v3.world_model_full import ActionRanking
 
 logger = logging.getLogger(__name__)
+
+POLICY_AUTHORITY = "JARVIS"
+
+
+def _proposal_audit_context(proposal: Proposal) -> dict[str, Any]:
+    """Serializable proposal snapshot for deterministic replay."""
+    return {
+        "signal_id": proposal.signal_id,
+        "direction": proposal.direction,
+        "regime": proposal.regime,
+        "session": proposal.session,
+        "stress": proposal.stress,
+        "sentiment": proposal.sentiment,
+        "sage_score": proposal.sage_score,
+        "slippage_bps_estimate": proposal.slippage_bps_estimate,
+        "extra": dict(proposal.extra),
+    }
+
+
+def _stable_decision_seed(proposal: Proposal) -> int:
+    payload = json.dumps(
+        _proposal_audit_context(proposal),
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.blake2s(payload.encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, byteorder="big", signed=False)
 
 
 @dataclass
@@ -50,6 +80,8 @@ class DecisionPacket:
     final_action: str
     final_size_multiplier: float                # e.g. 1.0, 0.5, 0.25, 0.0
     confidence: float                           # in [0, 1]
+    policy_authority: str = POLICY_AUTHORITY
+    decision_seed: int | None = None
 
     # Per-layer outputs
     rag_summary: str = ""
@@ -77,6 +109,8 @@ class DecisionPacket:
             "ts": self.ts,
             "proposal_id": self.proposal_id,
             "direction": self.direction,
+            "policy_authority": self.policy_authority,
+            "decision_seed": self.decision_seed,
             "final_action": self.final_action,
             "final_size_multiplier": self.final_size_multiplier,
             "confidence": self.confidence,
@@ -106,6 +140,7 @@ class DecisionPacket:
                 },
             },
             "layer_errors": self.layer_errors,
+            "raw": self.raw,
         }
 
 
@@ -160,6 +195,14 @@ class JarvisOrchestrator:
     ) -> DecisionPacket:
         """Run all layers and assemble the DecisionPacket."""
         layer_errors: list[str] = []
+        decision_seed = _stable_decision_seed(proposal)
+        raw_context = {
+            "policy_authority": POLICY_AUTHORITY,
+            "decision_seed": decision_seed,
+            "proposal": _proposal_audit_context(proposal),
+            "quantum_requested": self.consult_quantum,
+            "use_iterative_debate": self.use_iterative_debate,
+        }
 
         # 1. RAG enrichment
         rag_ctx = self._consult_rag(proposal, current_narrative, layer_errors)
@@ -175,7 +218,9 @@ class JarvisOrchestrator:
         )
 
         # 4. Firm-board debate
-        verdict = self._consult_firm_board(proposal, layer_errors)
+        verdict = self._consult_firm_board(
+            proposal, layer_errors, decision_seed=decision_seed,
+        )
 
         # 5. Quantum (optional, daily-rebalance only)
         quantum_summary = ""
@@ -196,6 +241,7 @@ class JarvisOrchestrator:
                 final_action=final_action,
                 final_size_multiplier=final_size,
                 confidence=confidence,
+                decision_seed=decision_seed,
                 rag_summary=rag_ctx.summary if rag_ctx else "",
                 rag_cautions=list(rag_ctx.cautions) if rag_ctx else [],
                 rag_boosts=list(rag_ctx.boosts) if rag_ctx else [],
@@ -213,9 +259,10 @@ class JarvisOrchestrator:
                     verdict.devils_advocate_role.value
                     if verdict and verdict.devils_advocate_role else None
                 ),
-                quantum_used=self.consult_quantum,
+                quantum_used=bool(quantum_summary),
                 quantum_contribution_summary=quantum_summary,
                 layer_errors=layer_errors,
+                raw=raw_context,
             )
 
         # Otherwise: firm-board's final action drives, modulated by
@@ -239,6 +286,7 @@ class JarvisOrchestrator:
             final_action=final_action,
             final_size_multiplier=round(final_size, 3),
             confidence=confidence,
+            decision_seed=decision_seed,
             rag_summary=rag_ctx.summary if rag_ctx else "",
             rag_cautions=list(rag_ctx.cautions) if rag_ctx else [],
             rag_boosts=list(rag_ctx.boosts) if rag_ctx else [],
@@ -254,9 +302,10 @@ class JarvisOrchestrator:
                 verdict.devils_advocate_role.value
                 if verdict and verdict.devils_advocate_role else None
             ),
-            quantum_used=self.consult_quantum,
+            quantum_used=bool(quantum_summary),
             quantum_contribution_summary=quantum_summary,
             layer_errors=layer_errors,
+            raw=raw_context,
         )
 
     # ── Per-layer consultations ───────────────────────────────
@@ -355,6 +404,8 @@ class JarvisOrchestrator:
         self,
         proposal: Proposal,
         errors: list[str],
+        *,
+        decision_seed: int | None = None,
     ) -> IterativeVerdict | None:
         try:
             if self.use_iterative_debate:
@@ -362,7 +413,9 @@ class JarvisOrchestrator:
                     deliberate_iterative,
                 )
                 return deliberate_iterative(
-                    proposal=proposal, memory=self.memory,
+                    proposal=proposal,
+                    memory=self.memory,
+                    seed=decision_seed,
                 )
             from eta_engine.brain.jarvis_v3.firm_board import deliberate
             single_pass = deliberate(proposal=proposal, memory=self.memory)

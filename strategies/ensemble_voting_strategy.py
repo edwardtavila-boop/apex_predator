@@ -35,6 +35,7 @@ fires get a vote of confidence.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from statistics import mean
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -79,6 +80,23 @@ class EnsembleVotingConfig:
     # strategies voted.
     regime_prefix: str = "ensemble"
 
+    # Turn on context-aware routing: strategy votes are down/up-weighted
+    # by the inferred tape regime (trend/chop/high-vol) before selecting
+    # the winner.
+    use_regime_router: bool = True
+
+    # Confidence-weighted aggregation (outside-the-box upgrade):
+    # instead of plain arithmetic averaging, combine proposals using a
+    # conviction weight derived from confluence, implied R multiple and
+    # risk commitment.
+    use_confidence_weighting: bool = True
+
+    # Adversarial safety rail: abstain in toxic market micro-conditions.
+    enable_fail_safe: bool = True
+    max_wick_to_range_ratio: float = 0.75
+    max_short_term_range_to_long_term_range: float = 2.6
+    max_gap_to_atr: float = 2.5
+
 
 class EnsembleVotingStrategy:
     """Aggregates multiple strategies via majority vote."""
@@ -107,6 +125,9 @@ class EnsembleVotingStrategy:
         equity: float,
         config: BacktestConfig,
     ) -> _Open | None:
+        if self.cfg.enable_fail_safe and self._should_abstain(bar, hist):
+            return None
+
         # Always call ALL sub-strategies (even if vote will fail)
         # so their states (EMAs, cooldowns) advance every bar.
         proposals: list[tuple[str, _Open]] = []
@@ -116,6 +137,11 @@ class EnsembleVotingStrategy:
             except Exception:  # noqa: BLE001 - sub isolation
                 continue
             if out is not None:
+                if self.cfg.use_regime_router:
+                    regime_weight = self._regime_weight_for_strategy(name, bar, hist)
+                    if regime_weight <= 0.0:
+                        continue
+                    out = self._scale_open(out, regime_weight)
                 proposals.append((name, out))
 
         if len(proposals) < self.cfg.min_agreement_count:
@@ -135,16 +161,26 @@ class EnsembleVotingStrategy:
             # Sub-strategies disagree on side — no consensus
             return None
 
-        # Aggregate the chosen side: take the AVERAGE entry, stop,
-        # target, qty, risk across the agreeing proposals. This is
-        # safer than just picking one — it dampens any single sub's
-        # parameter quirks.
+        # Aggregate chosen-side proposals.
+        # Default legacy behaviour is arithmetic averaging. With
+        # confidence-weighting enabled we bias toward stronger proposals.
         n = len(chosen_proposals)
-        avg_entry = sum(p.entry_price for p in chosen_proposals) / n
-        avg_stop = sum(p.stop for p in chosen_proposals) / n
-        avg_target = sum(p.target for p in chosen_proposals) / n
-        avg_qty = sum(p.qty for p in chosen_proposals) / n
-        avg_risk = sum(p.risk_usd for p in chosen_proposals) / n
+        if self.cfg.use_confidence_weighting:
+            weights = [self._proposal_weight(p) for p in chosen_proposals]
+            wsum = sum(weights) or float(n)
+            avg_entry = sum(p.entry_price * w for p, w in zip(chosen_proposals, weights, strict=False)) / wsum
+            avg_stop = sum(p.stop * w for p, w in zip(chosen_proposals, weights, strict=False)) / wsum
+            avg_target = sum(p.target * w for p, w in zip(chosen_proposals, weights, strict=False)) / wsum
+            avg_qty = sum(p.qty * w for p, w in zip(chosen_proposals, weights, strict=False)) / wsum
+            avg_risk = sum(p.risk_usd * w for p, w in zip(chosen_proposals, weights, strict=False)) / wsum
+            agg_conf = min(10.0, max(0.0, mean(weights)))
+        else:
+            avg_entry = sum(p.entry_price for p in chosen_proposals) / n
+            avg_stop = sum(p.stop for p in chosen_proposals) / n
+            avg_target = sum(p.target for p in chosen_proposals) / n
+            avg_qty = sum(p.qty for p in chosen_proposals) / n
+            avg_risk = sum(p.risk_usd for p in chosen_proposals) / n
+            agg_conf = mean(p.confluence for p in chosen_proposals)
 
         # Optional size scaling by vote count
         if self.cfg.size_by_agreement:
@@ -177,9 +213,85 @@ class EnsembleVotingStrategy:
             target=avg_target,
             qty=avg_qty,
             risk_usd=avg_risk,
-            confluence=10.0,
+            confluence=agg_conf,
             regime=regime_tag,
         )
+
+    def _proposal_weight(self, o: _Open) -> float:
+        stop_dist = abs(o.entry_price - o.stop)
+        tgt_dist = abs(o.target - o.entry_price)
+        rr = tgt_dist / stop_dist if stop_dist > 0 else 1.0
+        # Blend three dimensions:
+        # - confluence (quality),
+        # - rr (asymmetric payoff),
+        # - risk_usd (skin in the game).
+        conf_term = max(0.1, min(10.0, o.confluence)) / 10.0
+        rr_term = max(0.5, min(2.5, rr)) / 2.5
+        risk_term = max(1.0, o.risk_usd) ** 0.2
+        return conf_term * rr_term * risk_term
+
+    def _scale_open(self, o: _Open, mult: float) -> _Open:
+        m = max(0.0, min(1.5, mult))
+        return replace(
+            o,
+            qty=o.qty * m,
+            risk_usd=o.risk_usd * m,
+            confluence=max(0.0, min(10.0, o.confluence * m)),
+        )
+
+    def _infer_regime(self, bar: BarData, hist: list[BarData]) -> str:
+        window = hist[-24:] if len(hist) >= 24 else hist
+        if len(window) < 6:
+            return "neutral"
+        avg_range = mean(max(1e-9, b.high - b.low) for b in window)
+        short = window[-6:]
+        short_range = mean(max(1e-9, b.high - b.low) for b in short)
+        closes = [b.close for b in window]
+        drift = closes[-1] - closes[0]
+        trend_strength = abs(drift) / max(1e-9, avg_range * len(window))
+        if short_range / max(1e-9, avg_range) > 2.0:
+            return "high_vol"
+        if trend_strength > 0.75:
+            return "trend"
+        return "chop"
+
+    def _regime_weight_for_strategy(self, name: str, bar: BarData, hist: list[BarData]) -> float:
+        regime = self._infer_regime(bar, hist)
+        lname = name.lower()
+        if regime == "high_vol":
+            return 0.6 if ("trend" in lname or "orb" in lname) else 0.25
+        if regime == "trend":
+            return 1.2 if ("trend" in lname or "orb" in lname) else 0.7
+        if regime == "chop":
+            return 1.15 if ("meanrev" in lname or "grid" in lname or "sweep" in lname) else 0.8
+        return 1.0
+
+    def _should_abstain(self, bar: BarData, hist: list[BarData]) -> bool:
+        if len(hist) < 8:
+            return False
+        last = bar
+        prev = hist[-1]
+        body = abs(last.close - last.open)
+        rng = max(1e-9, last.high - last.low)
+        upper_wick = max(0.0, last.high - max(last.open, last.close))
+        lower_wick = max(0.0, min(last.open, last.close) - last.low)
+        wick_ratio = (upper_wick + lower_wick) / rng
+
+        short = hist[-6:]
+        long = hist[-24:] if len(hist) >= 24 else hist
+        short_range = mean(max(1e-9, b.high - b.low) for b in short)
+        long_range = mean(max(1e-9, b.high - b.low) for b in long)
+        vol_shock = short_range / max(1e-9, long_range)
+
+        # Approximate gap by close-to-open jump relative to rolling ATR proxy.
+        atr = mean(max(1e-9, b.high - b.low) for b in long)
+        gap_to_atr = abs(last.open - prev.close) / max(1e-9, atr)
+
+        if wick_ratio > self.cfg.max_wick_to_range_ratio and body / rng < 0.35:
+            return True
+        if vol_shock > self.cfg.max_short_term_range_to_long_term_range:
+            return True
+        return gap_to_atr > self.cfg.max_gap_to_atr
 
     # -- helper for audit-trail name tagging ---------------------------------
 

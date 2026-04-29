@@ -13,13 +13,17 @@
 # ============================================================================
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "C:\eta_engine"
+    [string]$InstallDir = "C:\EvolutionaryTradingAlgo\eta_engine"
 )
 
 function Log  { param($m) Write-Host "[supercharge] $m" -ForegroundColor Cyan }
 function OK   { param($m) Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Skip { param($m) Write-Host "[SKIP] $m" -ForegroundColor Yellow }
 function Warn { param($m) Write-Host "[WARN] $m" -ForegroundColor DarkYellow }
+
+$workspaceRoot = Split-Path -Parent $InstallDir
+$stateDir = Join-Path $workspaceRoot "var\eta_engine\state"
+$logDir = Join-Path $workspaceRoot "logs\eta_engine"
 
 # ----------------------------------------------------------------------------
 # #12 -- Power plan -> High Performance
@@ -148,8 +152,8 @@ if ($existing -match [regex]::Escape($marker)) {
 $marker
 `$global:APEX_ROOT    = "$InstallDir"
 `$global:APEX_PY      = "$InstallDir\.venv\Scripts\python.exe"
-`$global:APEX_STATE   = "`$env:LOCALAPPDATA\eta_engine\state"
-`$global:APEX_LOGS    = "`$env:LOCALAPPDATA\eta_engine\logs"
+`$global:APEX_STATE   = "$stateDir"
+`$global:APEX_LOGS    = "$logDir"
 
 function apex-status    { & `$global:APEX_PY -m deploy.scripts.smoke_check --skip-systemd }
 function apex-heartbeat { Get-Content "`$global:APEX_STATE\avengers_heartbeat.json" | ConvertFrom-Json | ConvertTo-Json }

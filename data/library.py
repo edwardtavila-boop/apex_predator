@@ -5,19 +5,19 @@ Single source of truth for every market-data CSV available locally.
 
 Why this exists
 ---------------
-We have a lot of data scattered across ``C:\\mnq_data\\`` (synced
-active set) and ``C:\\mnq_data\\history\\`` (long history): 1s/1m/5m
-MNQ ladder, hourly + daily MNQ (4+ years), correlated tickers
-(ES1, NQ1, RTY1, DXY, VIX), and order-flow tick aggregates. Every
-research script that wants to load a slice today is hand-coding the
-path + schema. This module replaces that with one catalog.
+We have a lot of data under the canonical ETA workspace root:
+MNQ ladders, longer-history futures/crypto bars, correlated tickers,
+order-flow aggregates, on-chain feeds, and synthetic macro/sentiment
+series. Every research script that wants to load a slice today is
+hand-coding the path + schema. This module replaces that with one
+catalog.
 
 Two on-disk shapes are handled transparently:
 
 * **"main"** — header ``timestamp_utc, epoch_s, open, high, low, close, volume, session``.
-  Files: ``C:\\mnq_data\\mnq_*.csv``.
+  Files: ``mnq_data\\mnq_*.csv`` under the workspace root.
 * **"history"** — header ``time, open, high, low, close, volume`` where
-  ``time`` is epoch seconds (UTC). Files: ``C:\\mnq_data\\history\\<SYMBOL>1_<TF>.csv``.
+  ``time`` is epoch seconds (UTC). Files: ``mnq_data\\history\\<SYMBOL>1_<TF>.csv``.
 
 Exposed API
 -----------
@@ -41,11 +41,13 @@ import csv
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
+
+from eta_engine.scripts import workspace_roots
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
 
 
@@ -54,24 +56,24 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 DEFAULT_ROOTS: tuple[Path, ...] = (
-    Path(r"C:\mnq_data"),
-    Path(r"C:\mnq_data\history"),
+    workspace_roots.MNQ_DATA_ROOT,
+    workspace_roots.MNQ_HISTORY_ROOT,
     # CME crypto bars (BTC/MBT/ETH/MET). Directory may not exist
     # yet — DataLibrary._discover skips missing roots silently.
     # When fetch_btc_bars.py starts writing here, the next library
     # call surfaces the new datasets automatically.
-    Path(r"C:\crypto_data"),
-    Path(r"C:\crypto_data\history"),
+    workspace_roots.CRYPTO_DATA_ROOT,
+    workspace_roots.CRYPTO_HISTORY_ROOT,
     # On-chain time series (BTCONCHAIN_D.csv etc.) written by
     # scripts/fetch_onchain_history. Sentiment + macro feeds use the
     # same root + the SENT/MACRO suffix conventions documented in
     # data.audit._resolve_library_lookup.
-    Path(r"C:\crypto_data\onchain"),
-    Path(r"C:\crypto_data\sentiment"),
-    Path(r"C:\crypto_data\macro"),
+    workspace_roots.CRYPTO_ONCHAIN_ROOT,
+    workspace_roots.CRYPTO_SENTIMENT_ROOT,
+    workspace_roots.CRYPTO_MACRO_ROOT,
     # IBKR-native crypto bars for the pre-live drift comparison
     # (scripts/fetch_ibkr_crypto_bars writes here).
-    Path(r"C:\crypto_data\ibkr\history"),
+    workspace_roots.CRYPTO_IBKR_HISTORY_ROOT,
 )
 
 

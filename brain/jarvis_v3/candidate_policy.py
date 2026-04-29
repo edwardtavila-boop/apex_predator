@@ -1,6 +1,6 @@
 """Candidate-policy callable interface (Tier-2 #7, 2026-04-27).
 
-Unblocks 3 separate scaffolds:
+Unblocks 3 separate candidate-policy lanes:
   * scripts/score_policy_candidate.py -- replay a candidate over the
     last 30 days and compare metrics to the champion
   * brain/jarvis_v3/bandit_harness.py -- multi-arm bandit between
@@ -47,9 +47,10 @@ it, and prints a side-by-side comparison vs the champion.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 
 class _ActionRequestLike(Protocol):

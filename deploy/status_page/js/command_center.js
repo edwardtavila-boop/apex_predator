@@ -1,10 +1,48 @@
 // eta_engine/deploy/status_page/js/command_center.js
-// 10 JARVIS panels for the Command Center view.
+// 10 JARVIS panels for the ETA live dashboard view.
 // Wave-7 dashboard, 2026-04-27.
 
 import { Panel, formatPct, formatR, formatTime, escapeHtml, selection } from '/js/panels.js';
 import { liveStream, poller } from '/js/live.js';
 import { onAuthenticated, authedPost } from '/js/auth.js';
+
+function notify(message, type = 'success') {
+  const host = document.getElementById('toast-container');
+  if (!host) {
+    console[type === 'error' ? 'error' : 'log'](message);
+    return;
+  }
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function setAlertDock(items) {
+  const body = document.getElementById('alert-dock-body');
+  const top = document.getElementById('top-alerts');
+  const rows = (items || []).slice(0, 6);
+  if (top) {
+    const high = rows.filter((x) => x.severity === 'high').length;
+    const medium = rows.filter((x) => x.severity === 'medium').length;
+    const low = rows.filter((x) => x.severity === 'low').length;
+    top.innerHTML = `<span>alerts</span><span class="alert-pill alert-high">${high}H</span><span class="alert-pill alert-medium">${medium}M</span><span class="alert-pill alert-low">${low}L</span>`;
+  }
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = '<div class="text-zinc-500">No active alerts.</div>';
+    window.dispatchEvent(new CustomEvent('eta-alerts-updated', { detail: { items: [] } }));
+    return;
+  }
+  body.innerHTML = rows.map((r) =>
+    `<div class="flex items-start justify-between gap-2 py-1">
+      <span class="text-zinc-200">${escapeHtml(r.label)}</span>
+      <span class="alert-pill alert-${escapeHtml(r.severity)}">${escapeHtml(r.severity)}</span>
+    </div>`,
+  ).join('');
+  window.dispatchEvent(new CustomEvent('eta-alerts-updated', { detail: { items: rows } }));
+}
 
 // --- 1. Live verdict stream (SSE) ---
 class VerdictStreamPanel extends Panel {
@@ -59,46 +97,75 @@ class SageHealthPanel extends Panel {
   constructor() { super('cc-sage-health', '/api/jarvis/health', 'Sage Health'); }
   render(data) {
     const issues = data.issues || [];
+    const quantum = data.quantum || {};
+    const authority = data.policy_authority || 'JARVIS';
+    const quantumLine = `<div class="text-xs text-zinc-500 mt-2">Authority: ${escapeHtml(authority)} | Quantum: ${escapeHtml(quantum.status || 'idle')} | fallbacks ${Number(quantum.recent_fallbacks || 0)} | cost $${Number(quantum.recent_cost_estimate_usd || 0).toFixed(4)}</div>`;
     if (issues.length === 0) {
-      this.body.innerHTML = '<div class="text-emerald-400 text-sm">✓ all schools healthy</div>';
+      this.body.innerHTML = '<div class="text-emerald-400 text-sm">◉ all schools healthy</div>';
+      setAlertDock([]);
+      this.body.innerHTML += quantumLine;
       return;
     }
+    const dockRows = issues.slice(0, 8).map((i) => ({
+      label: `${i.school} neutral ${formatPct(i.neutral_rate)}`,
+      severity: i.severity === 'critical' ? 'high' : 'medium',
+    }));
+    setAlertDock(dockRows);
     this.body.innerHTML = '<ul class="space-y-1 text-xs">' + issues.map(i => {
       const cls = i.severity === 'critical' ? 'text-red-400' : 'text-amber-400';
-      return `<li><span class="${cls}">●</span> ${escapeHtml(i.school)} ${formatPct(i.neutral_rate)} neutral (${i.n_consultations})</li>`;
+      return `<li><span class="${cls}">◉</span> ${escapeHtml(i.school)} ${formatPct(i.neutral_rate)} neutral (${i.n_consultations})</li>`;
     }).join('') + '</ul>';
+    this.body.innerHTML += quantumLine;
   }
 }
 
 // --- 4. Disagreement heatmap ---
 class DisagreementHeatmapPanel extends Panel {
   constructor() {
-    super('cc-disagreement-heatmap', `/api/jarvis/sage_disagreement_heatmap?symbol=${selection.symbol}`, '23-School Disagreement');
+    super('cc-disagreement-heatmap', `/api/jarvis/sage_disagreement_heatmap?symbol=${selection.symbol}`, 'School Disagreement');
     window.addEventListener('selection-changed', (e) => {
       this.endpoint = `/api/jarvis/sage_disagreement_heatmap?symbol=${e.detail.symbol}`;
       this.refresh();
     });
   }
   render(data) {
-    const matrix = data.matrix || [];
-    if (matrix.length === 0) {
-      this.body.innerHTML = `<div class="text-zinc-500 text-sm">${escapeHtml(data._warning || 'no data')}</div>`;
+    const schools = Object.entries(data.per_school || {});
+    if (schools.length === 0) {
+      this.body.innerHTML = `<div class="text-zinc-500 text-sm">No disagreement data yet for ${escapeHtml(selection.symbol)}. Waiting for fresh Sage consultations.</div>`;
       return;
     }
-    const html = matrix.map(row => {
-      return `<div class="flex gap-px">${row.cells.map(c => {
-        const intensity = Math.abs(c.score);
-        const color = c.score > 0 ? `rgba(16,185,129,${intensity})` : `rgba(239,68,68,${intensity})`;
-        return `<div class="w-3 h-3" style="background:${color}" title="${escapeHtml(c.school_a)} vs ${escapeHtml(c.school_b)}: ${c.score.toFixed(2)}"></div>`;
-      }).join('')}</div>`;
-    }).join('');
-    this.body.innerHTML = `<div class="space-y-px">${html}</div>`;
+    const rows = schools
+      .sort((a, b) => Number(a[1].aligned_with_composite) - Number(b[1].aligned_with_composite))
+      .map(([name, row]) => {
+        const aligned = !!row.aligned_with_composite;
+        const bias = String(row.bias || 'neutral').toUpperCase();
+        const conv = Number(row.conviction || 0);
+        const tone = aligned ? 'text-emerald-400' : 'text-red-400';
+        const chip = aligned ? 'Aligned' : 'Disagreeing';
+        return `<tr>
+          <td class="py-1">${escapeHtml(name)}</td>
+          <td class="py-1 text-zinc-300">${escapeHtml(bias)}</td>
+          <td class="py-1 text-right ${tone}">${formatPct(conv)}</td>
+          <td class="py-1 text-right ${tone}">${chip}</td>
+        </tr>`;
+      }).join('');
+    const clashes = (data.named_clashes || []).slice(0, 3).map(c =>
+      `<li class="text-zinc-400">${escapeHtml(c.name)} — ${escapeHtml(c.interpretation || 'n/a')}</li>`,
+    ).join('');
+    this.body.innerHTML = `
+      <div class="text-xs text-zinc-500 mb-2">Composite bias: <span class="text-zinc-200">${escapeHtml(String(data.composite_bias || '—').toUpperCase())}</span></div>
+      <table class="w-full text-xs">
+        <tr class="text-zinc-500"><th class="text-left">School</th><th class="text-left">Bias</th><th class="text-right">Conviction</th><th class="text-right">Status</th></tr>
+        ${rows}
+      </table>
+      <ul class="mt-2 text-xs space-y-1">${clashes || '<li class="text-zinc-600">No named clashes in the current window.</li>'}</ul>`;
   }
 }
 
 // --- 5. Stress / mood ---
 class StressMoodPanel extends Panel {
-  constructor() { super('cc-stress-mood', '/api/jarvis/summary', 'Stress + Session'); }
+  constructor() { super('cc-stress-mood', '/api/jarvis/summary', 'Stress & Session');
+  }
   render(data) {
     if (data._warning) { this.body.innerHTML = `<div class="text-zinc-500 text-sm">${escapeHtml(data._warning)}</div>`; return; }
     const stress = data.stress_composite ?? 0;
@@ -107,11 +174,20 @@ class StressMoodPanel extends Panel {
     const killCls = kill === 'tripped' ? 'text-red-400' : kill === 'armed' ? 'text-amber-400' : 'text-emerald-400';
     this.body.innerHTML = `
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-zinc-500">stress</span>
+        <span class="text-xs text-zinc-500">Stress Composite</span>
         <span class="text-2xl font-mono">${formatPct(stress)}</span>
       </div>
-      <div class="text-xs text-zinc-500">session: <span class="text-zinc-100">${escapeHtml(phase)}</span></div>
-      <div class="text-xs text-zinc-500">kill-switch: <span class="${killCls}">${escapeHtml(kill)}</span></div>`;
+      <div class="w-full h-2 bg-zinc-800 rounded mb-2 overflow-hidden"><div class="h-full bg-cyan-500" style="width:${Math.min(100, Math.max(0, stress * 100))}%"></div></div>
+      <div class="text-xs text-zinc-500">Session Phase: <span class="text-zinc-100">${escapeHtml(phase)}</span></div>
+      <div class="text-xs text-zinc-500">Kill-Switch State: <span class="${killCls}">${escapeHtml(kill)}</span></div>`;
+    const stressAlerts = [];
+    if (Number(stress) >= 0.7) stressAlerts.push({ label: `Stress composite elevated (${formatPct(stress)})`, severity: 'high' });
+    else if (Number(stress) >= 0.5) stressAlerts.push({ label: `Stress composite watch (${formatPct(stress)})`, severity: 'medium' });
+    if (kill === 'armed') stressAlerts.push({ label: 'Kill switch armed', severity: 'medium' });
+    if (kill === 'tripped') stressAlerts.push({ label: 'Kill switch tripped', severity: 'high' });
+    if (stressAlerts.length) setAlertDock(stressAlerts);
+    const topStress = document.getElementById('top-stress');
+    if (topStress) topStress.innerHTML = `<span>stress</span><span class="${Number(stress) >= 0.7 ? 'text-red-400' : Number(stress) >= 0.5 ? 'text-amber-300' : 'text-emerald-400'}">${formatPct(stress)}</span>`;
   }
 }
 
@@ -120,34 +196,58 @@ class PolicyDiffPanel extends Panel {
   constructor() { super('cc-policy-diff', '/api/jarvis/policy_diff', 'Bandit Policy Diff'); }
   render(data) {
     if (data._warning) { this.body.innerHTML = `<div class="text-zinc-500 text-sm">${escapeHtml(data._warning)}</div>`; return; }
-    const arms = data.arms || {};
-    this.body.innerHTML = '<table class="text-xs w-full">' +
-      '<tr><th class="text-left">arm</th><th>verdict</th><th>cap</th></tr>' +
-      Object.entries(arms).map(([arm, v]) =>
-        `<tr><td>${escapeHtml(arm)}</td><td>${escapeHtml(v.verdict)}</td><td>${formatPct(v.size_cap_mult ?? 1)}</td></tr>`
-      ).join('') + '</table>';
+    const candidates = data.candidates || {};
+    const rows = Object.entries(candidates).map(([name, v]) => {
+      if (v.error) {
+        return `<tr><td>${escapeHtml(name)}</td><td colspan="3" class="text-red-400">Error: ${escapeHtml(v.error)}</td></tr>`;
+      }
+      return `<tr>
+        <td>${escapeHtml(name)}</td>
+        <td class="text-right">${v.n_records ?? '—'}</td>
+        <td class="text-right ${Number(v.avg_r || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}">${formatR(v.avg_r || 0)}</td>
+        <td class="text-right">${formatPct(v.win_rate || 0)}</td>
+      </tr>`;
+    }).join('');
+    this.body.innerHTML = `
+      <div class="text-xs text-zinc-500 mb-2">Window: ${data.window_days ?? '—'} days · Records: ${data.n_records ?? 0}</div>
+      <table class="text-xs w-full">
+        <tr class="text-zinc-500"><th class="text-left">Candidate</th><th class="text-right">N</th><th class="text-right">Avg R</th><th class="text-right">Win Rate</th></tr>
+        ${rows || '<tr><td colspan="4" class="text-zinc-500">No candidate deltas available yet.</td></tr>'}
+      </table>`;
   }
 }
 
 // --- 7. V22 toggle (operator-action panel) ---
 class V22TogglePanel extends Panel {
-  constructor() { super('cc-v22-toggle', '/api/jarvis/sage_modulation_toggle', 'V22 Sage Modulation'); }
+  constructor() { super('cc-v22-toggle', '/api/jarvis/sage_modulation_toggle', 'V22 Modulation'); }
   render(data) {
     const enabled = !!data.enabled;
     const cls = enabled ? 'bg-emerald-600' : 'bg-zinc-700';
     this.body.innerHTML = `
       <div class="flex items-center justify-between">
-        <span class="text-sm">${enabled ? 'ON' : 'OFF'}</span>
-        <button id="v22-toggle-btn" class="${cls} hover:opacity-80 px-3 py-1 rounded text-sm">flip</button>
+        <span class="text-sm font-medium">${enabled ? 'Enabled' : 'Disabled'}</span>
+        <button id="v22-toggle-btn" class="${cls} hover:opacity-80 px-3 py-1 rounded text-sm">${enabled ? 'Disable' : 'Enable'}</button>
       </div>
-      <div class="text-xs text-zinc-500 mt-2">flag: ${escapeHtml(data.flag_name || 'ETA_FF_V22_SAGE_MODULATION')}</div>`;
+      <div class="text-xs text-zinc-500 mt-2">Flag: ${escapeHtml(data.flag_name || 'ETA_FF_V22_SAGE_MODULATION')}</div>
+      <div class="text-xs text-zinc-500 mt-1">Controls whether School V22 can modulate execution confidence and size gates.</div>`;
     document.getElementById('v22-toggle-btn').addEventListener('click', async () => {
       try {
         const r = await authedPost('/api/jarvis/sage_modulation_toggle',
           { enabled: !enabled },
           { stepUpReason: 'Flipping V22 sage modulation. PIN required.' });
-        if (r && r.ok) this.refresh();
-      } catch (e) { console.error('v22 toggle failed', e); }
+        if (!r) return;
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          const code = body?.detail?.error_code || `http_${r.status}`;
+          notify(`V22 toggle failed (${code})`, 'error');
+          return;
+        }
+        notify(`V22 toggled ${!enabled ? 'ON' : 'OFF'}`, 'success');
+        this.refresh();
+      } catch (e) {
+        console.error('v22 toggle failed', e);
+        notify(`V22 toggle failed (${e.message})`, 'error');
+      }
     });
     // Also reflect on top bar
     const topEl = document.getElementById('top-v22-toggle');
@@ -177,9 +277,9 @@ class ModelTierPanel extends Panel {
     if (data._warning) { this.body.innerHTML = `<div class="text-zinc-500 text-sm">${escapeHtml(data._warning)}</div>`; return; }
     this.body.innerHTML = `
       <div class="text-2xl font-mono text-emerald-400">${escapeHtml(data.tier || '—')}</div>
-      <div class="text-xs text-zinc-500 mt-2">subsystem: ${escapeHtml(data.subsystem || '—')}</div>
-      <div class="text-xs text-zinc-500">category: ${escapeHtml(data.task_category || '—')}</div>
-      <div class="text-xs text-zinc-500">at: ${formatTime(data.ts)}</div>`;
+      <div class="text-xs text-zinc-500 mt-2">Subsystem: ${escapeHtml(data.subsystem || '—')}</div>
+      <div class="text-xs text-zinc-500">Task Category: ${escapeHtml(data.task_category || '—')}</div>
+      <div class="text-xs text-zinc-500">Last Selection: ${formatTime(data.ts)}</div>`;
   }
 }
 

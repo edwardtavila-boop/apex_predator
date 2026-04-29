@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 
 from eta_engine.data.library import (
+    DEFAULT_ROOTS,
     DataLibrary,
-    DatasetMeta,
     _parse_filename,
 )
-
+from eta_engine.scripts import workspace_roots
 
 # ---------------------------------------------------------------------------
 # Filename parsing
@@ -235,6 +235,19 @@ def test_summary_jarvis_payload_is_serialisable(fake_roots) -> None:  # type: ig
 def test_missing_root_does_not_crash(tmp_path: Path) -> None:
     lib = DataLibrary(roots=[tmp_path / "nonexistent"])
     assert lib.list() == []
+
+
+def test_default_roots_follow_workspace_helpers() -> None:
+    assert DEFAULT_ROOTS == (
+        workspace_roots.MNQ_DATA_ROOT,
+        workspace_roots.MNQ_HISTORY_ROOT,
+        workspace_roots.CRYPTO_DATA_ROOT,
+        workspace_roots.CRYPTO_HISTORY_ROOT,
+        workspace_roots.CRYPTO_ONCHAIN_ROOT,
+        workspace_roots.CRYPTO_SENTIMENT_ROOT,
+        workspace_roots.CRYPTO_MACRO_ROOT,
+        workspace_roots.CRYPTO_IBKR_HISTORY_ROOT,
+    )
 
 
 def test_empty_csv_skipped_not_crashed(tmp_path: Path) -> None:

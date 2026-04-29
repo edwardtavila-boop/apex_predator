@@ -36,7 +36,6 @@ class GannSchool(SchoolBase):
                 rationale=f"insufficient bars ({n} < 30)",
             )
         lows = ctx.lows()
-        highs = ctx.highs()
         last_close = float(ctx.bars[-1]["close"])
 
         # Find swing low + its index in the lookback window

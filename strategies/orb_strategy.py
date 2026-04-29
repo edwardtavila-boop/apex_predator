@@ -110,6 +110,12 @@ class ORBConfig:
     risk_per_trade_pct: float = 0.01  # 1% of equity per trade
     max_trades_per_day: int = 1  # one ORB trade per session by default
 
+    # Cross-asset filter — when enabled, ctx_builder must populate
+    # ``ctx["es_aligned"]`` (True/False). False blocks entry. The
+    # default OFF preserves backward compat; turn ON only when the
+    # runner is wiring ES bars into ctx.
+    require_es_aligned: bool = False
+
     # ── Cross-asset ES filter (opt-in) ──
     # When True, the strategy ALSO requires ES1 to be breaking out
     # of its own opening range in the same direction. Cross-asset
@@ -153,12 +159,22 @@ class ORBStrategy:
     so cross-window state stays clean.
     """
 
-    def __init__(self, config: ORBConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: ORBConfig | None = None,
+        *,
+        ctx_provider: Callable[[BarData, list[BarData]], dict[str, object]] | None = None,
+    ) -> None:
         self.cfg = config or ORBConfig()
         self._tz = ZoneInfo(self.cfg.timezone_name)
         self._day: _DayState | None = None
         self._ema: float | None = None
         self._ema_alpha = 2.0 / (self.cfg.ema_bias_period + 1) if self.cfg.ema_bias_period > 0 else 0.0
+        # Optional callable(bar, hist) -> dict — used when
+        # require_es_aligned=True to fetch ctx["es_aligned"]. None
+        # means the ES gate degrades to "always allow" regardless of
+        # the require flag.
+        self._ctx_provider = ctx_provider
         # ES-correlation filter: caller may attach a provider that maps a
         # MNQ/NQ bar -> the time-aligned ES bar (or None if ES has no bar
         # at that minute, e.g. ES holiday). Keeping the provider as a
@@ -292,6 +308,17 @@ class ORBStrategy:
             side = "SELL"
         if side is None:
             return None
+
+        # ES correlation filter (opt-in). Costs nothing when
+        # require_es_aligned=False; when True and ctx_provider is
+        # set, ctx["es_aligned"]=False blocks the entry.
+        if self.cfg.require_es_aligned and self._ctx_provider is not None:
+            try:
+                es_ctx = self._ctx_provider(bar, hist)
+            except Exception:  # noqa: BLE001 — never crash hot loop
+                es_ctx = {}
+            if not bool(es_ctx.get("es_aligned", True)):
+                return None
 
         # ── Cross-asset ES confirmation gate ──
         # Require ES1 to be breaking out of ITS opening range in the

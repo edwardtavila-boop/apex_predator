@@ -45,6 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT  # noqa: E402
 
 _API_URL = "https://api.alternative.me/fng/?limit=0&format=json"
 _USER_AGENT = (
@@ -119,7 +120,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--out", type=Path,
-        default=Path(r"C:\mnq_data\history\BTC_FEAR_GREED.csv"),
+        default=MNQ_HISTORY_ROOT / "BTC_FEAR_GREED.csv",
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()

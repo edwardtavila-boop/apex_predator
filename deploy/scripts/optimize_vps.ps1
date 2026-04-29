@@ -19,14 +19,20 @@ function Skip { param($m) Write-Host "[SKIP] $m" -ForegroundColor Yellow }
 function Warn { param($m) Write-Host "[WARN] $m" -ForegroundColor DarkYellow }
 function Die  { param($m) Write-Host "[FAIL] $m" -ForegroundColor Red }
 
+$workspaceRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+$installDir = Join-Path $workspaceRoot "eta_engine"
+$stateRoot = Join-Path $workspaceRoot "var\eta_engine"
+$logRoot = Join-Path $workspaceRoot "logs\eta_engine"
+
 # ----------------------------------------------------------------------------
 # #1 -- Windows Defender exclusions
 # ----------------------------------------------------------------------------
 Log "Step 1/4 -- Defender exclusions"
 $paths = @(
-    "C:\eta_engine",
-    "C:\EvolutionaryTradingAlgo\firm_command_center",
-    "$env:LOCALAPPDATA\eta_engine"
+    $installDir,
+    (Join-Path $workspaceRoot "firm_command_center"),
+    $stateRoot,
+    $logRoot
 )
 $processes = @("python.exe", "cloudflared.exe", "pwsh.exe")
 

@@ -5,7 +5,8 @@
 # opening up on home computer". This script:
 #
 #   1. Verifies prerequisites (git, gh, python, eta_engine repo present)
-#   2. Optionally renames C:\eta_engine\ -> C:\eta_engine\ (post-rebrand)
+#   2. Optionally migrates a legacy C:\eta_engine install into the canonical
+#      C:\EvolutionaryTradingAlgo\eta_engine workspace path
 #   3. Clones the 3 satellite repos (mnq_backtest, mnq_eta_bot, jarvis_identity)
 #   4. Registers the 16 operator-tooling scheduled tasks (hidden, idempotent)
 #   5. Optionally also registers the persona/fleet daemons via register_tasks.ps1
@@ -14,7 +15,7 @@
 # Usage on the VPS (as Administrator):
 #
 #     # First time:
-#     cd C:\eta_engine                     # (or wherever the repo lives)
+#     cd C:\EvolutionaryTradingAlgo\eta_engine
 #     git pull                              # get latest deploy/scripts/
 #     powershell -File deploy\scripts\vps_supercharge_bootstrap.ps1
 #
@@ -28,9 +29,9 @@
 #     powershell -File deploy\scripts\vps_supercharge_bootstrap.ps1 -DryRun
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = "C:\",
+    [string]$InstallRoot = "C:\EvolutionaryTradingAlgo",
     [string]$GitHubOwner = "edwardtavila-boop",
-    [string]$EtaEngineDir = "C:\eta_engine",
+    [string]$EtaEngineDir = "C:\EvolutionaryTradingAlgo\eta_engine",
     [switch]$SkipClone,
     [switch]$SkipTasks,
     [switch]$KeepDisabled,
@@ -70,19 +71,22 @@ foreach ($cmd in $prereqs.Keys) {
 if (-not (Test-Path $EtaEngineDir)) {
     Write-Host ""
     Write-Host "  WARN: $EtaEngineDir does not exist." -ForegroundColor Yellow
-    # Older deploys put it at C:\eta_engine\ -- offer to rename it.
-    if (Test-Path "C:\eta_engine") {
-        Write-Host "  Found C:\eta_engine -- looks like a pre-rebrand install."
+    $legacyEtaEngineDir = "C:\eta_engine"
+    # Older deploys put it at C:\eta_engine -- offer to move it into the
+    # canonical workspace root instead of keeping a parallel tree alive.
+    if (Test-Path $legacyEtaEngineDir) {
+        Write-Host "  Found $legacyEtaEngineDir -- looks like a pre-canonical install."
         if (-not $DryRun) {
-            $resp = Read-Host "  Rename C:\eta_engine -> C:\eta_engine ? [y/N]"
+            $resp = Read-Host "  Move $legacyEtaEngineDir -> $EtaEngineDir ? [y/N]"
             if ($resp -match '^[yY]') {
+                New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
                 # Stop any process holding files in the old location
                 Get-Process | Where-Object {
-                    try { $_.Path -and $_.Path.StartsWith("C:\eta_engine\") } catch { $false }
+                    try { $_.Path -and $_.Path.StartsWith("$legacyEtaEngineDir\") } catch { $false }
                 } | Stop-Process -Force -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 1
-                Rename-Item -LiteralPath "C:\eta_engine" -NewName "eta_engine" -Force
-                Write-Host "  RENAMED C:\eta_engine -> C:\eta_engine" -ForegroundColor Green
+                Move-Item -LiteralPath $legacyEtaEngineDir -Destination $EtaEngineDir -Force
+                Write-Host "  MOVED $legacyEtaEngineDir -> $EtaEngineDir" -ForegroundColor Green
             }
         }
     } else {

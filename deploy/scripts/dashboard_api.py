@@ -586,8 +586,63 @@ def jarvis_today_verdicts() -> dict:
 
 @app.get("/api/jarvis/health")
 def jarvis_router_health() -> dict:
-    """Liveness probe for the JARVIS-routes layer."""
-    return {"status": "ok", "router": "jarvis"}
+    """Liveness and authority probe for JARVIS/Sage/Quantum."""
+    issues = []
+    sage_snapshot = {}
+    try:
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        monitor = default_monitor()
+        issues = [issue.__dict__ for issue in monitor.check_health()]
+        sage_snapshot = monitor.snapshot()
+    except Exception as exc:  # noqa: BLE001
+        issues.append({
+            "school": "sage_health",
+            "neutral_rate": 0.0,
+            "n_consultations": 0,
+            "severity": "warn",
+            "detail": f"sage health monitor unavailable: {exc}",
+        })
+
+    quantum_jobs = []
+    for raw in read_jsonl_tail(_state_dir() / "quantum" / "jobs.jsonl", limit=25):
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            quantum_jobs.append(row)
+    quantum_last = quantum_jobs[0] if quantum_jobs else {}
+    quantum_fallbacks = sum(1 for row in quantum_jobs if row.get("fell_back_to_classical"))
+    quantum_cost = sum(float(row.get("cost_estimate_usd") or 0.0) for row in quantum_jobs)
+    try:
+        from eta_engine.brain.feature_flags import ETA_FLAGS
+        flags = ETA_FLAGS.snapshot()
+    except Exception:  # noqa: BLE001
+        flags = {}
+
+    return {
+        "status": "ok" if not any(i.get("severity") == "critical" for i in issues) else "degraded",
+        "router": "jarvis",
+        "policy_authority": "JARVIS",
+        "sage": {
+            "issues": issues,
+            "schools": sage_snapshot,
+            "n_schools_observed": len(sage_snapshot),
+        },
+        "issues": issues,
+        "quantum": {
+            "status": "idle" if not quantum_jobs else "observed",
+            "last_job": quantum_last,
+            "recent_jobs": len(quantum_jobs),
+            "recent_fallbacks": quantum_fallbacks,
+            "recent_cost_estimate_usd": round(quantum_cost, 4),
+        },
+        "flags": {
+            "ONLINE_LEARNING": flags.get("ONLINE_LEARNING", False),
+            "V22_SAGE_MODULATION": flags.get("V22_SAGE_MODULATION", False),
+            "BANDIT_LIVE_ROUTING": flags.get("BANDIT_LIVE_ROUTING", False),
+        },
+    }
 
 
 # ─── Sage explain (Wave-6 #3, 2026-04-27) ──────────────────────────
@@ -855,6 +910,27 @@ def _sup_bot_to_roster_row(sup: dict, now_ts: float) -> dict:
     }
 
 
+def _supervisor_roster_rows(now_ts: float, bot: str | None = None) -> list[dict]:
+    """Load live supervisor heartbeat rows in the same shape as /api/bot-fleet."""
+    try:
+        from eta_engine.scripts.jarvis_supervisor_bridge import (
+            jarvis_supervisor_bot_accounts,
+        )
+
+        sup_hb = _state_dir() / "jarvis_intel" / "supervisor" / "heartbeat.json"
+        sup_accounts = jarvis_supervisor_bot_accounts(heartbeat_path=sup_hb)
+    except Exception:
+        return []
+
+    rows = [_sup_bot_to_roster_row(s, now_ts) for s in sup_accounts]
+    if bot is not None:
+        rows = [
+            row for row in rows
+            if str(row.get("name") or row.get("id") or "") == bot
+        ]
+    return rows
+
+
 @app.get("/api/bot-fleet")
 def bot_fleet_roster(
     response: Response,
@@ -979,21 +1055,14 @@ def bot_fleet_roster(
     # The JARVIS strategy supervisor writes its 16-bot roster to the heartbeat.
     # Those bots never appear in state/bots/, so we merge them in here.
     # Supervisor rows win on name collision (they carry live session data).
-    try:
-        from eta_engine.scripts.jarvis_supervisor_bridge import (
-            jarvis_supervisor_bot_accounts,
-        )
-        sup_hb = _state_dir() / "jarvis_intel" / "supervisor" / "heartbeat.json"
-        sup_accounts = jarvis_supervisor_bot_accounts(heartbeat_path=sup_hb)
-        if sup_accounts:
-            sup_ids = {str(s.get("id") or "") for s in sup_accounts}
-            rows = [
-                r for r in rows
-                if str(r.get("name") or r.get("id") or "") not in sup_ids
-            ]
-            rows.extend(_sup_bot_to_roster_row(s, now_ts) for s in sup_accounts)
-    except Exception:
-        pass  # Never crash the roster because the supervisor is unavailable
+    sup_rows = _supervisor_roster_rows(now_ts, bot=bot)
+    if sup_rows:
+        sup_ids = {str(s.get("id") or "") for s in sup_rows}
+        rows = [
+            r for r in rows
+            if str(r.get("name") or r.get("id") or "") not in sup_ids
+        ]
+        rows.extend(sup_rows)
 
     confirmed_bots = sum(
         1 for r in rows
@@ -1142,6 +1211,67 @@ class SageModulationToggleRequest(BaseModel):
     enabled: bool
 
 
+def _supervisor_equity_payload(
+    *,
+    bot: str | None,
+    range_key: str,
+    range_label: str,
+    since_days: int,
+    normalize: bool,
+) -> dict | None:
+    """Build a truthful live equity payload from the JARVIS supervisor heartbeat."""
+    from datetime import UTC, datetime
+
+    now_ts = time.time()
+    rows = _supervisor_roster_rows(now_ts, bot=bot)
+    if not rows:
+        return None
+
+    total_pnl = 0.0
+    latest_ts = ""
+    for row in rows:
+        with contextlib.suppress(TypeError, ValueError):
+            total_pnl += float(row.get("todays_pnl") or 0.0)
+        row_ts = str(row.get("last_trade_ts") or "")
+        if row_ts > latest_ts:
+            latest_ts = row_ts
+
+    baseline = 5000.0 if bot is not None else float(max(1, len(rows)) * 5000)
+    current_equity = round(baseline + total_pnl, 2)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    point_ts = latest_ts or datetime.fromtimestamp(now_ts, UTC).isoformat()
+    series = [
+        {"ts": today_start.isoformat().replace("+00:00", "Z"), "equity": round(baseline, 2)},
+        {"ts": point_ts, "equity": current_equity},
+    ]
+    summary = {
+        "current_equity": current_equity,
+        "today_pnl": round(total_pnl, 2),
+        "week_pnl": round(total_pnl, 2),
+        "month_pnl": round(total_pnl, 2),
+        "total_pnl": round(total_pnl, 2),
+    }
+    truth = _truth_snapshot(rows, server_ts=now_ts)
+    return {
+        "bot_id": bot,
+        "range": range_label,
+        "series": series,
+        "curve": series,
+        "summary": summary,
+        "baseline_equity": baseline if normalize else None,
+        "server_ts": now_ts,
+        "data_ts": now_ts,
+        "source": "supervisor_heartbeat",
+        "since_days": since_days,
+        "live": _fills_activity_snapshot(bot=bot),
+        "session_cum_pnl": round(total_pnl, 2),
+        "session_truth_status": truth["truth_status"],
+        "session_truth_line": truth["truth_summary_line"],
+        range_key: series,
+        **truth,
+    }
+
+
 @app.get("/api/equity")
 def equity_curve(
     bot: str | None = None,
@@ -1180,6 +1310,16 @@ def equity_curve(
 
     data = read_json_safe(source)
     if "_warning" in data:
+        series_key = {"1d": "today", "1w": "week", "1m": "month", "all": "all_time"}[range]
+        supervisor_payload = _supervisor_equity_payload(
+            bot=bot,
+            range_key=series_key,
+            range_label=range,
+            since_days=since_days,
+            normalize=normalize,
+        )
+        if supervisor_payload is not None:
+            return supervisor_payload
         truth = _truth_snapshot([], server_ts=time.time())
         return {
             "bot_id": bot,

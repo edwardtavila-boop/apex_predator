@@ -17,7 +17,8 @@ Three new fetchers + three new providers, all free public sources:
 | Crypto Fear & Greed | alternative.me JSON API | 3,004 | working |
 | LTH-supply proxy | Mayer Multiple percentile from BTC daily | 1,236 | working |
 
-All three CSVs live in `C:\mnq_data\history\` following the
+All three CSVs live in the canonical ETA MNQ history root
+(`C:\EvolutionaryTradingAlgo\mnq_data\history\`) following the
 existing schema convention. Re-run the fetchers nightly to keep
 them current; the providers no-op gracefully when files are missing.
 

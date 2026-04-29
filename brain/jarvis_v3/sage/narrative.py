@@ -13,9 +13,10 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any
+from typing import TYPE_CHECKING
 
-from eta_engine.brain.jarvis_v3.sage.base import SageReport
+if TYPE_CHECKING:
+    from eta_engine.brain.jarvis_v3.sage.base import SageReport
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ _CACHE_LOCK = threading.Lock()
 def _template_narrative(report: SageReport, *, symbol: str = "") -> str:
     """Fallback deterministic narrative (no LLM call)."""
     aligned = report.schools_aligned_with_entry
-    disagree = report.schools_disagreeing_with_entry
     n = report.schools_consulted
 
     # Top 3 aligned + top disagreeing for color

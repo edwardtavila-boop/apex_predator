@@ -1,0 +1,836 @@
+// eta_engine/deploy/status_page/js/supercharge.js
+// V6 operator power tools (layout memory, macros, timeline) + UX memory.
+
+import { authedPost } from '/js/auth.js';
+import { liveStream, poller } from '/js/live.js';
+
+const THEME_KEY = 'eta.command_center.theme_mode';
+const PIN_KEY = 'eta.command_center.pinned_panels';
+const LAYOUT_KEY = 'eta.command_center.layout_v1';
+const HIDDEN_SURFACES_KEY = 'eta.command_center.hidden_surfaces_v1';
+const COLLAPSED_STACKS_KEY = 'eta.command_center.collapsed_stacks_v1';
+const MINIMAL_MODE_KEY = 'eta.command_center.minimal_mode';
+const SESSION_LOG_MAX = 400;
+const MACRO_COOLDOWN_MS = 20_000;
+let lastDangerMacroAt = 0;
+const sessionLog = [];
+
+function pushSessionLog(kind, detail) {
+  sessionLog.unshift({
+    ts: new Date().toISOString(),
+    kind,
+    detail,
+  });
+  if (sessionLog.length > SESSION_LOG_MAX) sessionLog.length = SESSION_LOG_MAX;
+}
+
+function applyTheme(theme) {
+  document.body.classList.remove('theme-neon', 'theme-stealth', 'theme-institutional');
+  document.body.classList.add(`theme-${theme}`);
+  const btn = document.getElementById('top-theme-toggle');
+  if (btn) btn.textContent = `theme: ${theme}`;
+}
+
+function initThemeToggle() {
+  const saved = localStorage.getItem(THEME_KEY) || 'neon';
+  applyTheme(saved);
+  const btn = document.getElementById('top-theme-toggle');
+  const themes = ['neon', 'stealth', 'institutional'];
+  btn?.addEventListener('click', () => {
+    const current = localStorage.getItem(THEME_KEY) || 'neon';
+    const idx = themes.indexOf(current);
+    const next = themes[(idx + 1) % themes.length];
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+}
+
+function initExport() {
+  const btn = document.getElementById('top-export-btn');
+  btn?.addEventListener('click', () => {
+    const panels = [...document.querySelectorAll('[data-panel-id]')].map((el) => ({
+      panelId: el.getAttribute('data-panel-id'),
+      hidden: el.classList.contains('surface-hidden') || el.classList.contains('hidden'),
+      stale: el.classList.contains('stale'),
+      error: el.classList.contains('error'),
+      lastRefreshAt: Number(el.dataset.lastRefreshAt || 0) || null,
+    }));
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      selection: {
+        tab: document.querySelector('.tab-btn[aria-selected="true"]')?.getAttribute('data-tab') || 'jarvis',
+      },
+      topBar: {
+        sse: document.getElementById('top-sse-status')?.textContent?.trim() || '',
+        freshness: document.getElementById('top-data-freshness')?.textContent?.trim() || '',
+        autopilot: document.getElementById('top-autopilot')?.textContent?.trim() || '',
+      },
+      panels,
+      sessionLog: sessionLog.slice(0, 220),
+      activeAlerts: document.getElementById('alert-dock-body')?.textContent?.trim() || '',
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `eta-operator-snapshot-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function initPinPanels() {
+  const bind = () => {
+    const saved = new Set(JSON.parse(localStorage.getItem(PIN_KEY) || '[]'));
+    document.querySelectorAll('[data-panel-id]').forEach((el) => {
+      const id = el.getAttribute('data-panel-id');
+      if (!id) return;
+      if (saved.has(id)) el.classList.add('pinned');
+      const title = el.querySelector('.panel-title');
+      if (!title || title.dataset.pinBound === '1') return;
+      title.dataset.pinBound = '1';
+      title.addEventListener('dblclick', () => {
+        el.classList.toggle('pinned');
+        const next = new Set(JSON.parse(localStorage.getItem(PIN_KEY) || '[]'));
+        if (el.classList.contains('pinned')) next.add(id);
+        else next.delete(id);
+        localStorage.setItem(PIN_KEY, JSON.stringify(Array.from(next)));
+      });
+    });
+  };
+  bind();
+  setTimeout(bind, 1200);
+}
+
+function saveLayout() {
+  const payload = {};
+  document.querySelectorAll('section[id^="view-"]').forEach((section) => {
+    const entries = [];
+    section.querySelectorAll('[data-panel-id]').forEach((panel) => {
+      const id = panel.getAttribute('data-panel-id');
+      const parent = panel.parentElement;
+      if (!id || !parent) return;
+      const parentId = parent.id || parent.className || 'root';
+      entries.push({ id, parentId });
+    });
+    payload[section.id] = entries;
+  });
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(payload));
+}
+
+function initDraggableLayouts() {
+  document.querySelectorAll('[data-panel-id]').forEach((panel) => {
+    panel.setAttribute('draggable', 'true');
+    panel.addEventListener('dragstart', (e) => {
+      panel.classList.add('dragging');
+      e.dataTransfer?.setData('text/panel-id', panel.getAttribute('data-panel-id') || '');
+    });
+    panel.addEventListener('dragend', () => {
+      panel.classList.remove('dragging');
+      saveLayout();
+    });
+  });
+  document.querySelectorAll('section[id^="view-"], section[id^="view-"] > div').forEach((container) => {
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const dragging = document.querySelector('.dragging');
+      if (!dragging || !container.contains(dragging.parentElement || null)) return;
+      const candidates = [...container.querySelectorAll(':scope > [data-panel-id]:not(.dragging)')];
+      const next = candidates.find((el) => {
+        const rect = el.getBoundingClientRect();
+        return e.clientY < rect.top + rect.height / 2;
+      });
+      if (next) container.insertBefore(dragging, next);
+      else container.appendChild(dragging);
+    });
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      saveLayout();
+    });
+  });
+}
+
+function restoreLayout() {
+  const raw = localStorage.getItem(LAYOUT_KEY);
+  if (!raw) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  Object.entries(parsed || {}).forEach(([sectionId, entries]) => {
+    if (!Array.isArray(entries)) return;
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    entries.forEach((entry) => {
+      const panel = section.querySelector(`[data-panel-id="${entry.id}"]`);
+      if (!panel) return;
+      const targetParent = [...section.querySelectorAll(':scope > div, :scope')]
+        .find((p) => (p.id || p.className || 'root') === entry.parentId);
+      if (targetParent) targetParent.appendChild(panel);
+    });
+  });
+}
+
+async function runMacro(action, opts = {}) {
+  if (action === 'flatten' || action === 'kill') {
+    const phrase = `${action} all`;
+    const typed = (prompt(`Type "${phrase}" to confirm`) || '').trim().toLowerCase();
+    if (typed !== phrase) return;
+    const now = Date.now();
+    if (now - lastDangerMacroAt < MACRO_COOLDOWN_MS) return;
+    lastDangerMacroAt = now;
+  }
+  const rosterResp = await fetch('/api/bot-fleet', { credentials: 'same-origin', cache: 'no-store' });
+  if (!rosterResp.ok) return;
+  const roster = await rosterResp.json();
+  const bots = Array.isArray(roster.bots) ? roster.bots : [];
+  if (!bots.length) return;
+  for (const bot of bots) {
+    const id = bot.name;
+    if (!id) continue;
+    try {
+      await authedPost(`/api/bot/${id}/${action}`, {}, opts);
+      pushSessionLog('macro', `${action}:${id}`);
+    } catch {
+      // Continue best-effort for fleet macros.
+    }
+  }
+}
+
+function initMacros() {
+  document.getElementById('macro-pause-all')?.addEventListener('click', () => runMacro('pause'));
+  document.getElementById('macro-resume-all')?.addEventListener('click', () => runMacro('resume'));
+  document.getElementById('macro-flatten-all')?.addEventListener('click', () => runMacro('flatten', { stepUpReason: 'Flatten all bots requires step-up.' }));
+  document.getElementById('macro-kill-all')?.addEventListener('click', () => runMacro('kill', { stepUpReason: 'Kill all bots requires step-up.' }));
+}
+
+function initSeverityTimeline() {
+  const host = document.getElementById('alert-severity-timeline');
+  if (!host) return;
+  const history = Array(24).fill('none');
+  const draw = () => {
+    host.innerHTML = history.map((level) => `<div class="severity-cell ${level === 'none' ? '' : level}"></div>`).join('');
+  };
+  const push = (level) => {
+    history.shift();
+    history.push(level);
+    draw();
+  };
+  draw();
+  window.addEventListener('eta-alerts-updated', (e) => {
+    const items = e.detail?.items || [];
+    let level = 'none';
+    if (items.some((x) => x.severity === 'high')) level = 'high';
+    else if (items.some((x) => x.severity === 'medium')) level = 'medium';
+    else if (items.some((x) => x.severity === 'low')) level = 'low';
+    push(level);
+  });
+  setInterval(() => push(history[history.length - 1] || 'none'), 30_000);
+}
+
+function initCommandPalette() {
+  const modal = document.getElementById('command-palette-modal');
+  const input = document.getElementById('command-palette-input');
+  const results = document.getElementById('command-palette-results');
+  const openBtn = document.getElementById('top-command-palette-btn');
+
+  const commands = [
+    { name: 'Toggle compact mode', run: () => document.getElementById('top-compact-toggle')?.click() },
+    { name: 'Toggle minimal mode', run: () => document.getElementById('top-minimal-toggle')?.click() },
+    { name: 'Cycle theme', run: () => document.getElementById('top-theme-toggle')?.click() },
+    { name: 'Export snapshot', run: () => document.getElementById('top-export-btn')?.click() },
+    { name: 'Go to JARVIS tab', run: () => document.querySelector('[data-tab="jarvis"]')?.click() },
+    { name: 'Go to Fleet tab', run: () => document.querySelector('[data-tab="fleet"]')?.click() },
+    { name: 'Logout', run: () => document.getElementById('top-logout')?.click() },
+  ];
+
+  const close = () => {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+  };
+  const open = () => {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    input?.focus();
+    render('');
+  };
+  const render = (query) => {
+    if (!results) return;
+    const q = query.trim().toLowerCase();
+    const list = commands.filter((c) => c.name.toLowerCase().includes(q));
+    results.innerHTML = list.map((c, idx) => `<button data-cmd-idx="${idx}">${c.name}</button>`).join('') || '<div class="text-zinc-500 p-2">No commands</div>';
+    results.querySelectorAll('button[data-cmd-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const item = list[Number(btn.dataset.cmdIdx)];
+        item?.run();
+        close();
+      });
+    });
+  };
+
+  openBtn?.addEventListener('click', open);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+  input?.addEventListener('input', () => render(input.value));
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      open();
+    }
+    if (e.key === 'Escape') close();
+  });
+}
+
+function ensureRestoreDock() {
+  let dock = document.getElementById('hidden-surfaces-dock');
+  if (dock) return dock;
+  dock = document.createElement('div');
+  dock.id = 'hidden-surfaces-dock';
+  dock.className = 'hidden-surfaces-dock';
+  document.body.appendChild(dock);
+  return dock;
+}
+
+function initHideableFloatingSurfaces() {
+  const selectors = ['#alert-dock', '#macro-tray', '#v6-rail'];
+  const hidden = new Set(JSON.parse(localStorage.getItem(HIDDEN_SURFACES_KEY) || '[]'));
+  const dock = ensureRestoreDock();
+
+  const persist = () => {
+    localStorage.setItem(HIDDEN_SURFACES_KEY, JSON.stringify(Array.from(hidden)));
+  };
+
+  const renderDock = () => {
+    const ids = Array.from(hidden);
+    if (!ids.length) {
+      dock.innerHTML = '';
+      dock.classList.add('hidden');
+      return;
+    }
+    dock.classList.remove('hidden');
+    dock.innerHTML = ids.map((id) => {
+      const label = id.replace(/^#/, '').replaceAll('-', ' ');
+      return `<button class="restore-surface-btn" data-restore-id="${id}">show ${label}</button>`;
+    }).join('');
+    dock.querySelectorAll('button[data-restore-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-restore-id');
+        const el = document.querySelector(id);
+        if (!el) return;
+        el.classList.remove('surface-hidden');
+        hidden.delete(id);
+        persist();
+        renderDock();
+      });
+    });
+  };
+
+  selectors.forEach((id) => {
+    const el = document.querySelector(id);
+    if (!el) return;
+    const title = el.querySelector('.panel-title');
+    if (title && !title.querySelector('[data-hide-surface]')) {
+      const hideBtn = document.createElement('button');
+      hideBtn.type = 'button';
+      hideBtn.className = 'surface-hide-btn';
+      hideBtn.setAttribute('data-hide-surface', id);
+      hideBtn.textContent = 'hide';
+      title.appendChild(hideBtn);
+      hideBtn.addEventListener('click', () => {
+        el.classList.add('surface-hidden');
+        hidden.add(id);
+        persist();
+        renderDock();
+      });
+    }
+    if (hidden.has(id)) el.classList.add('surface-hidden');
+  });
+
+  renderDock();
+}
+
+function initHideableStacks() {
+  const collapsed = new Set(JSON.parse(localStorage.getItem(COLLAPSED_STACKS_KEY) || '[]'));
+  const persist = () => {
+    localStorage.setItem(COLLAPSED_STACKS_KEY, JSON.stringify(Array.from(collapsed)));
+  };
+
+  document.querySelectorAll('section[id^="view-"]').forEach((section) => {
+    const sectionId = section.id;
+    const candidates = [...section.children].filter((el) => el.matches('div') && !el.hasAttribute('data-panel-id'));
+    candidates.forEach((stackEl, idx) => {
+      if (stackEl.dataset.stackReady === '1') return;
+      const stackId = `${sectionId}-stack-${idx + 1}`;
+      stackEl.dataset.stackReady = '1';
+      stackEl.dataset.stackId = stackId;
+      stackEl.classList.add('stack-shell');
+
+      const ctrl = document.createElement('div');
+      ctrl.className = 'stack-controls';
+      const label = document.createElement('span');
+      label.className = 'stack-label';
+      label.textContent = `stack ${idx + 1}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'stack-toggle-btn';
+      btn.textContent = 'hide stack';
+      ctrl.appendChild(label);
+      ctrl.appendChild(btn);
+
+      const body = document.createElement('div');
+      body.className = 'stack-body';
+      while (stackEl.firstChild) body.appendChild(stackEl.firstChild);
+      stackEl.appendChild(ctrl);
+      stackEl.appendChild(body);
+
+      const setCollapsed = (isCollapsed) => {
+        stackEl.classList.toggle('stack-collapsed', isCollapsed);
+        btn.textContent = isCollapsed ? 'show stack' : 'hide stack';
+        if (isCollapsed) collapsed.add(stackId);
+        else collapsed.delete(stackId);
+        persist();
+      };
+      btn.addEventListener('click', () => setCollapsed(!stackEl.classList.contains('stack-collapsed')));
+      if (collapsed.has(stackId)) setCollapsed(true);
+    });
+  });
+}
+
+function initMinimalMode() {
+  const btn = document.getElementById('top-minimal-toggle');
+  const apply = (enabled) => {
+    document.body.classList.toggle('minimal-mode', enabled);
+    if (btn) btn.textContent = `minimal: ${enabled ? 'on' : 'off'}`;
+  };
+  const saved = localStorage.getItem(MINIMAL_MODE_KEY) === '1';
+  apply(saved);
+  btn?.addEventListener('click', () => {
+    const next = !document.body.classList.contains('minimal-mode');
+    localStorage.setItem(MINIMAL_MODE_KEY, next ? '1' : '0');
+    apply(next);
+  });
+}
+
+function initDataFreshnessTelemetry() {
+  const chip = document.getElementById('top-data-freshness');
+  if (!chip) return;
+  const panelTouch = new Map();
+  const PANEL_STALE_MS = 15_000;
+  const PANEL_HARD_STALE_MS = 35_000;
+
+  const classify = () => {
+    const now = Date.now();
+    let stale = 0;
+    let hardStale = 0;
+    panelTouch.forEach((ts) => {
+      const age = now - ts;
+      if (age > PANEL_HARD_STALE_MS) hardStale += 1;
+      else if (age > PANEL_STALE_MS) stale += 1;
+    });
+    if (hardStale > 0) {
+      chip.textContent = `data: degraded (${hardStale} hard stale)`;
+      chip.classList.remove('text-emerald-300', 'text-amber-300');
+      chip.classList.add('text-red-300');
+      return;
+    }
+    if (stale > 0) {
+      chip.textContent = `data: warming (${stale} stale)`;
+      chip.classList.remove('text-emerald-300', 'text-red-300');
+      chip.classList.add('text-amber-300');
+      return;
+    }
+    chip.textContent = 'data: fresh';
+    chip.classList.remove('text-amber-300', 'text-red-300');
+    chip.classList.add('text-emerald-300');
+  };
+
+  window.addEventListener('eta-panel-refresh', (e) => {
+    const id = e.detail?.panelId;
+    const at = Number(e.detail?.at || Date.now());
+    if (!id) return;
+    panelTouch.set(id, at);
+    pushSessionLog('panel_refresh', `${id}:${Number(e.detail?.latencyMs || 0)}ms`);
+    classify();
+  });
+
+  window.addEventListener('eta-panel-error', () => classify());
+  setInterval(classify, 2000);
+}
+
+function initConsistencyGuardrails() {
+  let previousFillTs = 0;
+  setInterval(async () => {
+    try {
+      const [fillsResp, rosterResp] = await Promise.all([
+        fetch(`/api/live/fills?limit=30&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' }),
+        fetch('/api/bot-fleet', { credentials: 'same-origin', cache: 'no-store' }),
+      ]);
+      if (!fillsResp.ok || !rosterResp.ok) return;
+      const fillsBody = await fillsResp.json();
+      const rosterBody = await rosterResp.json();
+      const fills = Array.isArray(fillsBody.fills) ? fillsBody.fills : [];
+      const bots = new Set((Array.isArray(rosterBody.bots) ? rosterBody.bots : []).map((b) => String(b.name)));
+      const latestTs = fills.length ? new Date(fills[0].ts || 0).getTime() : 0;
+      const unknownBots = fills.filter((f) => !bots.has(String(f.bot || ''))).length;
+      if (latestTs && previousFillTs && latestTs < previousFillTs) {
+        window.dispatchEvent(new CustomEvent('eta-remediation', { detail: { reason: 'fill timestamp rollback' } }));
+      }
+      if (unknownBots > 0) {
+        window.dispatchEvent(new CustomEvent('eta-remediation', { detail: { reason: `unknown fill bots:${unknownBots}` } }));
+      }
+      previousFillTs = Math.max(previousFillTs, latestTs || 0);
+      pushSessionLog('consistency', `fills:${fills.length} unknown:${unknownBots}`);
+    } catch {
+      // ignore transient consistency check failures
+    }
+  }, 9000);
+}
+
+function initLatencyBudgetGuardrails() {
+  const budgets = {
+    '/api/live/': 800,
+    '/api/equity': 1300,
+    '/api/bot-fleet': 1100,
+    '/api/jarvis': 1500,
+    default: 1200,
+  };
+  const counters = {};
+  window.addEventListener('eta-panel-refresh', (e) => {
+    const endpoint = String(e.detail?.endpoint || '');
+    const latency = Number(e.detail?.latencyMs || 0);
+    const budget = endpoint.includes('/api/live/') ? budgets['/api/live/']
+      : endpoint.includes('/api/equity') ? budgets['/api/equity']
+      : endpoint.includes('/api/bot-fleet') ? budgets['/api/bot-fleet']
+      : endpoint.includes('/api/jarvis') ? budgets['/api/jarvis']
+      : budgets.default;
+    const key = endpoint || 'unknown';
+    if (!counters[key]) counters[key] = 0;
+    if (latency > budget) {
+      counters[key] += 1;
+      pushSessionLog('latency_breach', `${key}:${latency}>${budget}`);
+      if (counters[key] >= 3) {
+        window.dispatchEvent(new CustomEvent('eta-remediation', { detail: { reason: `latency breach ${key}` } }));
+        counters[key] = 0;
+      }
+    } else {
+      counters[key] = 0;
+    }
+  });
+}
+
+function initTradeRefreshFanout() {
+  const REFRESH_IDS = new Set([
+    'fl-roster',
+    'fl-drilldown',
+    'fl-equity-curve',
+    'fl-fill-quality',
+    'fl-performance-os',
+    'fl-risk-sim',
+    'fl-risk-ladder',
+    'fl-health-badges',
+  ]);
+  let timer = null;
+  const run = () => {
+    timer = null;
+    poller.panels
+      .filter((p) => REFRESH_IDS.has(p.containerId))
+      .forEach((p) => p.refresh().catch(() => undefined));
+  };
+  window.addEventListener('eta-trade-update', () => {
+    if (timer) return;
+    timer = setTimeout(run, 350);
+  });
+}
+
+function initAutopilotWatchdog() {
+  const chip = document.getElementById('top-autopilot');
+  let lastHealAt = 0;
+  const HEAL_COOLDOWN_MS = 10_000;
+  const STREAM_STALE_MS = 25_000;
+
+  const setChip = (label, tone) => {
+    if (!chip) return;
+    chip.textContent = label;
+    chip.classList.remove('text-cyan-300', 'text-amber-300', 'text-red-300', 'text-emerald-300');
+    chip.classList.add(tone);
+  };
+
+  const heal = (reason) => {
+    const now = Date.now();
+    if (now - lastHealAt < HEAL_COOLDOWN_MS) return;
+    lastHealAt = now;
+    setChip(`autopilot: healing (${reason})`, 'text-amber-300');
+    try {
+      liveStream.connect();
+      poller._tick();
+    } catch {
+      setChip('autopilot: degraded', 'text-red-300');
+    }
+  };
+
+  window.addEventListener('online', () => {
+    setChip('autopilot: online', 'text-emerald-300');
+    heal('network');
+  });
+  window.addEventListener('offline', () => setChip('autopilot: offline', 'text-red-300'));
+
+  setInterval(() => {
+    if (!navigator.onLine) {
+      setChip('autopilot: offline', 'text-red-300');
+      return;
+    }
+    const now = Date.now();
+    if (!liveStream.connected) {
+      heal('disconnect');
+      return;
+    }
+    if (liveStream.lastEventAt && (now - liveStream.lastEventAt) > STREAM_STALE_MS) {
+      heal('stale stream');
+      return;
+    }
+    setChip('autopilot: armed', 'text-cyan-300');
+  }, 4000);
+}
+
+function ensureIncidentTimeline() {
+  let el = document.getElementById('incident-timeline');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'incident-timeline';
+  el.className = 'incident-timeline hidden';
+  el.innerHTML = '<div class="incident-title">Incident Timeline</div><div class="incident-body" id="incident-timeline-body"></div>';
+  document.body.appendChild(el);
+  return el;
+}
+
+function initIncidentTimelineMode() {
+  const btn = document.getElementById('top-timeline-btn');
+  const root = ensureIncidentTimeline();
+  const body = root.querySelector('#incident-timeline-body');
+  const events = [];
+  const push = (line, tone = 'info') => {
+    events.unshift({ ts: Date.now(), line, tone });
+    if (events.length > 80) events.length = 80;
+    if (!body) return;
+    body.innerHTML = events.slice(0, 28).map((ev) => {
+      const age = Math.max(0, Math.floor((Date.now() - ev.ts) / 1000));
+      return `<div class="incident-row ${ev.tone}"><span>${age}s</span><span>${ev.line}</span></div>`;
+    }).join('');
+  };
+  const toggle = () => root.classList.toggle('hidden');
+  btn?.addEventListener('click', toggle);
+  window.addEventListener('eta-trade-update', (e) => {
+    const bot = e.detail?.fill?.bot || 'bot';
+    const side = e.detail?.fill?.side || '?';
+    push(`fill ${bot} ${String(side).toUpperCase()}`, 'ok');
+  });
+  window.addEventListener('eta-panel-error', (e) => {
+    push(`panel error ${e.detail?.panelId || 'unknown'}`, 'bad');
+  });
+  window.addEventListener('eta-panel-refresh', (e) => {
+    const p = e.detail?.panelId || 'panel';
+    const ms = Number(e.detail?.latencyMs || 0);
+    if (ms >= 1200) push(`slow refresh ${p} ${ms}ms`, 'warn');
+  });
+  window.addEventListener('eta-remediation', (e) => {
+    push(`self-heal ${e.detail?.reason || 'action'}`, 'warn');
+  });
+}
+
+function initWorkspacePresets() {
+  const btn = document.getElementById('top-workspace-btn');
+  const modes = ['balanced', 'execution', 'risk', 'research'];
+  const apply = (mode) => {
+    document.body.classList.remove('ws-balanced', 'ws-execution', 'ws-risk', 'ws-research');
+    document.body.classList.add(`ws-${mode}`);
+    if (btn) btn.textContent = `workspace: ${mode}`;
+  };
+  const saved = localStorage.getItem(WORKSPACE_KEY) || 'balanced';
+  apply(saved);
+  btn?.addEventListener('click', () => {
+    const current = localStorage.getItem(WORKSPACE_KEY) || 'balanced';
+    const next = modes[(modes.indexOf(current) + 1) % modes.length];
+    localStorage.setItem(WORKSPACE_KEY, next);
+    apply(next);
+  });
+}
+
+function initPresentationMode() {
+  const btn = document.getElementById('top-presentation-btn');
+  const apply = (enabled) => {
+    document.body.classList.toggle('presentation-mode', enabled);
+    if (btn) btn.textContent = `presentation: ${enabled ? 'on' : 'off'}`;
+  };
+  const saved = localStorage.getItem(PRESENTATION_KEY) === '1';
+  apply(saved);
+  btn?.addEventListener('click', () => {
+    const next = !document.body.classList.contains('presentation-mode');
+    localStorage.setItem(PRESENTATION_KEY, next ? '1' : '0');
+    apply(next);
+  });
+}
+
+function initAutoRemediationPlaybooks() {
+  const panelErrorCounts = new Map();
+  const mark = (reason) => window.dispatchEvent(new CustomEvent('eta-remediation', { detail: { reason } }));
+
+  window.addEventListener('eta-panel-error', (e) => {
+    const id = String(e.detail?.panelId || '');
+    if (!id) return;
+    panelErrorCounts.set(id, (panelErrorCounts.get(id) || 0) + 1);
+    if ((panelErrorCounts.get(id) || 0) >= 2) {
+      const p = poller.panels.find((x) => x.containerId === id);
+      p?.refresh().catch(() => undefined);
+      mark(`retry ${id}`);
+      panelErrorCounts.set(id, 0);
+    }
+  });
+
+  setInterval(() => {
+    const now = Date.now();
+    poller.panels.forEach((p) => {
+      const last = Number(p.element?.dataset?.lastRefreshAt || 0);
+      if (!last) return;
+      const age = now - last;
+      if (age > 40_000) {
+        p.refresh().catch(() => undefined);
+        mark(`stale refresh ${p.containerId}`);
+      }
+    });
+    if (liveStream.connected && liveStream.lastEventAt && now - liveStream.lastEventAt > 30_000) {
+      liveStream.connect();
+      poller._tick();
+      mark('stream rebind');
+    }
+  }, 7000);
+}
+
+function initUpdateAuditStrip() {
+  const host = document.getElementById('update-audit-strip');
+  if (!host) return;
+  const events = [];
+  const render = () => {
+    host.innerHTML = events.slice(-8).map((ev) =>
+      `<div class="audit-chip">${ev.panel} · ${ev.latency}ms · ${ev.age}s</div>`,
+    ).join('');
+  };
+  window.addEventListener('eta-panel-refresh', (e) => {
+    const panel = String(e.detail?.panelId || 'panel');
+    const at = Number(e.detail?.at || Date.now());
+    const latency = Number(e.detail?.latencyMs || 0);
+    events.push({ panel, at, latency, age: 0 });
+    if (events.length > 80) events.splice(0, events.length - 80);
+    render();
+  });
+  setInterval(() => {
+    const now = Date.now();
+    events.forEach((ev) => { ev.age = Math.max(0, Math.floor((now - ev.at) / 1000)); });
+    render();
+  }, 1000);
+}
+
+function initPerformanceAutopilot() {
+  const key = 'eta.command_center.perf_mode';
+  const pref = localStorage.getItem(key);
+  if (pref === 'low') {
+    document.body.classList.add('perf-low');
+    return;
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.body.classList.add('perf-low');
+    localStorage.setItem(key, 'low');
+    return;
+  }
+  let frames = 0;
+  let last = performance.now();
+  const tick = (ts) => {
+    frames += 1;
+    if (ts - last >= 2000) {
+      const fps = (frames * 1000) / (ts - last);
+      if (fps < 28) {
+        document.body.classList.add('perf-low');
+        localStorage.setItem(key, 'low');
+        return;
+      }
+      frames = 0;
+      last = ts;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function initMobileCommandSheet() {
+  if (window.matchMedia && !window.matchMedia('(max-width: 1024px)').matches) return;
+  const sheet = document.createElement('div');
+  sheet.id = 'mobile-command-sheet';
+  sheet.className = 'mobile-sheet hidden';
+  sheet.innerHTML = `
+    <div class="mobile-sheet-backdrop" data-close-sheet="1"></div>
+    <div class="mobile-sheet-card">
+      <div class="mobile-sheet-head">
+        <span>Operator Actions</span>
+        <button type="button" id="mobile-sheet-close">close</button>
+      </div>
+      <div class="mobile-sheet-body">
+        <button data-macro="pause">Pause All</button>
+        <button data-macro="resume">Resume All</button>
+        <button data-macro="flatten">Flatten All</button>
+        <button data-macro="kill">Kill All</button>
+      </div>
+    </div>`;
+  const fab = document.createElement('button');
+  fab.id = 'mobile-command-fab';
+  fab.className = 'mobile-command-fab';
+  fab.textContent = 'ops';
+  document.body.appendChild(sheet);
+  document.body.appendChild(fab);
+  const open = () => sheet.classList.remove('hidden');
+  const close = () => sheet.classList.add('hidden');
+  fab.addEventListener('click', open);
+  sheet.querySelector('[data-close-sheet="1"]')?.addEventListener('click', close);
+  sheet.querySelector('#mobile-sheet-close')?.addEventListener('click', close);
+  sheet.querySelectorAll('[data-macro]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const act = btn.getAttribute('data-macro');
+      if (!act) return;
+      if (act === 'flatten') await runMacro('flatten', { stepUpReason: 'Flatten all bots requires step-up.' });
+      else if (act === 'kill') await runMacro('kill', { stepUpReason: 'Kill all bots requires step-up.' });
+      else await runMacro(act);
+      close();
+    });
+  });
+}
+
+function boot() {
+  initPerformanceAutopilot();
+  initThemeToggle();
+  initExport();
+  initPinPanels();
+  initCommandPalette();
+  restoreLayout();
+  initDraggableLayouts();
+  initMacros();
+  initSeverityTimeline();
+  initHideableFloatingSurfaces();
+  initMinimalMode();
+  initDataFreshnessTelemetry();
+  initConsistencyGuardrails();
+  initLatencyBudgetGuardrails();
+  initTradeRefreshFanout();
+  initAutopilotWatchdog();
+  initUpdateAuditStrip();
+  initMobileCommandSheet();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

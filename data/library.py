@@ -18,6 +18,8 @@ Two on-disk shapes are handled transparently:
   Files: ``mnq_data\\mnq_*.csv`` under the workspace root.
 * **"history"** — header ``time, open, high, low, close, volume`` where
   ``time`` is epoch seconds (UTC). Files: ``mnq_data\\history\\<SYMBOL>1_<TF>.csv``.
+  The same first-column shape is also used by supporting one-value series such
+  as funding, ETF flows, on-chain proxies, and macro sentiment.
 
 Exposed API
 -----------
@@ -82,10 +84,23 @@ DEFAULT_ROOTS: tuple[Path, ...] = (
 # ---------------------------------------------------------------------------
 
 # History shape: SYMBOL_<TF>.csv where TF is one of 1s/1m/5m/15m/1h/4h/D/W
-# Examples: MNQ1_5m.csv, NQ1_4h.csv, MNQ1_D.csv
+# Examples: MNQ1_5m.csv, NQ1_4h.csv, MNQ1_D.csv, FEAR_GREEDMACRO_D.csv
 _HISTORY_RE = re.compile(
-    r"^(?P<symbol>[A-Z]+\d?)_(?P<tf>\d+(?:s|m|h)|D|W)\.csv$"
+    r"^(?P<symbol>[A-Z][A-Z0-9_]*)_(?P<tf>\d+(?:s|m|h)|D|W)\.csv$"
 )
+
+_ETF_FLOW_RE = re.compile(
+    r"^(?P<symbol>[A-Z]+)_ETF_FLOWS\.CSV$"
+)
+
+_SPECIAL_HISTORY_FILES: dict[str, tuple[str, str, str]] = {
+    # BTC long-term-holder proxy is our canonical on-chain stand-in until a
+    # paid Glassnode/CoinMetrics feed is wired. Surface it through the same
+    # BTCONCHAIN/D handle the audit layer expects.
+    "BTC_LTH_PROXY.CSV": ("BTCONCHAIN", "D", "history"),
+    # Fear & Greed is a macro/sentiment overlay rather than a BTC bar series.
+    "BTC_FEAR_GREED.CSV": ("FEAR_GREEDMACRO", "D", "history"),
+}
 
 # Main shape: mnq_<TICKER>_<DIGITS>.csv where DIGITS is 1 or 5 (minutes)
 # OR: mnq_<TF>.csv where TF in {1s, 1m, 5m}
@@ -105,6 +120,12 @@ _MAIN_MIN_TO_TF = {"1": "1m", "5": "5m"}
 def _parse_filename(p: Path) -> tuple[str, str, str] | None:
     """Return (symbol, timeframe, schema_kind) or None if not recognised."""
     name = p.name
+    special = _SPECIAL_HISTORY_FILES.get(name.upper())
+    if special is not None:
+        return special
+    m = _ETF_FLOW_RE.match(name.upper())
+    if m:
+        return f"{m.group('symbol')}ETFLOWS", "D", "history"
     m = _HISTORY_RE.match(name)
     if m:
         return m.group("symbol").upper(), m.group("tf"), "history"

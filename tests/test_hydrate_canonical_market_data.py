@@ -10,6 +10,7 @@ from eta_engine.scripts.hydrate_canonical_market_data import (
     _canonical_history_name_from_databento,
     _canonical_history_name_from_main,
     _convert_main_to_history,
+    _resample_rows,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +53,20 @@ def test_convert_main_to_history_rewrites_schema(tmp_path: Path) -> None:
     assert materialized[1]["close"] == "101.5"
 
 
+def test_convert_main_to_history_skips_empty_target(tmp_path: Path) -> None:
+    source = tmp_path / "empty.csv"
+    target = tmp_path / "history" / "MNQ1_5m.csv"
+    source.write_text(
+        "timestamp_utc,epoch_s,open,high,low,close,volume,session\n",
+        encoding="utf-8",
+    )
+
+    rows = _convert_main_to_history(source, target)
+
+    assert rows == 0
+    assert not target.exists()
+
+
 def test_import_futures_dry_run_does_not_write_target(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "source.csv"
     target = tmp_path / "history" / "MNQ1_5m.csv"
@@ -66,13 +81,37 @@ def test_import_futures_dry_run_does_not_write_target(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(hydrate, "MNQ_HISTORY_ROOT", tmp_path / "unused")
     monkeypatch.setattr(hydrate, "ensure_dir", lambda path: path)
-    monkeypatch.setattr(hydrate, "_collect_futures_candidates", lambda: {target: candidate})
+    monkeypatch.setattr(
+        hydrate,
+        "_collect_futures_candidates",
+        lambda *, max_legacy_files=200: {target: candidate},
+    )
     monkeypatch.setattr(hydrate, "_probe_rows", lambda path, source_kind: 0)
 
     imported, skipped = hydrate._import_futures(dry_run=True)
 
     assert (imported, skipped) == (0, 1)
     assert not target.exists()
+
+
+def test_collect_futures_candidates_respects_legacy_probe_limit(tmp_path: Path, monkeypatch) -> None:
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    for name in ("mnq1_5m.csv", "nq_1m.csv", "es_5m.csv"):
+        (legacy_root / name).write_text("time,open,high,low,close,volume\n1,1,1,1,1,1\n", encoding="utf-8")
+
+    monkeypatch.setattr(hydrate, "MNQ_HISTORY_ROOT", tmp_path / "history")
+    monkeypatch.setattr(hydrate, "MNQ_DATA_ROOT", tmp_path / "canonical")
+    monkeypatch.setattr(hydrate, "_iter_legacy_databento_dirs", lambda: [legacy_root])
+    monkeypatch.setattr(hydrate, "_probe_rows", lambda path, source_kind: 1)
+
+    candidates = hydrate._collect_futures_candidates(max_legacy_files=2)
+
+    assert len(candidates) == 2
+
+    candidates = hydrate._collect_futures_candidates(max_legacy_files=0)
+
+    assert len(candidates) == 3
 
 
 def test_crypto_price_dry_run_does_not_fetch(monkeypatch, tmp_path: Path) -> None:
@@ -88,3 +127,26 @@ def test_crypto_price_dry_run_does_not_fetch(monkeypatch, tmp_path: Path) -> Non
     written, skipped = hydrate._fetch_crypto_prices(dry_run=True)
 
     assert (written, skipped) == (0, 1)
+
+
+def test_resample_rows_aggregates_to_hourly() -> None:
+    rows = [
+        {"time": 1735689600, "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5, "volume": 10.0},
+        {"time": 1735691400, "open": 1.5, "high": 2.5, "low": 1.0, "close": 2.0, "volume": 20.0},
+    ]
+
+    out = _resample_rows(rows, "1h")
+
+    assert len(out) == 1
+    assert out[0]["open"] == 1.0
+    assert out[0]["high"] == 2.5
+    assert out[0]["low"] == 0.5
+    assert out[0]["close"] == 2.0
+    assert out[0]["volume"] == 30.0
+
+
+def test_crypto_bar_plan_backfills_missing_intraday_feeds() -> None:
+    plan = {(item.symbol, item.timeframe) for item in hydrate._CRYPTO_BAR_PLAN}
+    assert ("BTC", "1m") in plan
+    assert ("BTC", "5m") in plan
+    assert ("SOL", "5m") in plan

@@ -137,10 +137,20 @@ def test_audit_all_returns_one_per_bot() -> None:
     assert {a.bot_id for a in out} == {r.bot_id for r in REQUIREMENTS}
 
 
+def test_deactivated_bot_is_not_reported_as_data_blocked(tmp_path: Path) -> None:
+    lib = DataLibrary(roots=[tmp_path / "empty"])
+    a = audit_bot("xrp_perp", library=lib)
+    assert a is not None
+    assert a.deactivated is True
+    assert a.is_runnable is True
+    assert not a.missing_critical
+
+
 def test_summary_markdown_lists_runnable_and_blocked() -> None:
     md = summary_markdown(audit_all())
     assert "Runnable:" in md
     assert "Blocked:" in md
+    assert "Deactivated:" in md
     assert "mnq_futures" in md
 
 

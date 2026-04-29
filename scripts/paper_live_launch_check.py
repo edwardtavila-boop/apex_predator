@@ -140,6 +140,20 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
     """
     issues: list[str] = []
     warnings: list[str] = []
+    extras = assignment.extras or {}
+
+    if bool(extras.get("deactivated")):
+        return {
+            "bot_id": assignment.bot_id,
+            "strategy_id": assignment.strategy_id,
+            "strategy_kind": assignment.strategy_kind,
+            "symbol": assignment.symbol,
+            "timeframe": assignment.timeframe,
+            "promotion_status": "deactivated",
+            "status": "READY",
+            "issues": [],
+            "warnings": [],
+        }
 
     # 1. Strategy kind resolvable
     if assignment.strategy_kind not in _RESOLVABLE_KINDS:
@@ -156,10 +170,7 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
         issues.append(f"no bot directory for {assignment.bot_id}")
 
     # 4. Promotion-status check (research_candidate is its own warning)
-    promo_status = (
-        assignment.extras.get("promotion_status")
-        if assignment.extras else None
-    )
+    promo_status = extras.get("promotion_status")
     if promo_status == "research_candidate":
         warnings.append("research_candidate (gate not fully passed)")
     elif promo_status == "deactivated":
@@ -187,7 +198,7 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
         assignment.bot_id, assignment.strategy_id,
     )
     has_warmup_override = bool(
-        assignment.extras and assignment.extras.get("warmup_policy"),
+        extras.get("warmup_policy"),
     )
     if not has_baseline:
         warnings.append("baseline not in strategy_baselines.json")

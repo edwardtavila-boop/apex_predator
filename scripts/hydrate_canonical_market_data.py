@@ -38,6 +38,8 @@ import argparse
 import csv
 import shutil
 import sys
+from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from glob import glob
@@ -64,6 +66,7 @@ from eta_engine.scripts.workspace_roots import (  # noqa: E402
     MNQ_DATA_ROOT,
     MNQ_HISTORY_ROOT,
     ensure_dir,
+    ensure_parent,
 )
 
 _CONTINUOUS_FUTURES = frozenset({"MNQ", "NQ", "ES", "MES", "RTY"})
@@ -87,16 +90,24 @@ class CryptoPlan:
 
 
 _CRYPTO_BAR_PLAN: tuple[CryptoPlan, ...] = (
+    CryptoPlan("BTC", "1m", 6),
+    CryptoPlan("BTC", "5m", 24),
     CryptoPlan("BTC", "1h", 24),
     CryptoPlan("BTC", "D", 60),
     CryptoPlan("ETH", "5m", 6),
     CryptoPlan("ETH", "1h", 24),
     CryptoPlan("ETH", "D", 60),
+    CryptoPlan("SOL", "5m", 12),
     CryptoPlan("SOL", "1h", 24),
     CryptoPlan("SOL", "D", 24),
 )
 
 _CRYPTO_FUNDING_SYMBOLS: tuple[str, ...] = ("BTC", "ETH", "SOL")
+
+_FUTURES_RESAMPLE_PLAN: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("MNQ1", "1h", ("1m", "5m")),
+    ("MNQ1", "4h", ("1h", "1m", "5m")),
+)
 
 
 def _normalize_symbol(raw: str) -> str:
@@ -171,11 +182,16 @@ def _iter_legacy_databento_dirs() -> list[Path]:
     return [p for p in out if p.exists() and p.is_dir()]
 
 
-def _collect_futures_candidates() -> dict[Path, ImportCandidate]:
+def _collect_futures_candidates(*, max_legacy_files: int | None = 200) -> dict[Path, ImportCandidate]:
     best: dict[Path, ImportCandidate] = {}
+    legacy_seen = 0
+    legacy_limit = None if max_legacy_files is None or max_legacy_files <= 0 else max_legacy_files
 
     for root in _iter_legacy_databento_dirs():
         for source in sorted(root.glob("*.csv")):
+            if legacy_limit is not None and legacy_seen >= legacy_limit:
+                break
+            legacy_seen += 1
             target_name = _canonical_history_name_from_databento(source.name)
             if target_name is None:
                 continue
@@ -196,6 +212,8 @@ def _collect_futures_candidates() -> dict[Path, ImportCandidate]:
                 current.source.stat().st_mtime,
             ):
                 best[target] = candidate
+        if legacy_limit is not None and legacy_seen >= legacy_limit:
+            break
 
     for source in sorted(MNQ_DATA_ROOT.glob("*.csv")):
         target_name = _canonical_history_name_from_main(source.name)
@@ -259,15 +277,105 @@ def _convert_main_to_history(source: Path, target: Path) -> int:
             except (KeyError, ValueError):
                 continue
             rows += 1
+    if rows <= 0:
+        with suppress(OSError):
+            tmp.unlink()
+        return 0
     tmp.replace(target)
     return rows
 
 
-def _import_futures(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
+def _read_history_ohlcv(path: Path) -> list[dict[str, float]]:
+    if not path.exists():
+        return []
+    out: list[dict[str, float]] = []
+    with path.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            try:
+                out.append({
+                    "time": int(float(row["time"])),
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": float(row.get("volume", 0.0) or 0.0),
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
+    out.sort(key=lambda row: row["time"])
+    return out
+
+
+def _bucket_time(ts: int, timeframe: str) -> int:
+    dt = datetime.fromtimestamp(ts, UTC)
+    if timeframe == "1h":
+        bucket = dt.replace(minute=0, second=0, microsecond=0)
+    elif timeframe == "4h":
+        bucket = dt.replace(
+            hour=(dt.hour // 4) * 4,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+    elif timeframe == "D":
+        bucket = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif timeframe == "W":
+        bucket = dt.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=dt.weekday())
+    else:
+        raise ValueError(f"unsupported resample timeframe: {timeframe}")
+    return int(bucket.timestamp())
+
+
+def _resample_rows(rows: list[dict[str, float]], timeframe: str) -> list[dict[str, float]]:
+    if not rows:
+        return []
+    buckets: dict[int, list[dict[str, float]]] = defaultdict(list)
+    for row in rows:
+        buckets[_bucket_time(int(row["time"]), timeframe)].append(row)
+    out: list[dict[str, float]] = []
+    for bucket_ts in sorted(buckets):
+        bucket_rows = sorted(buckets[bucket_ts], key=lambda row: row["time"])
+        out.append({
+            "time": bucket_ts,
+            "open": bucket_rows[0]["open"],
+            "high": max(row["high"] for row in bucket_rows),
+            "low": min(row["low"] for row in bucket_rows),
+            "close": bucket_rows[-1]["close"],
+            "volume": sum(row["volume"] for row in bucket_rows),
+        })
+    return out
+
+
+def _write_history_rows(path: Path, rows: list[dict[str, float]]) -> int:
+    if not rows:
+        return 0
+    ensure_parent(path)
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["time", "open", "high", "low", "close", "volume"])
+        for row in rows:
+            writer.writerow([
+                int(row["time"]),
+                row["open"],
+                row["high"],
+                row["low"],
+                row["close"],
+                row["volume"],
+            ])
+    return len(rows)
+
+
+def _import_futures(
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+    max_legacy_files: int | None = 200,
+) -> tuple[int, int]:
     ensure_dir(MNQ_HISTORY_ROOT)
     imported = 0
     skipped = 0
-    for target, candidate in sorted(_collect_futures_candidates().items()):
+    for target, candidate in sorted(_collect_futures_candidates(max_legacy_files=max_legacy_files).items()):
         existing_rows = _probe_rows(target, "history") if target.exists() else 0
         if not force and existing_rows >= candidate.row_count:
             print(
@@ -289,11 +397,59 @@ def _import_futures(*, force: bool = False, dry_run: bool = False) -> tuple[int,
         else:
             wrote = _convert_main_to_history(candidate.source, target)
             if wrote <= 0:
+                if target.exists() and _probe_rows(target, "history") <= 0:
+                    with suppress(OSError):
+                        target.unlink()
                 print(f"  [warn] conversion produced zero rows for {candidate.source}")
                 skipped += 1
                 continue
         imported += 1
     return imported, skipped
+
+
+def _synthesize_futures_timeframes(
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+) -> tuple[int, int]:
+    written = 0
+    skipped = 0
+    for symbol, target_tf, source_candidates in _FUTURES_RESAMPLE_PLAN:
+        target = MNQ_HISTORY_ROOT / f"{symbol}_{target_tf}.csv"
+        existing_rows = _probe_rows(target, "history") if target.exists() else 0
+        if existing_rows > 0 and not force:
+            print(
+                f"[hydrate:resample] skip {target.name} "
+                f"(existing rows={existing_rows:,})",
+            )
+            skipped += 1
+            continue
+        source_path = next(
+            (
+                MNQ_HISTORY_ROOT / f"{symbol}_{source_tf}.csv"
+                for source_tf in source_candidates
+                if _probe_rows(MNQ_HISTORY_ROOT / f"{symbol}_{source_tf}.csv", "history") > 0
+            ),
+            None,
+        )
+        if source_path is None:
+            print(f"[hydrate:resample] warn {symbol}/{target_tf}: no usable source in {source_candidates}")
+            skipped += 1
+            continue
+        print(f"[hydrate:resample] {source_path.name} -> {target.name}")
+        if dry_run:
+            skipped += 1
+            continue
+        rows = _read_history_ohlcv(source_path)
+        out_rows = _resample_rows(rows, target_tf)
+        if not out_rows:
+            print(f"  [warn] resample produced zero rows from {source_path.name}")
+            skipped += 1
+            continue
+        count = _write_history_rows(target, out_rows)
+        print(f"  wrote {count:,} rows -> {target}")
+        written += 1
+    return written, skipped
 
 
 def _fetch_crypto_prices(*, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
@@ -406,13 +562,28 @@ def main() -> int:
     p.add_argument("--skip-crypto", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--force", action="store_true")
+    p.add_argument(
+        "--max-legacy-files",
+        type=int,
+        default=200,
+        help="maximum legacy databento CSVs to probe before stopping; 0 means unlimited",
+    )
     args = p.parse_args()
 
     imported = skipped = 0
     if not args.skip_futures:
-        fut_imported, fut_skipped = _import_futures(force=args.force, dry_run=args.dry_run)
+        fut_imported, fut_skipped = _import_futures(
+            force=args.force,
+            dry_run=args.dry_run,
+            max_legacy_files=args.max_legacy_files,
+        )
+        fut_resampled, fut_resample_skipped = _synthesize_futures_timeframes(
+            force=args.force,
+            dry_run=args.dry_run,
+        )
         imported += fut_imported
-        skipped += fut_skipped
+        imported += fut_resampled
+        skipped += fut_skipped + fut_resample_skipped
 
     if not args.skip_crypto:
         price_written, price_skipped = _fetch_crypto_prices(force=args.force, dry_run=args.dry_run)

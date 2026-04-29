@@ -30,8 +30,11 @@ is authoritative and **this file must be updated**.
 5. **Venue matters.** Futures (MNQ/NQ) use bracket orders via the
    active futures broker — currently IBKR (primary) + Tastytrade
    (fallback) per `venues/router.py::ACTIVE_FUTURES_VENUES`.
-   Tradovate is DORMANT (operator mandate 2026-04-24). Perps
-   (ETH/SOL/XRP/BTC-seed) use reduce-only IOC on Bybit v5.
+   Tradovate is DORMANT (operator mandate 2026-04-24). Crypto
+   perps stay paper/research-only for US-person flows unless a
+   compliant venue is explicitly approved; ETH/SOL/BTC-seed use
+   market/IOC-style urgency in code, while XRP overrides to
+   POST_ONLY because of thin-book slippage.
 
 ## 2. Hierarchy: from macro to entry
 
@@ -192,8 +195,10 @@ Thinner book → tighter guards:
 - Slippage buffer **0.008** (vs ETH's 0.005).
 - trend_follow requires ADX **≥30** (vs 25) and vol_ratio **≥1.5** (vs 1.2).
 - mean_revert uses RSI 75/25 like SOL.
-- Router TODO: should select POST_ONLY for XRP; currently MARKET with
-  the wider slippage buffer above.
+- Router guardrail: `XrpPerpBot._build_order_request()` selects
+  POST_ONLY at `signal.price` with low urgency; the wider slippage
+  buffer remains a liquidation-safety backstop if a later fallback
+  market route is explicitly chosen.
 
 ### 6.6 BTC grid seed (SEED tier)
 

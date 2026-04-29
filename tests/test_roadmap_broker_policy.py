@@ -15,3 +15,13 @@ def test_roadmap_matches_current_broker_policy() -> None:
     assert "Tradovate primary" not in text
     assert "Bybit primary" not in text
     assert "OKX/Bitget backup" not in text
+
+
+def test_edge_rules_xrp_router_policy_matches_code_guardrail() -> None:
+    text = (ROOT / "docs" / "edge_rules.md").read_text(encoding="utf-8")
+
+    assert "Router TODO" not in text
+    assert "currently MARKET" not in text
+    assert "XrpPerpBot._build_order_request()" in text
+    assert "POST_ONLY" in text
+    assert "low urgency" in text

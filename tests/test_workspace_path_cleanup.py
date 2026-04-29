@@ -120,6 +120,7 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     targets = (
         "eta_engine/scripts/drift_watchdog_smoke.py",
         "eta_engine/scripts/runtime_log_smoke.py",
+        "eta_engine/scripts/vps_failover_summary.py",
         "eta_engine/deploy/scripts/live_claude_smoke.py",
         "eta_engine/deploy/scripts/register_cloudflare_quick.ps1",
         "eta_engine/deploy/scripts/run_dashboard_8421.ps1",
@@ -137,6 +138,7 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
     )
     assert "ETA_DRIFT_WATCHDOG_LOG_PATH" in _read("eta_engine/scripts/drift_watchdog_smoke.py")
     assert "ETA_RUNTIME_LOG_PATH" in _read("eta_engine/scripts/runtime_log_smoke.py")
+    assert "vps_failover_drill.collect_checks" in _read("eta_engine/scripts/vps_failover_summary.py")
     assert "workspace_roots.ETA_RUNTIME_STATE_DIR" in _read(
         "eta_engine/obs/heartbeat_writer.py"
     )

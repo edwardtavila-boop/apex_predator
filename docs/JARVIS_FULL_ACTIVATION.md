@@ -89,6 +89,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - The VPS failover drill now attaches `.env.example`, active/dormant broker
   key groups, and exact VPS `bash -n deploy/install_vps.sh` validation commands
   to the remaining operator/environment amber results.
+- `scripts/vps_failover_summary.py` gives automation a read-only red/amber
+  blocker summary with extracted next commands, without printing the full DR
+  checklist or touching live broker/runtime state.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

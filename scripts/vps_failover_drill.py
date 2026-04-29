@@ -598,6 +598,26 @@ def _emit_drill_checklist(only_checklist: bool = False) -> None:
         )
 
 
+def collect_checks(*, skip_backup_test: bool = False) -> list[CheckResult]:
+    """Run the local DR checks without printing operator text."""
+    return [
+        _check_state_files_present(),
+        _check_state_files_fresh(),
+        _check_secrets_present(),
+        _check_deploy_files_present(),
+        _check_install_script_syntax(),
+        _check_cron_schedule(),
+        _backup_restore_round_trip(skip=skip_backup_test),
+        _check_idempotent_resume(),
+    ]
+
+
+def exit_code_for_checks(checks: list[CheckResult]) -> int:
+    """Return the process exit code implied by the check severities."""
+    severities = [c.severity for c in checks]
+    return 3 if "red" in severities else (2 if "amber" in severities else 0)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -624,16 +644,7 @@ def main() -> int:
         return 0
 
     print(f"[vps_failover_drill] running dry-run at {datetime.now(UTC).isoformat()}\n")
-    checks: list[CheckResult] = [
-        _check_state_files_present(),
-        _check_state_files_fresh(),
-        _check_secrets_present(),
-        _check_deploy_files_present(),
-        _check_install_script_syntax(),
-        _check_cron_schedule(),
-        _backup_restore_round_trip(skip=args.no_backup_test),
-        _check_idempotent_resume(),
-    ]
+    checks = collect_checks(skip_backup_test=args.no_backup_test)
 
     sev_glyph = {
         "green": "[GREEN]", "amber": "[AMBER]",
@@ -653,8 +664,7 @@ def main() -> int:
             tag = sev_glyph.get(c.severity, c.severity).upper()
             print(f"  {tag:10s} {c.name:35s} {c.summary}")
 
-    severities = [c.severity for c in checks]
-    rc = 3 if "red" in severities else (2 if "amber" in severities else 0)
+    rc = exit_code_for_checks(checks)
 
     _emit_drill_checklist()
     return rc

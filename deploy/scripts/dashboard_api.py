@@ -49,26 +49,98 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 _BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+CANONICAL_BOT_FLEET_TITLE = "Evolutionary Trading Algo // Bot Fleet Roster"
 
 # State/log dirs: repo-relative so every deployment reads the right directory.
-# APEX_STATE_DIR / APEX_LOG_DIR env vars still override (used by tests).
+# ETA_STATE_DIR / ETA_LOG_DIR are canonical; APEX_* remains as a legacy test/runtime fallback.
 _REPO_ROOT     = Path(__file__).resolve().parents[2]   # .../eta_engine/
+_WORKSPACE_ROOT = _REPO_ROOT.parent                     # .../EvolutionaryTradingAlgo/
 _DEFAULT_STATE = _REPO_ROOT / "state"
 _DEFAULT_LOG   = _REPO_ROOT / "logs"
+_DEFAULT_RUNTIME_STATE = _WORKSPACE_ROOT / "firm_command_center" / "var" / "data" / "runtime_state.json"
 
-STATE_DIR = Path(os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE)))
-LOG_DIR   = Path(os.environ.get("APEX_LOG_DIR",   str(_DEFAULT_LOG)))
+STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE))))
+LOG_DIR   = Path(os.environ.get("ETA_LOG_DIR", os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG))))
 _START_TS = time.time()
 
 
 def _state_dir() -> Path:
-    """Lazy state-dir resolver so tests can monkeypatch APEX_STATE_DIR."""
-    return Path(os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE)))
+    """Lazy state-dir resolver so tests can monkeypatch state paths."""
+    return Path(os.environ.get("ETA_STATE_DIR", os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE))))
 
 
 def _log_dir() -> Path:
-    """Lazy log-dir resolver so tests can monkeypatch APEX_LOG_DIR."""
-    return Path(os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG)))
+    """Lazy log-dir resolver so tests can monkeypatch log paths."""
+    return Path(os.environ.get("ETA_LOG_DIR", os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG))))
+
+
+def _runtime_state_path() -> Path:
+    """Canonical runtime heartbeat path for ETA service-level truth."""
+    return Path(os.environ.get("ETA_RUNTIME_STATE_PATH", str(_DEFAULT_RUNTIME_STATE)))
+
+
+def _read_runtime_state() -> dict:
+    """Read runtime state without letting service diagnostics break the dashboard."""
+    path = _runtime_state_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {"_warning": "missing_runtime_state", "_path": str(path)}
+    return data if isinstance(data, dict) else {"_warning": "invalid_runtime_state", "_path": str(path)}
+
+
+def _truth_snapshot(rows: list[dict], *, server_ts: float) -> dict:
+    """Explain exactly why the roster is live, stale, stopped, or empty."""
+    runtime = _read_runtime_state()
+    state_dir = _state_dir()
+    bots_dir = state_dir / "bots"
+    supervisor_hb = state_dir / "jarvis_intel" / "supervisor" / "heartbeat.json"
+    warnings: list[str] = []
+
+    if not bots_dir.exists():
+        warnings.append(f"missing bot status directory: {bots_dir}")
+    if not supervisor_hb.exists():
+        warnings.append(f"missing JARVIS supervisor heartbeat: {supervisor_hb}")
+
+    mode = str(runtime.get("mode") or "").strip()
+    detail = str(runtime.get("detail") or "").strip()
+    updated_at = str(runtime.get("updated_at") or "").strip()
+    if runtime.get("_warning"):
+        warnings.append(str(runtime["_warning"]))
+    if mode or detail:
+        warnings.append(f"runtime reports {mode or 'unknown'} / {detail or 'no_detail'}")
+
+    fresh_rows = [
+        row for row in rows
+        if row.get("heartbeat_age_s") is not None and float(row.get("heartbeat_age_s") or 0) <= 300
+    ]
+    if fresh_rows:
+        status = "live"
+        line = f"Live ETA truth: {len(fresh_rows)}/{len(rows)} bot heartbeat(s) are fresh."
+    elif rows:
+        status = "stale"
+        line = f"ETA roster has {len(rows)} bot row(s), but none have a fresh heartbeat."
+    elif mode == "manage_only" and detail in {"already_stopped", "stopped", "idle"}:
+        status = "runtime_stopped"
+        line = "ETA runtime is in manage-only mode and reports no active bot fleet."
+    else:
+        status = "empty"
+        line = "No live ETA bot roster is publishing into the canonical state directory."
+
+    return {
+        "title": CANONICAL_BOT_FLEET_TITLE,
+        "legacy_dashboard_retired": True,
+        "source_of_truth": str(state_dir),
+        "runtime_state_path": str(_runtime_state_path()),
+        "runtime": runtime,
+        "runtime_mode": mode,
+        "runtime_detail": detail,
+        "runtime_updated_at": updated_at,
+        "truth_status": status,
+        "truth_summary_line": line,
+        "truth_warnings": warnings,
+        "truth_checked_at": server_ts,
+    }
 
 
 app = FastAPI(
@@ -925,12 +997,26 @@ def bot_fleet_roster(
         1 for r in rows
         if r.get("source") == "jarvis_strategy_supervisor" or r.get("confirmed") is True
     )
+    truth = _truth_snapshot(rows, server_ts=now_ts)
     return {
         "bots":              rows,
         "confirmed_bots":    confirmed_bots,
+        "summary": {
+            "bot_total": len(rows),
+            "confirmed_bots": confirmed_bots,
+            "mnq_total": sum(1 for r in rows if str(r.get("symbol") or "").upper().startswith("MNQ")),
+            "mnq_running": sum(
+                1 for r in rows
+                if str(r.get("symbol") or "").upper().startswith("MNQ")
+                and str(r.get("status") or "").lower() == "running"
+            ),
+            "truth_status": truth["truth_status"],
+            "truth_summary_line": truth["truth_summary_line"],
+        },
         "server_ts":         now_ts,
         "live":              fills_stats,
         "window_since_days": since_days,
+        **truth,
     }
 
 
@@ -1092,10 +1178,12 @@ def equity_curve(
 
     data = read_json_safe(source)
     if "_warning" in data:
+        truth = _truth_snapshot([], server_ts=time.time())
         return {
             "bot_id": bot,
             "range": range,
             "series": [],
+            "curve": [],
             "summary": {
                 "current_equity": None,
                 "today_pnl": None,
@@ -1104,7 +1192,12 @@ def equity_curve(
                 "total_pnl": None,
             },
             "_warning": "no_data",
-            "server_ts": time.time(),
+            "session_cum_pnl": 0.0,
+            "session_truth_status": truth["truth_status"],
+            "session_truth_line": truth["truth_summary_line"],
+            "server_ts": truth["truth_checked_at"],
+            "source": "canonical_state_empty",
+            **truth,
         }
 
     # Pick the right series for the requested range
@@ -1184,6 +1277,7 @@ def equity_curve(
         "bot_id": bot,
         "range": range,
         "series": series,
+        "curve": series,
         "summary": summary,
         "baseline_equity": baseline,
         "server_ts": time.time(),
@@ -1191,6 +1285,8 @@ def equity_curve(
         "source": series_source,
         "since_days": since_days,
         "live": _fills_activity_snapshot(bot=bot),
+        "session_cum_pnl": float(summary.get("today_pnl") or 0.0),
+        "session_truth_status": "live" if series else "no_data",
     }
     # Carry through legacy keys so existing consumers (and the
     # `test_equity_returns_curve` test) continue to work.
@@ -1198,6 +1294,24 @@ def equity_curve(
         if legacy_key in data:
             out[legacy_key] = data[legacy_key]
     return out
+
+
+@app.get("/api/fleet-equity")
+def fleet_equity_curve(
+    bot: str | None = None,
+    range: str = "1d",
+    normalize: bool = False,
+    since_days: int = 1,
+    response: Response = None,
+) -> dict:
+    """Compatibility alias for the public fleet equity widget."""
+    return equity_curve(
+        bot=bot,
+        range=range,
+        normalize=normalize,
+        since_days=since_days,
+        response=response,
+    )
 
 
 def _compute_pnl_summary(data: dict) -> dict:

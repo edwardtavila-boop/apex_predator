@@ -75,6 +75,22 @@ class SweepResult:
     pass_gate: bool
 
 
+def _parse_int_list(raw: str) -> tuple[int, ...]:
+    """Parse comma-separated integers for CLI grid overrides."""
+    values = tuple(int(part.strip()) for part in raw.split(",") if part.strip())
+    if not values:
+        raise ValueError("at least one integer value is required")
+    return values
+
+
+def _parse_float_list(raw: str) -> tuple[float, ...]:
+    """Parse comma-separated floats for CLI grid overrides."""
+    values = tuple(float(part.strip()) for part in raw.split(",") if part.strip())
+    if not values:
+        raise ValueError("at least one float value is required")
+    return values
+
+
 def run_one(  # noqa: PLR0913
     cell: SweepCell,
     *,
@@ -164,6 +180,21 @@ def main() -> int:
     p.add_argument("--step-days", type=int, default=30)
     p.add_argument("--min-trades-per-window", type=int, default=10)
     p.add_argument(
+        "--range-minutes",
+        default="120,240,360",
+        help="comma-separated crypto ORB range minutes",
+    )
+    p.add_argument(
+        "--atr-stop-mults",
+        default="1.5,2.0,2.5,3.0",
+        help="comma-separated ATR stop multipliers",
+    )
+    p.add_argument(
+        "--rr-targets",
+        default="1.5,2.0,2.5",
+        help="comma-separated reward/risk targets",
+    )
+    p.add_argument(
         "--max-bars",
         type=int,
         default=None,
@@ -186,9 +217,9 @@ def main() -> int:
     grid = [
         SweepCell(rm, asm, rr)
         for rm, asm, rr in product(
-            (120, 240, 360),
-            (1.5, 2.0, 2.5, 3.0),
-            (1.5, 2.0, 2.5),
+            _parse_int_list(args.range_minutes),
+            _parse_float_list(args.atr_stop_mults),
+            _parse_float_list(args.rr_targets),
         )
     ]
     print(

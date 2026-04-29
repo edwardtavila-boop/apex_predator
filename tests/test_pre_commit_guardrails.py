@@ -47,6 +47,16 @@ def test_pre_commit_allows_source_files() -> None:
     assert forbidden == []
 
 
+def test_pre_commit_surfaces_docstring_ratchet_advisory() -> None:
+    specs = _pre_commit_check._advisory_audit_specs()
+
+    assert (
+        "docstring-ratchet",
+        "scripts/_docstring_audit.py",
+        ["--no-update", "--max-show", "3"],
+    ) in specs
+
+
 def test_pre_commit_blocks_timestamped_docs_runtime_snapshots() -> None:
     forbidden = _pre_commit_check._forbidden_staged_files_from_lines(
         [

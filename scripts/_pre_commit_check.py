@@ -248,20 +248,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _advisory_audit_specs() -> list[tuple[str, str, list[str]]]:
+    """Return advisory audit commands surfaced during the commit gate."""
+    return [
+        ("alert-events", "scripts/_audit_alert_events.py", []),
+        ("roadmap-vs-code", "scripts/_audit_roadmap_vs_code.py", []),
+        ("deferral-criteria", "scripts/_audit_deferral_criteria.py", []),
+        ("docstring-ratchet", "scripts/_docstring_audit.py", ["--no-update", "--max-show", "3"]),
+    ]
+
+
 def _advisory_audits(*, root: Path) -> None:
-    """Run the three audit scripts in advisory mode and surface results.
+    """Run audit scripts in advisory mode and surface results.
 
     Failures here do NOT block the commit. They print to stderr so the
     operator sees them inline; that's the only intervention. To
     promote any audit to a hard gate, change the call site to inspect
     the return code and ``return 4`` (or similar) on non-zero.
     """
-    audits = [
-        ("alert-events", "scripts/_audit_alert_events.py", []),
-        ("roadmap-vs-code", "scripts/_audit_roadmap_vs_code.py", []),
-        ("deferral-criteria", "scripts/_audit_deferral_criteria.py", []),
-    ]
-    for label, script, extra_args in audits:
+    for label, script, extra_args in _advisory_audit_specs():
         path = root / script
         if not path.exists():
             print(

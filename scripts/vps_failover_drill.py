@@ -101,6 +101,13 @@ _DEPLOY_FILES_REQUIRED: list[str] = [
 ]
 
 _ENV_EXAMPLE_FILE = ".env.example"
+_ENV_COPY_COMMANDS = [
+    "Copy-Item -LiteralPath .env.example -Destination .env",
+    'icacls .env /inheritance:r /grant:r "${env:USERNAME}:(R,W)"',
+    "notepad .env",
+    "cp .env.example .env && chmod 600 .env",
+    "$EDITOR .env",
+]
 _ENV_READINESS_REQUIREMENTS: dict[str, list[str]] = {
     "runtime_mode": ["APEX_MODE=PAPER"],
     "jarvis_budget": [
@@ -121,6 +128,22 @@ _ENV_READINESS_REQUIREMENTS: dict[str, list[str]] = {
         "TASTY_SESSION_TOKEN",
     ],
 }
+_ENV_TEMPLATE_REQUIRED_TOKENS = [
+    "APEX_MODE",
+    "ANTHROPIC_API_KEY",
+    "JARVIS_HOURLY_USD_BUDGET",
+    "JARVIS_DAILY_USD_BUDGET",
+    "IBKR_VENUE_TYPE",
+    "IBKR_CP_BASE_URL",
+    "IBKR_ACCOUNT_ID",
+    "IBKR_SYMBOL_CONID_MAP",
+    "TASTY_VENUE_TYPE",
+    "TASTY_API_BASE_URL",
+    "TASTY_ACCOUNT_NUMBER",
+    "TASTY_SESSION_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+]
 _VPS_BASH_VALIDATION_COMMANDS = [
     "cd ~/eta_engine && bash -n deploy/install_vps.sh",
     "cd ~/eta_engine && .venv/bin/python -m eta_engine.scripts.vps_failover_drill --no-backup-test --json",
@@ -206,6 +229,7 @@ def _env_readiness_details() -> dict[str, Any]:
         "template": _display_path(example_path),
         "template_exists": example_path.exists(),
         "copy_command": f"cp {_ENV_EXAMPLE_FILE} .env && chmod 600 .env",
+        "copy_commands": list(_ENV_COPY_COMMANDS),
         "active_brokers": ["IBKR", "Tastytrade"],
         "dormant_brokers": ["Tradovate"],
         "required_groups": _ENV_READINESS_REQUIREMENTS,
@@ -326,6 +350,33 @@ def _check_secrets_present() -> CheckResult:
         severity="green",
         summary=f".env exists ({p.stat().st_size} bytes; contents not read)",
         details=_env_readiness_details(),
+    )
+
+
+def _check_env_template_complete() -> CheckResult:
+    """1d. .env.example names every key required by failover guidance."""
+    p = ROOT / _ENV_EXAMPLE_FILE
+    if not p.exists():
+        return CheckResult(
+            name="env_template_complete",
+            severity="red",
+            summary=".env.example missing",
+            details={"template": _display_path(p)},
+        )
+    text = p.read_text(encoding="utf-8", errors="replace")
+    missing = [token for token in _ENV_TEMPLATE_REQUIRED_TOKENS if token not in text]
+    if missing:
+        return CheckResult(
+            name="env_template_complete",
+            severity="red",
+            summary=f".env.example missing failover key(s): {missing}",
+            details={"missing": missing, "template": _display_path(p)},
+        )
+    return CheckResult(
+        name="env_template_complete",
+        severity="green",
+        summary=f".env.example covers {len(_ENV_TEMPLATE_REQUIRED_TOKENS)} failover keys",
+        details={"required_tokens": list(_ENV_TEMPLATE_REQUIRED_TOKENS)},
     )
 
 
@@ -614,6 +665,7 @@ def collect_checks(*, skip_backup_test: bool = False) -> list[CheckResult]:
         _check_state_files_present(),
         _check_state_files_fresh(),
         _check_secrets_present(),
+        _check_env_template_complete(),
         _check_deploy_files_present(),
         _check_install_script_syntax(),
         _check_cron_schedule(),

@@ -35,8 +35,11 @@ def _commands_for_check(check: CheckResult) -> list[str]:
     """Extract concrete next commands from a check's structured details."""
     details = check.details or {}
     commands: list[str] = []
+    copy_commands = details.get("copy_commands")
+    if isinstance(copy_commands, list):
+        commands.extend(str(cmd) for cmd in copy_commands)
     copy_command = details.get("copy_command")
-    if isinstance(copy_command, str):
+    if isinstance(copy_command, str) and not commands:
         commands.append(copy_command)
         commands.append("$EDITOR .env")
     vps_commands = details.get("vps_commands")

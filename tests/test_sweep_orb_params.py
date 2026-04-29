@@ -4,6 +4,33 @@ from eta_engine.data import library as data_library
 from eta_engine.scripts import sweep_orb_params
 
 
+def test_parse_grid_lists_accept_cli_overrides() -> None:
+    assert sweep_orb_params._parse_int_list("5, 15") == [5, 15]
+    assert sweep_orb_params._parse_float_list("1.25, 2") == [1.25, 2.0]
+
+
+def test_build_grid_uses_cli_override_dimensions() -> None:
+    grid = sweep_orb_params._build_grid(
+        range_minutes=[5],
+        rr_targets=[2.0, 3.0],
+        atr_stop_mults=[1.5],
+        ema_periods=[0, 200],
+    )
+
+    assert grid == [
+        sweep_orb_params.SweepCell(5, 2.0, 1.5, 0),
+        sweep_orb_params.SweepCell(5, 2.0, 1.5, 200),
+        sweep_orb_params.SweepCell(5, 3.0, 1.5, 0),
+        sweep_orb_params.SweepCell(5, 3.0, 1.5, 200),
+    ]
+
+
+def test_parse_cells_accepts_explicit_research_cells() -> None:
+    assert sweep_orb_params._parse_cells("15:2.0:1.5:200") == [
+        sweep_orb_params.SweepCell(15, 2.0, 1.5, 200),
+    ]
+
+
 def test_sweep_orb_run_one_returns_zero_result_when_positive_price_filter_empties_dataset(monkeypatch) -> None:
     calls: list[dict[str, object]] = []
 

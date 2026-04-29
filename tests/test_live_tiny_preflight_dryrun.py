@@ -255,15 +255,20 @@ def test_gate_env_template_pass(fake_root: Path):
     p.write_text(
         "\n".join(
             [
-                "TRADOVATE_CLIENT_ID=",
-                "TRADOVATE_CLIENT_SECRET=",
-                "TRADOVATE_USERNAME=",
-                "TRADOVATE_PASSWORD=",
-                "TRADOVATE_DEVICE_ID=",
-                "BYBIT_API_KEY=",
-                "BYBIT_API_SECRET=",
-                "PUSHOVER_USER=",
-                "PUSHOVER_TOKEN=",
+                "APEX_MODE=",
+                "ANTHROPIC_API_KEY=",
+                "JARVIS_HOURLY_USD_BUDGET=",
+                "JARVIS_DAILY_USD_BUDGET=",
+                "IBKR_VENUE_TYPE=",
+                "IBKR_CP_BASE_URL=",
+                "IBKR_ACCOUNT_ID=",
+                "IBKR_SYMBOL_CONID_MAP=",
+                "TASTY_VENUE_TYPE=",
+                "TASTY_API_BASE_URL=",
+                "TASTY_ACCOUNT_NUMBER=",
+                "TASTY_SESSION_TOKEN=",
+                "TELEGRAM_BOT_TOKEN=",
+                "TELEGRAM_CHAT_ID=",
             ]
         )
     )
@@ -314,3 +319,9 @@ def test_gate_runtime_wired_fails_when_module_missing(
     g = mod._gate_runtime_wired()
     assert g.status == "FAIL"
     assert "missing" in g.detail.lower()
+
+
+def test_gate_crash_recovery_simulated_detects_orphaned_runtime() -> None:
+    g = mod._gate_crash_recovery_simulated()
+    assert g.status == "PASS", g.detail
+    assert "orphan detected" in g.detail

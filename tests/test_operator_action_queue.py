@@ -251,6 +251,31 @@ class TestMcpOauthProbeUnderSyntheticState:
         assert all(i.verdict == VERDICT_UNKNOWN for i in items)
 
 
+class TestActiveBrokerCredentialProbes:
+    def test_ibkr_probe_uses_runtime_consumed_cp_base_url(self, monkeypatch) -> None:
+        from eta_engine.scripts import operator_action_queue
+
+        monkeypatch.setenv("IBKR_CP_BASE_URL", "https://127.0.0.1:5000/v1/api")
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123")
+
+        item = operator_action_queue._op3_ibkr_creds()
+
+        assert item.verdict == VERDICT_DONE
+        assert item.evidence["ibkr_cp_base_url"] is True
+
+    def test_tastytrade_probe_uses_runtime_consumed_tasty_keys(self, monkeypatch) -> None:
+        from eta_engine.scripts import operator_action_queue
+
+        monkeypatch.setenv("TASTY_API_BASE_URL", "https://api.cert.tastyworks.com")
+        monkeypatch.setenv("TASTY_ACCOUNT_NUMBER", "5WX123")
+        monkeypatch.setenv("TASTY_SESSION_TOKEN", "token")
+
+        item = operator_action_queue._op4_tastytrade_creds()
+
+        assert item.verdict == VERDICT_DONE
+        assert item.evidence["TASTY_API_BASE_URL"] is True
+
+
 class TestStrategyResearchCandidateProbe:
     def test_research_warnings_mark_op16_blocked_with_next_commands(self, monkeypatch) -> None:
         from types import SimpleNamespace

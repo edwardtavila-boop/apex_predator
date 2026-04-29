@@ -161,9 +161,9 @@ def _op1_fund_ibkr() -> OpItem:
         where="IBKR portal",
     )
     # We cannot directly probe the broker balance without creds; the best
-    # signal is whether the credential gate has populated IBKR_BASE_URL +
+    # signal is whether the credential gate has populated IBKR_CP_BASE_URL +
     # IBKR_ACCOUNT_ID. Funding is downstream of creds.
-    creds_present = _env_key_present("IBKR_BASE_URL") and _env_key_present(
+    creds_present = _env_key_present("IBKR_CP_BASE_URL") and _env_key_present(
         "IBKR_ACCOUNT_ID",
     )
     if creds_present:
@@ -173,7 +173,7 @@ def _op1_fund_ibkr() -> OpItem:
         item.verdict = VERDICT_BLOCKED
         item.detail = "IBKR creds absent; populate per OP-3 first"
     item.evidence = {
-        "ibkr_base_url_present": _env_key_present("IBKR_BASE_URL"),
+        "ibkr_cp_base_url_present": _env_key_present("IBKR_CP_BASE_URL"),
         "ibkr_account_id_present": _env_key_present("IBKR_ACCOUNT_ID"),
     }
     return item
@@ -186,9 +186,9 @@ def _op2_fund_tastytrade() -> OpItem:
         where="Tastytrade portal",
     )
     creds_present = (
-        _env_key_present("TASTYTRADE_BASE_URL")
-        and _env_key_present("TASTYTRADE_ACCOUNT_NUMBER")
-        and _env_key_present("TASTYTRADE_SESSION_TOKEN")
+        _env_key_present("TASTY_API_BASE_URL")
+        and _env_key_present("TASTY_ACCOUNT_NUMBER")
+        and _env_key_present("TASTY_SESSION_TOKEN")
     )
     if creds_present:
         item.verdict = VERDICT_OBSERVED
@@ -200,12 +200,12 @@ def _op2_fund_tastytrade() -> OpItem:
         item.verdict = VERDICT_BLOCKED
         item.detail = "Tastytrade creds absent; populate per OP-4 first"
     item.evidence = {
-        "tastytrade_base_url_present": _env_key_present("TASTYTRADE_BASE_URL"),
-        "tastytrade_account_present": _env_key_present(
-            "TASTYTRADE_ACCOUNT_NUMBER",
+        "tasty_api_base_url_present": _env_key_present("TASTY_API_BASE_URL"),
+        "tasty_account_present": _env_key_present(
+            "TASTY_ACCOUNT_NUMBER",
         ),
-        "tastytrade_session_present": _env_key_present(
-            "TASTYTRADE_SESSION_TOKEN",
+        "tasty_session_present": _env_key_present(
+            "TASTY_SESSION_TOKEN",
         ),
     }
     return item
@@ -214,10 +214,10 @@ def _op2_fund_tastytrade() -> OpItem:
 def _op3_ibkr_creds() -> OpItem:
     item = OpItem(
         op_id="OP-3",
-        title="Populate IBKR_BASE_URL + IBKR_ACCOUNT_ID in keyring on trading host",
+        title="Populate IBKR_CP_BASE_URL + IBKR_ACCOUNT_ID in keyring on trading host",
         where="Trading host (keyring or .env)",
     )
-    base = _env_key_present("IBKR_BASE_URL")
+    base = _env_key_present("IBKR_CP_BASE_URL")
     acct = _env_key_present("IBKR_ACCOUNT_ID")
     if base and acct:
         item.verdict = VERDICT_DONE
@@ -226,24 +226,24 @@ def _op3_ibkr_creds() -> OpItem:
         item.verdict = VERDICT_BLOCKED
         missing = []
         if not base:
-            missing.append("IBKR_BASE_URL")
+            missing.append("IBKR_CP_BASE_URL")
         if not acct:
             missing.append("IBKR_ACCOUNT_ID")
         item.detail = f"Missing: {', '.join(missing)}"
-    item.evidence = {"ibkr_base_url": base, "ibkr_account_id": acct}
+    item.evidence = {"ibkr_cp_base_url": base, "ibkr_account_id": acct}
     return item
 
 
 def _op4_tastytrade_creds() -> OpItem:
     item = OpItem(
         op_id="OP-4",
-        title=("Populate TASTYTRADE_BASE_URL + _ACCOUNT_NUMBER + _SESSION_TOKEN in keyring on trading host"),
+        title=("Populate TASTY_API_BASE_URL + TASTY_ACCOUNT_NUMBER + TASTY_SESSION_TOKEN in keyring on trading host"),
         where="Trading host (keyring or .env)",
     )
     keys = (
-        "TASTYTRADE_BASE_URL",
-        "TASTYTRADE_ACCOUNT_NUMBER",
-        "TASTYTRADE_SESSION_TOKEN",
+        "TASTY_API_BASE_URL",
+        "TASTY_ACCOUNT_NUMBER",
+        "TASTY_SESSION_TOKEN",
     )
     present = {k: _env_key_present(k) for k in keys}
     if all(present.values()):

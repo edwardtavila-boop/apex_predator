@@ -1380,7 +1380,8 @@ def _build_broker_equity_adapter(
             "live mode requested but no real broker equity source is "
             "available (IBKR + Tastytrade creds both missing). Refusing "
             "to boot -- drift detection would be silently disabled. "
-            "Fix: populate IBKR_* / TASTYTRADE_* env vars, OR opt in "
+            "Fix: populate IBKR_CP_BASE_URL / IBKR_ACCOUNT_ID and "
+            "TASTY_API_BASE_URL / TASTY_ACCOUNT_NUMBER / TASTY_SESSION_TOKEN, OR opt in "
             "explicitly via APEX_ALLOW_LIVE_NO_DRIFT=1 to acknowledge "
             "that the eval will run with drift detection OFF."
         )

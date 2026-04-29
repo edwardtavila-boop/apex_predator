@@ -52,9 +52,13 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH, default_alerts_log_path
-
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from eta_engine.scripts.workspace_roots import ETA_RUNTIME_ALERTS_LOG_PATH, default_alerts_log_path  # noqa: E402
+
 DEFAULT_ALERTS = ETA_RUNTIME_ALERTS_LOG_PATH
 DEFAULT_BTC = ROOT / "docs" / "btc_live" / "btc_live_decisions.jsonl"
 
@@ -177,12 +181,16 @@ def _check_btc_journal_freshness(
     stale_hours: float,
     now_ts: float,
 ) -> tuple[str, str]:
-    """If runtime_starts in window but btc journal stale, alert."""
-    has_runtime = any(r.get("event") == "runtime_start" for r in alerts_window)
-    if not has_runtime:
-        return ("GREEN", "no runtime activity in window -- btc staleness moot")
+    """If LIVE runtime_starts appear in window but btc journal is stale, alert."""
+    has_live_runtime = any(_is_live_start(r) for r in alerts_window)
+    if not has_live_runtime:
+        dev_runtime = sum(1 for r in alerts_window if r.get("event") == "runtime_start")
+        return (
+            "GREEN",
+            f"no LIVE runtime activity in window (paper/dev={dev_runtime}) -- btc staleness moot",
+        )
     if not btc_records:
-        return ("YELLOW", f"no btc_live_decisions entries at all (runtime active: {has_runtime})")
+        return ("YELLOW", "no btc_live_decisions entries at all (LIVE runtime active)")
     last_ts = max((_parse_iso(r.get("ts", "")) or 0.0) for r in btc_records)
     age_h = (now_ts - last_ts) / 3600.0
     if age_h <= stale_hours:

@@ -38,7 +38,9 @@ def test_research_candidate_surfaces_registry_evidence(monkeypatch) -> None:
             "research_tune": {
                 "scope": "latest_20k_bar_research_candidate",
                 "source_artifact": "latest.md",
+                "candidate_agg_is_sharpe": -0.306,
                 "candidate_agg_oos_sharpe": 1.788,
+                "candidate_degradation": 0.191,
                 "strict_gate": False,
                 "full_history_smoke": {
                     "source_artifact": "full_history.md",
@@ -63,7 +65,54 @@ def test_research_candidate_surfaces_registry_evidence(monkeypatch) -> None:
     ]
     assert result["evidence"]["baseline_present"] is True
     assert result["evidence"]["scope"] == "latest_20k_bar_research_candidate"
+    assert result["evidence"]["candidate_agg_is_sharpe"] == -0.306
+    assert result["evidence"]["candidate_degradation"] == 0.191
     assert result["evidence"]["full_history_smoke"]["windows"] == 83
+
+
+def test_shadow_benchmark_is_ready_with_shadow_evidence(monkeypatch) -> None:
+    assignment = SimpleNamespace(
+        bot_id="mnq_futures",
+        strategy_id="mnq_orb_v2",
+        strategy_kind="orb",
+        symbol="MNQ1",
+        timeframe="5m",
+        extras={
+            "promotion_status": "shadow_benchmark",
+            "shadow_reason": "plain ORB failed full-history validation",
+        },
+    )
+    monkeypatch.setattr(mod, "_check_data_available", lambda *_: True)
+    monkeypatch.setattr(mod, "_check_bot_dir_exists", lambda *_: True)
+    monkeypatch.setattr(mod, "_load_baseline_entry", lambda *_: {"strategy_id": "mnq_orb_v2"})
+
+    result = mod._audit_bot(assignment)
+
+    assert result["status"] == "READY"
+    assert result["warnings"] == []
+    assert result["promotion_status"] == "shadow_benchmark"
+    assert result["evidence"]["launch_role"] == "shadow_only"
+    assert result["evidence"]["shadow_reason"] == "plain ORB failed full-history validation"
+
+
+def test_research_warning_includes_is_and_degradation_when_present() -> None:
+    warning = mod._research_warning(
+        {
+            "research_tune": {
+                "strict_gate": False,
+                "source_artifact": "sol.md",
+                "candidate_agg_is_sharpe": -0.306,
+                "candidate_agg_oos_sharpe": 2.489,
+                "candidate_dsr_pass_fraction": 0.524,
+                "candidate_degradation": 0.191,
+            }
+        }
+    )
+
+    assert warning == (
+        "research_candidate (strict gate failed; OOS +2.489; IS -0.306; "
+        "DSR pass 52.4%; degradation 19.1%; evidence sol.md)"
+    )
 
 
 def test_research_candidate_without_tune_keeps_generic_warning(monkeypatch) -> None:

@@ -52,16 +52,16 @@ sm = SecretsManager()
 # the URL + account id below. The session is browser-OAuth + cookie
 # based, so we do not stash a long-lived token here -- the Gateway
 # holds the session.
-sm.set("IBKR_BASE_URL", "https://localhost:5000/v1/api")
+sm.set("IBKR_CP_BASE_URL", "https://localhost:5000/v1/api")
 sm.set("IBKR_ACCOUNT_ID", "DUxxxxxxx")  # paper or live account id
 
 # --- Tastytrade fallback (RECOMMENDED, optional) --------------------
 # Tastytrade uses a session-token model. Generate a token from
 # https://my.tastytrade.com -> Manage -> Sessions, or via the API
 # /sessions endpoint with username + password.
-sm.set("TASTYTRADE_BASE_URL", "https://api.tastyworks.com")
-sm.set("TASTYTRADE_ACCOUNT_NUMBER", "5WTxxxxx")
-sm.set("TASTYTRADE_SESSION_TOKEN", "session_token_from_tastytrade")
+sm.set("TASTY_API_BASE_URL", "https://api.tastyworks.com")
+sm.set("TASTY_ACCOUNT_NUMBER", "5WTxxxxx")
+sm.set("TASTY_SESSION_TOKEN", "session_token_from_tastytrade")
 
 # --- Operator notification channel (REQUIRED) -----------------------
 sm.set("TELEGRAM_BOT_TOKEN", "bot_token")
@@ -97,7 +97,7 @@ from eta_engine.venues.ibkr import (
 async def main() -> None:
     sm = SecretsManager()
     cfg = IbkrClientPortalConfig(
-        base_url=sm.get("IBKR_BASE_URL") or "",
+        base_url=sm.get("IBKR_CP_BASE_URL") or "",
         account_id=sm.get("IBKR_ACCOUNT_ID") or "",
     )
     v = IbkrClientPortalVenue(config=cfg)
@@ -108,7 +108,7 @@ async def main() -> None:
     if net_liq is None:
         msg = (
             "IBKR get_net_liquidation returned None. Check that the "
-            "Client Portal Gateway is running on IBKR_BASE_URL, that "
+            "Client Portal Gateway is running on IBKR_CP_BASE_URL, that "
             "IBKR_ACCOUNT_ID matches a logged-in account, and that "
             "the session has not timed out."
         )
@@ -133,9 +133,9 @@ from eta_engine.venues.tastytrade import (
 async def main() -> None:
     sm = SecretsManager()
     cfg = TastytradeConfig(
-        base_url=sm.get("TASTYTRADE_BASE_URL") or "",
-        account_number=sm.get("TASTYTRADE_ACCOUNT_NUMBER") or "",
-        session_token=sm.get("TASTYTRADE_SESSION_TOKEN") or "",
+        base_url=sm.get("TASTY_API_BASE_URL") or "",
+        account_number=sm.get("TASTY_ACCOUNT_NUMBER") or "",
+        session_token=sm.get("TASTY_SESSION_TOKEN") or "",
     )
     v = TastytradeVenue(config=cfg)
     net_liq = await v.get_net_liquidation()

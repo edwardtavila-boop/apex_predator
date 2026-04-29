@@ -275,15 +275,20 @@ def _gate_env_template() -> Gate:
         return g
     txt = p.read_text()
     required_keys = [
-        "TRADOVATE_CLIENT_ID",
-        "TRADOVATE_CLIENT_SECRET",
-        "TRADOVATE_USERNAME",
-        "TRADOVATE_PASSWORD",
-        "TRADOVATE_DEVICE_ID",
-        "BYBIT_API_KEY",
-        "BYBIT_API_SECRET",
-        "PUSHOVER_USER",
-        "PUSHOVER_TOKEN",
+        "APEX_MODE",
+        "ANTHROPIC_API_KEY",
+        "JARVIS_HOURLY_USD_BUDGET",
+        "JARVIS_DAILY_USD_BUDGET",
+        "IBKR_VENUE_TYPE",
+        "IBKR_CP_BASE_URL",
+        "IBKR_ACCOUNT_ID",
+        "IBKR_SYMBOL_CONID_MAP",
+        "TASTY_VENUE_TYPE",
+        "TASTY_API_BASE_URL",
+        "TASTY_ACCOUNT_NUMBER",
+        "TASTY_SESSION_TOKEN",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
     ]
     missing = [k for k in required_keys if k not in txt]
     if missing:
@@ -401,19 +406,19 @@ def _gate_credential_probe_full() -> Gate:
     # Tier-A minimum: per-active-broker keys + Telegram heartbeat.
     # Crypto (Bybit) is Tier-B, not blocker.
     # Per-venue key sets:
-    #   ibkr        -> IBKR_BASE_URL, IBKR_ACCOUNT_ID
-    #   tastytrade  -> TASTYTRADE_BASE_URL, TASTYTRADE_ACCOUNT_NUMBER,
-    #                  TASTYTRADE_SESSION_TOKEN
+    #   ibkr        -> IBKR_CP_BASE_URL, IBKR_ACCOUNT_ID
+    #   tastytrade  -> TASTY_API_BASE_URL, TASTY_ACCOUNT_NUMBER,
+    #                  TASTY_SESSION_TOKEN
     #   tradovate   -> TRADOVATE_USERNAME, TRADOVATE_PASSWORD,
     #                  TRADOVATE_APP_ID, TRADOVATE_APP_SECRET,
     #                  TRADOVATE_CID  (DORMANT; only required when
     #                  the operator un-dormants the broker)
     venue_key_sets: dict[str, list[str]] = {
-        "ibkr": ["IBKR_BASE_URL", "IBKR_ACCOUNT_ID"],
+        "ibkr": ["IBKR_CP_BASE_URL", "IBKR_ACCOUNT_ID"],
         "tastytrade": [
-            "TASTYTRADE_BASE_URL",
-            "TASTYTRADE_ACCOUNT_NUMBER",
-            "TASTYTRADE_SESSION_TOKEN",
+            "TASTY_API_BASE_URL",
+            "TASTY_ACCOUNT_NUMBER",
+            "TASTY_SESSION_TOKEN",
         ],
         "tradovate": [
             "TRADOVATE_USERNAME",
@@ -636,6 +641,7 @@ def _gate_crash_recovery_simulated() -> Gate:
             timeout=60,
         )
         text = out.stdout or ""
+        diagnostic = (out.stdout or out.stderr or "").strip()
         # Expect orphan-detection text in output (RED or YELLOW orphaned-runtime line)
         detected = "orphaned-runtime" in text and ("YELLOW" in text or "RED" in text)
         if detected:
@@ -644,7 +650,7 @@ def _gate_crash_recovery_simulated() -> Gate:
             g.evidence = {"returncode": out.returncode}
         else:
             g.status = "FAIL"
-            g.detail = f"orphan NOT detected: rc={out.returncode} head={text[:200]}"
+            g.detail = f"orphan NOT detected: rc={out.returncode} head={diagnostic[:200]}"
     except Exception as e:  # noqa: BLE001
         g.status, g.detail = "FAIL", f"crash-recovery drill error: {e}"
     finally:

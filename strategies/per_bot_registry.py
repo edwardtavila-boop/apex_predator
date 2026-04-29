@@ -173,8 +173,11 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "full-history smoke now evaluates 487,725/490,103 positive-price "
             "MNQ1 5m bars without crashing, but plain ORB v2 fails "
             "materially (83 windows, agg OOS Sh -2.958, DSR pass 13.2%). "
-            "Keep this as a plain-ORB research/soak baseline only; "
-            "mnq_futures_sage remains the stronger promoted MNQ lane. "
+            "Targeted full-history retune on 2026-04-29 checked the "
+            "registered cell plus five serious ORB alternatives; none "
+            "improved enough to remain a promotion candidate (best checked "
+            "OOS was still -2.368). Keep this as a shadow benchmark only; "
+            "mnq_futures_sage is the stronger launchable MNQ lane. "
             "Historical note: "
             "Switched from confluence-mean-reversion to ORB on "
             "2026-04-27 after the mean-reversion baseline "
@@ -200,7 +203,12 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "strategies/orb_strategy.py."
         ),
         extras={
-            "promotion_status": "research_candidate",
+            "promotion_status": "shadow_benchmark",
+            "shadow_reason": (
+                "Plain MNQ ORB failed full-history validation; retained only "
+                "as a diagnostic benchmark while mnq_futures_sage carries "
+                "the MNQ launch lane."
+            ),
             "orb_config": {
                 "range_minutes": 5,
                 "rr_target": 3.0,
@@ -211,16 +219,26 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "retuned_on": "2026-04-29",
                 "scope": "latest_20k_bar_research_candidate",
                 "source_artifact": (
-                    "var/eta_engine/state/research_grid/"
-                    "orb_sweep_MNQ1_5m_20260429_155144.md"
+                    "docs/research_log/"
+                    "mnq_orb_latest20k_candidate_20260429T155144Z.md"
                 ),
                 "previous_agg_oos_sharpe": -1.429,
                 "candidate_agg_oos_sharpe": 1.788,
                 "strict_gate": False,
+                "targeted_full_history_retune": {
+                    "source_artifact": (
+                        "docs/research_log/"
+                        "mnq_orb_targeted_full_history_retune_20260429T185455Z.md"
+                    ),
+                    "cells_checked": 5,
+                    "best_checked_agg_oos_sharpe": -2.368,
+                    "best_checked_dsr_pass_fraction": 0.253,
+                    "strict_gate": False,
+                },
                 "full_history_smoke": {
                     "source_artifact": (
-                        "var/eta_engine/state/research_grid/"
-                        "research_grid_20260429_173608_610619.md"
+                        "docs/research_log/"
+                        "mnq_orb_full_history_smoke_20260429T185103Z.md"
                     ),
                     "tradable_bars": 487725,
                     "raw_bars": 490103,
@@ -838,7 +856,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             },
         },
     ),
-    # ETH sage-daily-gated (research candidate). Sister bot to
+    # ETH sage-daily-gated (shadow benchmark). Sister bot to
     # eth_perp; applies the BTC sage-daily-gate breakthrough pattern
     # to ETH using crypto_orb (range=120m, ATR=3.0, RR=2.5) as the
     # underlying since ETH lacks ETF flow data.
@@ -855,7 +873,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         min_trades_per_window=3,
         strategy_kind="sage_daily_gated",
         rationale=(
-            "REFRESHED 2026-04-29: run_research_grid now attaches real "
+            "SHADOW BENCHMARK refreshed 2026-04-29: run_research_grid now attaches real "
             "daily sage verdicts for sage_daily_gated cells. Provider-backed "
             "retune over the latest 720d ETH tape found the best honest "
             "candidate at the legacy120 ORB base with loose daily-sage gate "
@@ -863,7 +881,9 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "+OOS, DSR pass 57.1%, degradation 40.6%, gate FAIL. "
             "The registered ETH v4 ORB base was weaker under the overlay "
             "(best OOS +2.882), so keep the legacy120 overlay as "
-            "research-only until degradation clears the 35% cap. "
+            "shadow-only until degradation clears the 35% cap; ETH launch "
+            "exposure should come from the stricter eth_perp and "
+            "eth_compression lanes. "
             "Historical 2026-04-27 note: "
             "Generalization test of the BTC sage-daily-gate breakthrough. "
             "Plain crypto_regime_trend on ETH baseline is NEGATIVE "
@@ -881,12 +901,17 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "(below 3-trade min_trades_met floor). RESEARCH CANDIDATE: "
             "the +5.77 lift is real and the IS-positive flip resolves "
             "the prior promotion blocker, but two single-trade-window "
-            "blowups stop the strict gate. Still RESEARCH CANDIDATE only "
-            "until degradation and fold-consistency clear the strict "
-            "promotion gate."
+            "blowups stop the strict gate. Keep it as a diagnostic "
+            "shadow benchmark until degradation and fold-consistency clear "
+            "the strict promotion gate."
         ),
         extras={
-            "promotion_status": "research_candidate",
+            "promotion_status": "shadow_benchmark",
+            "shadow_reason": (
+                "ETH sage-daily has strong OOS but still fails the strict "
+                "degradation cap; retained as a diagnostic benchmark while "
+                "eth_perp and eth_compression carry ETH launch readiness."
+            ),
             "underlying_strategy": "crypto_orb",
             "crypto_orb_config": {
                 "range_minutes": 120,
@@ -944,7 +969,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={"deactivated": True, "deactivation_reason": "no news feed"},
     ),
-    # SOL perp — same crypto_orb baseline; SOL is research candidate
+    # SOL perp — shadow benchmark until a stationary edge is proven.
     StrategyAssignment(
         bot_id="sol_perp",
         strategy_id="sol_corb_v2",
@@ -958,6 +983,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         min_trades_per_window=10,
         strategy_kind="crypto_orb",
         rationale=(
+            "SHADOW BENCHMARK refreshed 2026-04-29. "
             "Same crypto_orb baseline; SOL had the worst IS Sharpe "
             "(-0.696) under the prior confluence path, so quant "
             "warns 'there's a real chance it just doesn't have a "
@@ -971,11 +997,19 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "from the v1 config's agg OOS Sharpe -4.76 to +2.49 "
             "with range=240m, atr=1.25, rr=2.5, max/day=1. DSR "
             "pass improved to 52.4pct and degradation compressed to "
-            "19.1pct, but aggregate IS remains negative (-0.31), so "
-            "this is a research/paper upgrade, not a live champion."
+            "19.1pct, but aggregate IS remains negative (-0.31) and "
+            "the combined baseline is nearly flat (avg R +0.0171, "
+            "profit factor 1.0065). Keep SOL as a diagnostic shadow "
+            "lane only; do not route live exposure until a future "
+            "provider-backed retune proves stationary IS and OOS edge."
         ),
         extras={
-            "promotion_status": "research_candidate",
+            "promotion_status": "shadow_benchmark",
+            "shadow_reason": (
+                "SOL retune improved OOS but still has negative aggregate IS "
+                "and a near-flat combined baseline; retained only as a "
+                "diagnostic benchmark until stationary edge is proven."
+            ),
             "alt_strategy_kind": "confluence", "alt_threshold": 6.5,
             "crypto_orb_config": {
                 "range_minutes": 240,
@@ -984,7 +1018,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "rr_target": 2.5,
             },
             "fleet_corr_partner": "btc_hybrid",
-            "research_candidate": True,
+            "research_candidate": False,
             "research_tune": {
                 "retuned_on": "2026-04-29",
                 "scope": "latest_20k_bar_research_candidate",
@@ -1031,12 +1065,19 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "accumulation cadence. Distinct from all other bots "
             "because the goal is *exposure*, not edge."
         ),
+        extras={
+            "promotion_status": "non_edge_strategy",
+            "non_edge_reason": (
+                "Crypto seed is a DCA-style BTC exposure accumulator, "
+                "not an alpha edge strategy; readiness checks should keep "
+                "it separate from promotion-gated trading edges."
+            ),
+        },
     ),
-    # BTC compression breakout — RESEARCH CANDIDATE 2026-04-27 from
-    # the tight-knob foundation supercharge sweep. Clear lift from
-    # the default config (+0.50 OOS) to +2.30 OOS by tightening
-    # volume + close-location + cooldown. Still below strict DSR
-    # gate (39% vs 50%) so registered as candidate, not full PASS.
+    # BTC compression breakout — shadow benchmark after the canonical
+    # 2026-04-29 retest no longer confirmed the old 5y candidate.
+    # Stronger BTC launch lanes are btc_hybrid, btc_sage_daily_etf,
+    # and btc_ensemble_2of3.
     StrategyAssignment(
         bot_id="btc_compression",
         strategy_id="btc_compression_v1",
@@ -1050,16 +1091,17 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         min_trades_per_window=3,
         strategy_kind="compression_breakout",
         rationale=(
-            "RESEARCH CANDIDATE refreshed 2026-04-29 from the canonical "
+            "SHADOW BENCHMARK refreshed 2026-04-29 from the canonical "
             "imported BTC 1h tape. The old 5y snapshot showed a strong "
             "+2.30 OOS candidate, but the active 21-window tape no longer "
             "confirms that edge. The best current tight-compression cell "
             "uses volume z >= 1.0, close-location >= 0.80, cooldown 24 "
             "bars, and rr=2.5: agg IS -1.034, agg OOS +0.139, 105 OOS "
             "trades, DSR pass 47.6%, strict gate FAIL. Keep as a "
-            "research/paper candidate only until a provider-backed "
-            "retest clears positive IS+OOS and the 50% DSR pass gate. "
-            "Half-size warmup_policy applies."
+            "diagnostic compression benchmark only; BTC launch exposure "
+            "should use the stronger READY lanes until a provider-backed "
+            "compression retest clears positive IS+OOS and the 50% DSR "
+            "pass gate."
         ),
         extras={
             "compression_preset": "btc",
@@ -1067,7 +1109,12 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "compression_min_close_location": 0.80,
             "compression_min_bars_between_trades": 24,
             "compression_rr_target": 2.5,
-            "promotion_status": "research_candidate",
+            "promotion_status": "shadow_benchmark",
+            "shadow_reason": (
+                "BTC compression failed the canonical retest with negative "
+                "IS and near-flat OOS; retained only as a diagnostic "
+                "benchmark while stronger BTC lanes carry launch readiness."
+            ),
             "research_tune": {
                 "refreshed_on": "2026-04-29",
                 "scope": "canonical_btc_1h_compression_tight_retest",
@@ -1075,6 +1122,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                     "docs/research_log/"
                     "foundation_supercharge_sweep_results_btc_compression-compression_tight_20260429T180652Z.json"
                 ),
+                "candidate_agg_is_sharpe": -1.034,
                 "candidate_agg_oos_sharpe": 0.139,
                 "candidate_dsr_pass_fraction": 0.476,
                 "candidate_degradation": 0.286,

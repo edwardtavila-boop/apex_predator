@@ -21,10 +21,10 @@
       "avg_r": -0.2593,
       "r_stddev": 1.5495,
       "_promoted_at": "2026-04-29",
-      "_promotion_status": "research_candidate",
-      "_full_history_smoke": "2026-04-29 positive-price-filtered full-history smoke: 487,725/490,103 tradable MNQ1 5m bars, 83 windows, 28/83 positive OOS, agg IS Sharpe -0.707, agg OOS Sharpe -2.958, degradation 51.8%, DSR median 0.000, DSR pass 13.2%, strict gate FAIL. This supersedes any interpretation of v2 as promotion-grade; keep it as a plain-ORB research/soak baseline only while mnq_orb_sage_v1 remains the stronger promoted MNQ lane.",
+      "_promotion_status": "shadow_benchmark",
+      "_full_history_smoke": "2026-04-29 positive-price-filtered full-history smoke: 487,725/490,103 tradable MNQ1 5m bars, 83 windows, 28/83 positive OOS, agg IS Sharpe -0.707, agg OOS Sharpe -2.958, degradation 51.8%, DSR median 0.000, DSR pass 13.2%, strict gate FAIL. A targeted full-history retune checked five serious ORB alternatives; best checked OOS remained negative (-2.368, DSR pass 25.3%). This supersedes any interpretation of v2 as promotion-grade; keep it as a plain-ORB shadow benchmark only while mnq_orb_sage_v1 remains the stronger READY MNQ lane.",
       "_walk_forward_summary": "MNQ1/5m latest 20k imported bars, 60d/30d windows, 1/2 positive OOS, agg OOS Sharpe +1.788, DSR median 0.651, 50% pass fraction. Latest-slice retune: range=5m, rr=3.0, atr_stop=1.5, ema=50. Strict gate remains FAIL because pass fraction is exactly 50% and the second OOS fold only fired one trade.",
-      "_notes": "Research/paper baseline only, not final live promotion. Persisted so paper-live drift checks and launch readiness can compare the retuned assignment honestly. Full latest-20k combined backtest: 50 trades, 20.0% win rate, avg R -0.2593, max DD 18.306%, total return -12.6815%; the improvement is OOS-slice relative to the prior latest-slice smoke, not a complete production promotion."
+      "_notes": "Shadow/diagnostic baseline only, not a live or paper promotion candidate. Persisted so drift checks and launch readiness keep the known-bad plain ORB lane visible without blocking OP-16. Full latest-20k combined backtest: 50 trades, 20.0% win rate, avg R -0.2593, max DD 18.306%, total return -12.6815%; the improvement is OOS-slice relative to the prior latest-slice smoke, not a complete production promotion."
     },
     {
       "strategy_id": "nq_orb_v1",
@@ -174,9 +174,9 @@
       "avg_r": 0.4873,
       "r_stddev": 1.7205,
       "_promoted_at": "2026-04-29",
-      "_promotion_status": "research_candidate",
+      "_promotion_status": "shadow_benchmark",
       "_latest_walk_forward_summary": "ETH/1h latest imported 720d tape, 90d/30d windows, 21 windows. Strategy = crypto_orb(range=120m, ATR=3.0, RR=2.5, ema=100, max/day=2) + sage 22-school composite at DAILY cadence as directional veto (loose mode, conv>=0.30). Provider-backed retune: 13/21 positive OOS, agg IS Sharpe +2.159, agg OOS Sharpe +4.888, degradation 40.6%, DSR pass 57.1%, 68 OOS trades, strict gate FAIL. This improves the prior strict conv>=0.40 registry candidate (+3.877 OOS) but still fails the 35pct degradation cap.",
-      "_latest_notes": "Research candidate, not promoted to live. Full latest-720d combined backtest with the provider-backed prior config had 88 trades, 43.18% win rate, avg R +0.4873, profit factor 1.8923, Sharpe 4.4702, max DD 7.3007%, total return +51.4215%. ETH still lacks ETF flow data, so this is the sage-daily overlay over crypto_orb rather than the BTC ETF formula. Keep paper/research only until degradation <=35% and fold consistency clear the strict promotion gate.",
+      "_latest_notes": "Shadow benchmark, not promoted to live. Full latest-720d combined backtest with the provider-backed prior config had 88 trades, 43.18% win rate, avg R +0.4873, profit factor 1.8923, Sharpe 4.4702, max DD 7.3007%, total return +51.4215%. ETH still lacks ETF flow data, so this is the sage-daily overlay over crypto_orb rather than the BTC ETF formula. Keep paper/research only until degradation <=35% and fold consistency clear the strict promotion gate; ETH launch exposure should use eth_perp and eth_compression.",
       "_historical_note": "The legacy _walk_forward_summary/_notes fields below are the original 2026-04-27 360d snapshot retained for comparison; latest_* fields supersede them.",
       "_walk_forward_summary": "ETH/1h, 90d/30d windows, 9 windows. Strategy = crypto_orb(range=120m, ATR=3.0, RR=2.5) + sage 22-school composite at DAILY cadence as directional veto (strict mode, conv>=0.40). Agg IS Sharpe +2.46 (vs -0.86 plain crypto_orb baseline — sage flipped IS positive), agg OOS Sharpe **+5.77** (vs +1.38 baseline — 4x lift). 6/9 +OOS, DSR median 0.992, DSR pass 66.7%, deg_avg 0.73 (FAIL the 0.35 cap). Per-window OOS Sharpes: +12.09, +14.74, +4.81, +9.81, +10.85, -15.14, +14.74, 0.00, 0.00.",
       "_notes": "Research candidate, not promoted to live. ETH lacks ETF flow data so we can't run the BTC formula end-to-end (regime_trend + ETF + sage_daily). Substituting crypto_orb for regime_trend works because ETH's crypto_orb baseline already passes; sage daily gate adds +4.4 OOS Sharpe on top. Gate FAIL on two single-trade-window blowups (W7=2, W8=1) plus W5 regime-shift outlier (-15.14). The +5.77 result is real and IS-positive (resolves the prior eth_corb_v2 promotion blocker), but the strict gate's deg_avg cap and min_trades_met floor need either more data (currently 360d) or a circuit breaker. n_trades = sum across 9 windows IS+OOS = ~89."
@@ -208,9 +208,9 @@
       "avg_r": 0.0171,
       "r_stddev": 1.5891,
       "_promoted_at": "2026-04-29",
-      "_promotion_status": "research_candidate",
+      "_promotion_status": "shadow_benchmark",
       "_walk_forward_summary": "SOL/1h canonical imported tape, 90d/30d windows, 21 windows. Deployed-risk retune: crypto_orb(range=240m, atr_stop=1.25, rr=2.5, max 1 trade/day). 12/21 positive OOS, agg IS Sharpe -0.306, agg OOS Sharpe +2.489, DSR median 0.990, 52.4% pass fraction, degradation 19.1%. Strict gate remains FAIL because aggregate IS is still negative, but this improves the prior registered cell (+1.317 OOS, 42.9% DSR pass) and replaces the v1 latest-slice result of agg OOS Sharpe -4.761.",
-      "_notes": "Research/paper baseline only, not final live promotion. Persisted so drift checks and launch readiness compare the retuned SOL assignment honestly. Full current combined backtest over 17275 SOL 1h bars: 117 trades, 29.06% win rate, avg R +0.0171, profit factor 1.0065, Sharpe 0.1700, max DD 15.3913%, total return +0.5383%."
+      "_notes": "Shadow benchmark only, not final live promotion. Persisted so drift checks and launch readiness compare the retuned SOL assignment honestly without treating it as a launch blocker. Full current combined backtest over 17275 SOL 1h bars: 117 trades, 29.06% win rate, avg R +0.0171, profit factor 1.0065, Sharpe 0.1700, max DD 15.3913%, total return +0.5383%."
     },
     {
       "strategy_id": "crypto_seed_dca",
@@ -240,9 +240,9 @@
       "avg_r": 0.412,
       "r_stddev": 1.297,
       "_promoted_at": "2026-04-27",
-      "_promotion_status": "research_candidate",
-      "_walk_forward_summary": "BTC/1h, 90d/30d windows, 21 windows on the canonical imported tape. compression_breakout with tight knobs (vol_z=1.0, close_loc=0.80, cooldown=24, rr=2.5). Agg IS Sharpe -1.034, agg OOS Sharpe +0.139, 105 OOS trades, 47.6pct DSR pass. Gate FAIL: positive OOS but negative IS and below the 50pct DSR pass gate.",
-      "_notes": "RESEARCH CANDIDATE. The legacy 5y +2.30 OOS snapshot is no longer the active truth surface. Current canonical retest keeps BTC compression as paper/research only with risk_multiplier_during_warmup=0.3. Promote only after provider-backed retest clears positive IS+OOS and the 50pct DSR pass-fraction gate."
+      "_promotion_status": "shadow_benchmark",
+      "_walk_forward_summary": "BTC/1h, 90d/30d windows, 21 windows on the canonical imported tape. compression_breakout with tight knobs (vol_z=1.0, close_loc=0.80, cooldown=24, rr=2.5). Agg IS Sharpe -1.034, agg OOS Sharpe +0.139, 105 OOS trades, 47.6pct DSR pass. Gate FAIL: positive-but-near-flat OOS, negative IS, and below the 50pct DSR pass gate.",
+      "_notes": "SHADOW BENCHMARK. The legacy 5y +2.30 OOS snapshot is no longer the active truth surface. Current canonical retest keeps BTC compression as diagnostic-only while stronger BTC lanes carry launch readiness. Reconsider only after provider-backed retest clears positive IS+OOS and the 50pct DSR pass-fraction gate."
     },
     {
       "strategy_id": "xrp_DEACTIVATED",

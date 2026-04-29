@@ -45,6 +45,45 @@ sys.path.insert(0, str(ROOT.parent))
 from eta_engine.scripts import workspace_roots  # noqa: E402
 
 
+def _parse_int_list(raw: str) -> list[int]:
+    values = [int(part.strip()) for part in raw.split(",") if part.strip()]
+    if not values:
+        raise argparse.ArgumentTypeError("at least one integer value is required")
+    return values
+
+
+def _parse_float_list(raw: str) -> list[float]:
+    values = [float(part.strip()) for part in raw.split(",") if part.strip()]
+    if not values:
+        raise argparse.ArgumentTypeError("at least one float value is required")
+    return values
+
+
+def _parse_cells(raw: str) -> list[SweepCell]:
+    cells: list[SweepCell] = []
+    for chunk in raw.split(","):
+        spec = chunk.strip()
+        if not spec:
+            continue
+        parts = [part.strip() for part in spec.split(":")]
+        if len(parts) != 4:
+            raise argparse.ArgumentTypeError(
+                "--cells entries must be range:rr:atr:ema",
+            )
+        range_minutes, rr_target, atr_stop_mult, ema_bias_period = parts
+        cells.append(
+            SweepCell(
+                int(range_minutes),
+                float(rr_target),
+                float(atr_stop_mult),
+                int(ema_bias_period),
+            ),
+        )
+    if not cells:
+        raise argparse.ArgumentTypeError("at least one cell is required")
+    return cells
+
+
 @dataclass(frozen=True)
 class SweepCell:
     range_minutes: int
@@ -65,6 +104,24 @@ class SweepResult:
     pass_gate: bool
 
 
+def _build_grid(
+    *,
+    range_minutes: list[int],
+    rr_targets: list[float],
+    atr_stop_mults: list[float],
+    ema_periods: list[int],
+) -> list[SweepCell]:
+    return [
+        SweepCell(rm, rr, asm, ema)
+        for rm, rr, asm, ema in product(
+            range_minutes,
+            rr_targets,
+            atr_stop_mults,
+            ema_periods,
+        )
+    ]
+
+
 def run_one(
     cell: SweepCell,
     *,
@@ -72,6 +129,7 @@ def run_one(
     timeframe: str,
     window_days: int,
     step_days: int,
+    min_trades_per_window: int = 3,
     max_bars: int | None = None,
     bar_slice: str = "tail",
 ) -> SweepResult:
@@ -103,7 +161,7 @@ def run_one(
     )
     wf = WalkForwardConfig(
         window_days=window_days, step_days=step_days, anchored=True,
-        oos_fraction=0.3, min_trades_per_window=3,
+        oos_fraction=0.3, min_trades_per_window=min_trades_per_window,
         strict_fold_dsr_gate=True, fold_dsr_min_pass_fraction=0.5,
     )
     orb_cfg = ORBConfig(
@@ -134,6 +192,32 @@ def main() -> int:
     p.add_argument("--timeframe", default="5m")
     p.add_argument("--window-days", type=int, default=60)
     p.add_argument("--step-days", type=int, default=30)
+    p.add_argument("--min-trades-per-window", type=int, default=3)
+    p.add_argument(
+        "--range-minutes",
+        default="5,15,30",
+        help="comma-separated ORB range minutes",
+    )
+    p.add_argument(
+        "--rr-targets",
+        default="1.5,2.0,3.0",
+        help="comma-separated reward/risk targets",
+    )
+    p.add_argument(
+        "--atr-stop-mults",
+        default="1.0,1.5,2.0",
+        help="comma-separated ATR stop multipliers",
+    )
+    p.add_argument(
+        "--ema-periods",
+        default="50,200",
+        help="comma-separated EMA bias periods; use 0 to disable EMA bias",
+    )
+    p.add_argument(
+        "--cells",
+        default=None,
+        help="explicit comma-separated cells as range:rr:atr:ema; overrides grid lists",
+    )
     p.add_argument(
         "--max-bars",
         type=int,
@@ -153,22 +237,29 @@ def main() -> int:
         help="docs = tracked research log; runtime = ignored state report",
     )
     args = p.parse_args()
+    if args.min_trades_per_window < 1:
+        p.error("--min-trades-per-window must be >= 1")
 
-    grid = [
-        SweepCell(rm, rr, asm, ema)
-        for rm, rr, asm, ema in product(
-            (5, 15, 30),
-            (1.5, 2.0, 3.0),
-            (1.0, 1.5, 2.0),
-            (50, 200),
+    grid = (
+        _parse_cells(args.cells)
+        if args.cells
+        else _build_grid(
+            range_minutes=_parse_int_list(args.range_minutes),
+            rr_targets=_parse_float_list(args.rr_targets),
+            atr_stop_mults=_parse_float_list(args.atr_stop_mults),
+            ema_periods=_parse_int_list(args.ema_periods),
         )
-    ]
-    print(f"[sweep] {args.symbol}/{args.timeframe} — {len(grid)} cells\n")
+    )
+    print(
+        f"[sweep] {args.symbol}/{args.timeframe} — {len(grid)} cells, "
+        f"min_trades/window={args.min_trades_per_window}\n",
+    )
     results: list[SweepResult] = []
     for i, cell in enumerate(grid):
         r = run_one(
             cell, symbol=args.symbol, timeframe=args.timeframe,
             window_days=args.window_days, step_days=args.step_days,
+            min_trades_per_window=args.min_trades_per_window,
             max_bars=args.max_bars,
             bar_slice=args.bar_slice,
         )
@@ -195,6 +286,7 @@ def main() -> int:
         "",
         f"_Generated: {datetime.now(UTC).isoformat()}_  "
         f"_Cells: {len(grid)}_  _Windows: {args.window_days}d / step {args.step_days}d_  "
+        f"_Min trades/window: {args.min_trades_per_window}_  "
         f"_Bars: {args.bar_slice}:{args.max_bars if args.max_bars is not None else 'all'}_",
         "",
         "| Range | RR | ATR× | EMA | Windows | +OOS | IS Sh | OOS Sh | DSR med | DSR pass% | Verdict |",

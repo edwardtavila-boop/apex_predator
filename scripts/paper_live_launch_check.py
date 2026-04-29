@@ -59,6 +59,13 @@ _RESOLVABLE_KINDS: frozenset[str] = frozenset({
     "crypto_macro_confluence", "sage_daily_gated", "ensemble_voting",
     "compression_breakout", "sweep_reclaim",
 })
+_SHADOW_ONLY_STATUSES: frozenset[str] = frozenset({
+    "shadow_benchmark",
+    "deprecated",
+})
+_NON_EDGE_STATUSES: frozenset[str] = frozenset({
+    "non_edge_strategy",
+})
 
 
 def _check_data_available(symbol: str, timeframe: str) -> bool:
@@ -147,8 +154,10 @@ def _research_evidence(extras: dict[str, object]) -> dict[str, object]:
             "scope",
             "source_artifact",
             "strict_gate",
+            "candidate_agg_is_sharpe",
             "candidate_agg_oos_sharpe",
             "candidate_dsr_pass_fraction",
+            "candidate_degradation",
             "provider_backed",
         )
         if k in tune
@@ -162,8 +171,10 @@ def _research_evidence(extras: dict[str, object]) -> dict[str, object]:
                 "tradable_bars",
                 "raw_bars",
                 "windows",
+                "agg_is_sharpe",
                 "agg_oos_sharpe",
                 "dsr_pass_fraction",
+                "degradation",
                 "strict_gate",
             )
             if k in full_history
@@ -187,12 +198,25 @@ def _research_warning(extras: dict[str, object]) -> str:
     if oos is not None:
         parts.append(f"OOS {oos}")
 
+    is_sharpe = _fmt_metric(
+        source.get("agg_is_sharpe", source.get("candidate_agg_is_sharpe")),
+    )
+    if is_sharpe is not None:
+        parts.append(f"IS {is_sharpe}")
+
     dsr = _fmt_metric(
         source.get("dsr_pass_fraction", source.get("candidate_dsr_pass_fraction")),
         pct=True,
     )
     if dsr is not None:
         parts.append(f"DSR pass {dsr}")
+
+    degradation = _fmt_metric(
+        source.get("degradation", source.get("candidate_degradation")),
+        pct=True,
+    )
+    if degradation is not None:
+        parts.append(f"degradation {degradation}")
 
     artifact = source.get("source_artifact")
     if isinstance(artifact, str):
@@ -255,6 +279,16 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
     if promo_status == "research_candidate":
         evidence.update(_research_evidence(extras))
         warnings.append(_research_warning(extras))
+    elif promo_status in _SHADOW_ONLY_STATUSES:
+        evidence["launch_role"] = "shadow_only"
+        shadow_reason = extras.get("shadow_reason")
+        if isinstance(shadow_reason, str) and shadow_reason:
+            evidence["shadow_reason"] = shadow_reason
+    elif promo_status in _NON_EDGE_STATUSES:
+        evidence["launch_role"] = "non_edge_exposure"
+        non_edge_reason = extras.get("non_edge_reason")
+        if isinstance(non_edge_reason, str) and non_edge_reason:
+            evidence["non_edge_reason"] = non_edge_reason
     elif promo_status == "deactivated":
         # Deactivated bots aren't warnings — they're explicitly off
         return {

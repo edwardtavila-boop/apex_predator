@@ -13,8 +13,8 @@ or diffusion model, for three reasons:
      collapsing to look-like-real distributions that lack the tail
      structure we actually need for CRISIS and HIGH_VOL augmentation.
   2. The project philosophy is stdlib-first: `brain.regime` is a decision
-     tree, `brain.rl_agent` is a seeded random baseline. Adding a PyTorch
-     dep here would be inconsistent.
+     tree, `brain.rl_agent` is a deterministic guardrail baseline. Adding a
+     PyTorch dep here would be inconsistent.
   3. For the specific use case (augmenting the backtester with MORE bars
      that LOOK LIKE a known regime), a parametric simulator calibrated to
      per-regime (drift, vol, kurt, vol-clustering) profiles is more

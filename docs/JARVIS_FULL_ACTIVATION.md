@@ -43,6 +43,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - Qiskit QAOA no longer fabricates an all-zero answer when the SDK returns no
   usable best measurement. Small QUBOs recover through exact enumeration;
   larger ones recover through the existing simulated-annealing verifier.
+- `brain.rl_agent` no longer uses stochastic random exploration. The default
+  baseline is a deterministic guardrail policy with transparent action-score
+  feedback, so JARVIS/risk layers do not see random direction flips.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

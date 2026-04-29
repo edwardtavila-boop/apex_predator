@@ -83,6 +83,9 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - `scripts/runtime_log_smoke.py` can append a safe `runtime_smoke` row to
   `logs/eta_engine/runtime_log.jsonl` without starting bots or contacting
   brokers, giving DR/readiness checks a canonical runtime heartbeat.
+- `scripts/drift_watchdog_smoke.py` can append a safe `drift_watchdog_smoke`
+  row to `var/eta_engine/state/drift_watchdog.jsonl` without strategy replay
+  or broker access, giving DR/readiness checks canonical drift-state evidence.
 - The portfolio rebalancer now emits an auditable advisory plan that preserves
   total baseline budget by default, dampens highly correlated winners, and only
   mutates live bot sizing when `apply_rebalance_plan(..., dry_run=False)` is

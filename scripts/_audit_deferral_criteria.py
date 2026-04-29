@@ -126,7 +126,8 @@ def _scan_file(path: Path, *, root: Path) -> list[Hit]:
 def scan(root: Path) -> list[Hit]:
     """Walk the repo for production source markers.
 
-    Excludes: tests/, scripts/_legacy_bumps/, scripts/bumps/, docs/,
+    Excludes: tests/, scripts/_legacy_bumps/, scripts/bumps/,
+    scripts/_bump_roadmap_v*.py, docs/,
     __pycache__, .cache/, .venv/. The exclusions reflect 'this is a
     one-shot historical artifact, not actively-deferred work.'
 
@@ -157,6 +158,8 @@ def scan(root: Path) -> list[Hit]:
     for p in root.rglob("*.py"):
         rel = p.relative_to(root).as_posix()
         if rel == self_path:
+            continue
+        if rel.startswith("scripts/_bump_roadmap_v"):
             continue
         if any(rel.startswith(prefix) or "__pycache__" in rel for prefix in skip_prefixes):
             continue

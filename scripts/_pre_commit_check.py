@@ -307,9 +307,10 @@ def main(argv: list[str] | None = None) -> int:
         if rc != 0:
             return 2
 
-    # Advisory audits (do NOT gate the commit -- if a future bare
-    # deferral or unknown alert event surfaces, the operator sees the
-    # message inline at commit time but the commit still proceeds).
+    # Advisory audits (do NOT gate the commit -- if future alert-route,
+    # roadmap, deferral, broker-dormancy, or docstring-ratchet drift
+    # surfaces, the operator sees the message inline at commit time but
+    # the commit still proceeds).
     # Promoting any of these to gating is a follow-up decision; today
     # they're advisory because the cost of a false positive blocking a
     # routine commit is higher than the risk of a real positive going

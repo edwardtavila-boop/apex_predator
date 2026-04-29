@@ -2,6 +2,32 @@
 
 User mandate (verbatim): "lets do all three in order".
 
+## 2026-04-29 amendment -- one-command freshness refresh
+
+`scripts/refresh_launch_data.py` is now the canonical operator entrypoint
+for launch-critical data freshness:
+
+```powershell
+python -m eta_engine.scripts.refresh_launch_data --json
+```
+
+It runs the safe non-Databento refresh path:
+1. `fetch_index_futures_bars --symbol MNQ --timeframe 5m`
+2. `fetch_index_futures_bars --symbol NQ --timeframe 5m`
+3. `extend_nq_daily_yahoo`
+4. `announce_data_library`
+5. `paper_live_launch_check --json`
+
+On 2026-04-29 it refreshed:
+* `MNQ1_5m.csv`: 490,103 -> 493,040 rows, ending 2026-04-29.
+* `NQ1_5m.csv`: 20,726 -> 23,748 rows, ending 2026-04-29.
+* `NQ1_D.csv`: 6,775 -> 6,787 rows, ending 2026-04-29.
+
+Result after republishing the inventory: all 19 paper-live bot definitions
+returned `READY`, with `warn: []` and `block: []`. The inventory snapshot
+also exposes dataset freshness bands so "data exists" and "data is current"
+are no longer conflated.
+
 After commit 5e62b69 (foundation supercharge + eth_compression
 promotion), three concrete next moves were on the table:
 1. Tighter BTC compression sweep — push the +0.50 OOS / 358-trade

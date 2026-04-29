@@ -13,8 +13,9 @@ every promoted bot in the registry and checks:
 
 1. **Strategy resolves** — the strategy_kind has a registered
    handler in run_research_grid.
-2. **Data available** — all critical DataRequirements have files
-   on disk.
+2. **Data available + fresh** — primary strategy data resolves, and
+   every critical DataRequirement is present; stale critical support
+   feeds warn before launch.
 3. **Baseline persisted** — strategy_baselines.json has an entry
    (or registry entry has rationale-baseline).
 4. **Warmup policy set** — promoted_on, warmup_days, risk_mult.
@@ -107,6 +108,99 @@ def _data_freshness_warning(symbol: str, timeframe: str, freshness: dict[str, ob
         end_date = end.split("T", 1)[0]
         return f"stale data: {symbol}/{timeframe} ended {end_date} ({age:.2f}d old)"
     return f"stale data: {symbol}/{timeframe}"
+
+
+def _requirement_payload(req: Any) -> dict[str, object]:  # noqa: ANN401
+    return {
+        "kind": req.kind,
+        "symbol": req.symbol,
+        "timeframe": req.timeframe,
+        "critical": req.critical,
+        "note": req.note,
+    }
+
+
+def _requirement_label(req: Any) -> str:  # noqa: ANN401
+    return f"{req.kind}:{req.symbol}/{req.timeframe or '-'}"
+
+
+def _matches_primary_launch_dataset(
+    req: Any,  # noqa: ANN401
+    *,
+    primary_symbol: str,
+    primary_timeframe: str,
+) -> bool:
+    return (
+        req.kind == "bars"
+        and req.symbol.upper() == primary_symbol.upper()
+        and req.timeframe == primary_timeframe
+    )
+
+
+def _critical_feed_freshness_warning(req: Any, freshness: dict[str, object]) -> str | None:  # noqa: ANN401
+    """Human-readable warning for stale critical non-primary feeds."""
+    if freshness.get("status") != "stale":
+        return None
+    age = freshness.get("age_days")
+    end = freshness.get("end")
+    label = _requirement_label(req)
+    if isinstance(age, (int, float)) and isinstance(end, str):
+        end_date = end.split("T", 1)[0]
+        return f"stale critical feed: {label} ended {end_date} ({age:.2f}d old)"
+    return f"stale critical feed: {label}"
+
+
+def _check_critical_data_requirements(
+    bot_id: str,
+    *,
+    primary_symbol: str,
+    primary_timeframe: str,
+    generated_at: datetime | None = None,
+    library: Any | None = None,  # noqa: ANN401
+) -> dict[str, list[object]]:
+    """Check every critical requirement beyond the primary launch dataset."""
+    from eta_engine.data.audit import audit_bot
+    from eta_engine.scripts.announce_data_library import _dataset_freshness
+
+    audit = audit_bot(bot_id, library=library)
+    if audit is None or audit.deactivated:
+        return {"issues": [], "warnings": [], "evidence": []}
+
+    now = generated_at or datetime.now(UTC)
+    issues: list[str] = []
+    warnings: list[str] = []
+    evidence: list[dict[str, object]] = []
+
+    for req in audit.missing_critical:
+        if _matches_primary_launch_dataset(
+            req,
+            primary_symbol=primary_symbol,
+            primary_timeframe=primary_timeframe,
+        ):
+            continue
+        issues.append(f"missing critical feed: {_requirement_label(req)}")
+
+    for req, dataset in audit.available:
+        if not req.critical or _matches_primary_launch_dataset(
+            req,
+            primary_symbol=primary_symbol,
+            primary_timeframe=primary_timeframe,
+        ):
+            continue
+        freshness = _dataset_freshness(dataset, now)
+        item = {
+            "requirement": _requirement_payload(req),
+            "dataset_key": dataset.key,
+            "rows": dataset.row_count,
+            "end": dataset.end_ts.isoformat(),
+            **freshness,
+        }
+        evidence.append(item)
+        warning = _critical_feed_freshness_warning(req, item)
+        if warning is not None:
+            warnings.append(warning)
+
+    return {"issues": issues, "warnings": warnings, "evidence": evidence}
 
 
 def _check_bot_dir_exists(bot_id: str) -> bool:
@@ -314,6 +408,16 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
             )
             if freshness_warning is not None:
                 warnings.append(freshness_warning)
+
+    critical_data = _check_critical_data_requirements(
+        assignment.bot_id,
+        primary_symbol=assignment.symbol,
+        primary_timeframe=assignment.timeframe,
+    )
+    issues.extend(str(issue) for issue in critical_data["issues"])
+    warnings.extend(str(warning) for warning in critical_data["warnings"])
+    if critical_data["evidence"]:
+        evidence["critical_data_requirements"] = critical_data["evidence"]
 
     # 3. Bot directory exists
     if not _check_bot_dir_exists(assignment.bot_id):

@@ -38,6 +38,18 @@ now reports 54 datasets, 24 fresh, 2 warm, and 28 stale; bot coverage is
 dataset freshness bands so "data exists" and "data is current" are no
 longer conflated.
 
+The inventory snapshot now distinguishes raw dataset freshness from the
+canonical dataset each symbol/timeframe resolves to. Raw freshness remains
+24 fresh / 2 warm / 28 stale, while canonical freshness is 24 fresh / 1
+warm / 20 stale, with 8 stale raw feeds explicitly marked as superseded
+by a better canonical dataset.
+
+The launch gate now also checks every critical `DataRequirement` behind
+each bot, not just the primary strategy dataset. Missing critical support
+feeds block paper-live launch, stale critical support feeds warn, and fresh
+support feeds are attached as launch evidence. After the support-feed
+refresh, the stricter gate still returns 19 READY / 0 WARN / 0 BLOCK.
+
 After commit 5e62b69 (foundation supercharge + eth_compression
 promotion), three concrete next moves were on the table:
 1. Tighter BTC compression sweep — push the +0.50 OOS / 358-trade

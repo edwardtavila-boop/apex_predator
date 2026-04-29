@@ -23,6 +23,24 @@ def _write_history_csv(path: Path) -> None:
         writer.writerow([1_735_693_200, 100.5, 101.5, 100.0, 101.0, 12_000.0])
 
 
+def _write_history_csv_at(path: Path, timestamps: list[datetime]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["time", "open", "high", "low", "close", "volume"])
+        for idx, ts in enumerate(timestamps):
+            px = 100.0 + idx
+            writer.writerow([int(ts.timestamp()), px, px + 1.0, px - 1.0, px + 0.5, 10_000.0])
+
+
+def _write_main_csv_at(path: Path, timestamps: list[datetime]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["timestamp_utc", "epoch_s", "open", "high", "low", "close", "volume", "session"])
+        for idx, ts in enumerate(timestamps):
+            px = 100.0 + idx
+            writer.writerow([ts.isoformat(), int(ts.timestamp()), px, px + 1.0, px - 1.0, px + 0.5, 10_000.0, "ETH"])
+
+
 def test_default_snapshot_path_is_canonical_runtime_state() -> None:
     assert announce_data_library._DEFAULT_SNAPSHOT == ETA_DATA_INVENTORY_SNAPSHOT_PATH
     assert announce_data_library._DEFAULT_SNAPSHOT.parent == ETA_RUNTIME_STATE_DIR
@@ -77,6 +95,44 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
     available_dataset = payload["bot_coverage"]["items"][0]["available"][0]["dataset"]
     assert available_dataset["key"] == "BTC/1h/history"
     assert available_dataset["freshness"]["status"] == "stale"
+
+
+def test_inventory_snapshot_separates_raw_and_canonical_freshness(tmp_path: Path) -> None:
+    main = tmp_path / "main"
+    history = tmp_path / "history"
+    main.mkdir()
+    history.mkdir()
+    generated_at = datetime(2026, 4, 29, 20, 0, tzinfo=UTC)
+
+    _write_main_csv_at(
+        main / "mnq_es1_5.csv",
+        [
+            datetime(2026, 4, 14, 19, 0, tzinfo=UTC),
+            datetime(2026, 4, 14, 19, 5, tzinfo=UTC),
+        ],
+    )
+    _write_history_csv_at(
+        history / "ES1_5m.csv",
+        [
+            datetime(2026, 4, 29, 19, 25, tzinfo=UTC),
+            datetime(2026, 4, 29, 19, 30, tzinfo=UTC),
+            datetime(2026, 4, 29, 19, 35, tzinfo=UTC),
+        ],
+    )
+
+    payload = announce_data_library.build_inventory_snapshot(
+        DataLibrary(roots=[main, history]),
+        audits=[],
+        generated_at=generated_at,
+    )
+
+    freshness = payload["freshness"]
+    assert freshness["counts"] == {"fresh": 1, "warm": 0, "stale": 1}
+    assert freshness["canonical_counts"] == {"fresh": 1, "warm": 0, "stale": 0}
+    assert freshness["canonical_stale"] == []
+    assert freshness["superseded_stale"][0]["key"] == "ES1/5m/main"
+    assert freshness["superseded_stale"][0]["superseded_by"]["key"] == "ES1/5m/history"
+    assert freshness["superseded_stale"][0]["superseded_by"]["freshness"]["status"] == "fresh"
 
 
 def test_write_inventory_snapshot_creates_parent_and_pretty_json(tmp_path: Path) -> None:

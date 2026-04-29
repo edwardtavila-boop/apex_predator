@@ -105,6 +105,17 @@ def _dataset_payload(dataset: DatasetMeta, *, generated_at: datetime | None = No
     return payload
 
 
+def _canonical_datasets(datasets: list[DatasetMeta]) -> dict[tuple[str, str], DatasetMeta]:
+    """Pick the dataset DataLibrary.get() should prefer for each symbol/timeframe."""
+    canonical: dict[tuple[str, str], DatasetMeta] = {}
+    for dataset in datasets:
+        key = (dataset.symbol.upper(), dataset.timeframe)
+        current = canonical.get(key)
+        if current is None or (dataset.row_count, dataset.end_ts) > (current.row_count, current.end_ts):
+            canonical[key] = dataset
+    return canonical
+
+
 def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> dict[str, Any]:
     return {
         "bot_id": audit.bot_id,
@@ -125,20 +136,50 @@ def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> 
 
 
 def _freshness_summary(datasets: list[DatasetMeta], generated_at: datetime) -> dict[str, Any]:
-    items = [
-        {
-            **_dataset_payload(dataset),
-            "freshness": _dataset_freshness(dataset, generated_at),
-        }
+    canonical_by_pair = _canonical_datasets(datasets)
+    canonical_keys = {dataset.key for dataset in canonical_by_pair.values()}
+    payload_by_key = {
+        dataset.key: _dataset_payload(dataset, generated_at=generated_at)
         for dataset in datasets
-    ]
+    }
+    items: list[dict[str, Any]] = []
+    superseded: list[dict[str, Any]] = []
+    for dataset in datasets:
+        item = payload_by_key[dataset.key]
+        item["canonical"] = dataset.key in canonical_keys
+        canonical = canonical_by_pair[(dataset.symbol.upper(), dataset.timeframe)]
+        if not item["canonical"]:
+            canonical_payload = payload_by_key[canonical.key]
+            item["superseded_by"] = {
+                "key": canonical.key,
+                "rows": canonical.row_count,
+                "end": canonical.end_ts.isoformat(),
+                "freshness": canonical_payload["freshness"],
+            }
+            superseded.append(item)
+        items.append(item)
     counts = {"fresh": 0, "warm": 0, "stale": 0}
+    canonical_counts = {"fresh": 0, "warm": 0, "stale": 0}
     for item in items:
         counts[item["freshness"]["status"]] += 1
+        if item["canonical"]:
+            canonical_counts[item["freshness"]["status"]] += 1
     return {
         "thresholds_days": _FRESHNESS_THRESHOLDS_DAYS,
         "counts": counts,
+        "canonical_counts": canonical_counts,
         "stale": [item for item in items if item["freshness"]["status"] == "stale"],
+        "canonical_stale": [
+            item
+            for item in items
+            if item["canonical"] and item["freshness"]["status"] == "stale"
+        ],
+        "superseded": superseded,
+        "superseded_stale": [
+            item
+            for item in superseded
+            if item["freshness"]["status"] == "stale"
+        ],
         "warm": [item for item in items if item["freshness"]["status"] == "warm"],
     }
 

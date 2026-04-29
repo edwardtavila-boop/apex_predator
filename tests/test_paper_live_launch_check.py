@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from eta_engine.data.library import DataLibrary
 from eta_engine.scripts import paper_live_launch_check as mod
+
+_ORIGINAL_CHECK_CRITICAL_DATA_REQUIREMENTS = mod._check_critical_data_requirements
 
 
 @pytest.fixture(autouse=True)
 def _neutral_data_freshness(monkeypatch) -> None:
     monkeypatch.setattr(mod, "_check_data_freshness", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        mod,
+        "_check_critical_data_requirements",
+        lambda *_args, **_kwargs: {"issues": [], "warnings": [], "evidence": []},
+    )
 
 
 def test_deactivated_bot_is_ready_even_when_data_is_absent(monkeypatch) -> None:
@@ -204,3 +214,105 @@ def test_stale_launch_data_warns_without_blocking(monkeypatch) -> None:
     assert result["issues"] == []
     assert result["warnings"] == ["stale data: MNQ1/5m ended 2026-04-14 (15.02d old)"]
     assert result["evidence"]["data_freshness"]["dataset_key"] == "MNQ1/5m/history"
+
+
+def test_missing_critical_support_feed_blocks(monkeypatch) -> None:
+    assignment = SimpleNamespace(
+        bot_id="nq_futures",
+        strategy_id="nq_orb_v1",
+        strategy_kind="orb",
+        symbol="NQ1",
+        timeframe="5m",
+        extras={"promotion_status": "promoted"},
+    )
+    monkeypatch.setattr(mod, "_check_data_available", lambda *_: True)
+    monkeypatch.setattr(
+        mod,
+        "_check_critical_data_requirements",
+        lambda *_args, **_kwargs: {
+            "issues": ["missing critical feed: correlation:ES1/5m"],
+            "warnings": [],
+            "evidence": [],
+        },
+    )
+    monkeypatch.setattr(mod, "_check_bot_dir_exists", lambda *_: True)
+    monkeypatch.setattr(mod, "_load_baseline_entry", lambda *_: {"strategy_id": "nq_orb_v1"})
+
+    result = mod._audit_bot(assignment)
+
+    assert result["status"] == "BLOCK"
+    assert result["issues"] == ["missing critical feed: correlation:ES1/5m"]
+    assert result["warnings"] == []
+
+
+def test_stale_critical_support_feed_warns_with_evidence(monkeypatch) -> None:
+    assignment = SimpleNamespace(
+        bot_id="mnq_futures_sage",
+        strategy_id="mnq_orb_sage_v1",
+        strategy_kind="orb_sage_gated",
+        symbol="MNQ1",
+        timeframe="5m",
+        extras={"promotion_status": "promoted"},
+    )
+    support_evidence = [
+        {
+            "requirement": {
+                "kind": "correlation",
+                "symbol": "ES1",
+                "timeframe": "5m",
+                "critical": True,
+                "note": "ES correlation is a primary MNQ price driver",
+            },
+            "dataset_key": "ES1/5m/history",
+            "status": "stale",
+            "age_days": 15.02,
+            "end": "2026-04-14T19:00:00+00:00",
+            "rows": 491_074,
+        }
+    ]
+    monkeypatch.setattr(mod, "_check_data_available", lambda *_: True)
+    monkeypatch.setattr(
+        mod,
+        "_check_critical_data_requirements",
+        lambda *_args, **_kwargs: {
+            "issues": [],
+            "warnings": ["stale critical feed: correlation:ES1/5m ended 2026-04-14 (15.02d old)"],
+            "evidence": support_evidence,
+        },
+    )
+    monkeypatch.setattr(mod, "_check_bot_dir_exists", lambda *_: True)
+    monkeypatch.setattr(mod, "_load_baseline_entry", lambda *_: {"strategy_id": "mnq_orb_sage_v1"})
+
+    result = mod._audit_bot(assignment)
+
+    assert result["status"] == "WARN"
+    assert result["issues"] == []
+    assert result["warnings"] == [
+        "stale critical feed: correlation:ES1/5m ended 2026-04-14 (15.02d old)",
+    ]
+    assert result["evidence"]["critical_data_requirements"] == support_evidence
+
+
+def test_critical_requirement_helper_reports_missing_non_primary_feeds(tmp_path: Path) -> None:
+    history = tmp_path / "history"
+    history.mkdir()
+    with (history / "NQ1_5m.csv").open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["time", "open", "high", "low", "close", "volume"])
+        writer.writerow([1_735_689_600, 100.0, 101.0, 99.0, 100.5, 10_000.0])
+
+    findings = _ORIGINAL_CHECK_CRITICAL_DATA_REQUIREMENTS(
+        "nq_futures",
+        primary_symbol="NQ1",
+        primary_timeframe="5m",
+        library=DataLibrary(roots=[history]),
+    )
+
+    assert findings["warnings"] == []
+    assert findings["evidence"] == []
+    assert findings["issues"] == [
+        "missing critical feed: bars:NQ1/1h",
+        "missing critical feed: bars:NQ1/4h",
+        "missing critical feed: bars:NQ1/D",
+        "missing critical feed: correlation:ES1/5m",
+    ]

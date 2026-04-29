@@ -299,8 +299,8 @@ class DataLibrary:
             return None
         if schema_kind is not None:
             return matches[0]
-        # Prefer the longer-history version (typically "history").
-        return max(matches, key=lambda d: d.row_count)
+        # Prefer the longer-history version, then the freshest endpoint.
+        return max(matches, key=lambda d: (d.row_count, d.end_ts))
 
     def symbols(self) -> list[str]:
         return sorted({d.symbol for d in self._datasets})

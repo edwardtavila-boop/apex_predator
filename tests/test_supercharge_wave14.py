@@ -241,6 +241,7 @@ def test_daily_brief_renders_with_empty_logs(tmp_path: Path) -> None:
     brief = generate_daily_brief(
         n_hours_back=24,
         output_dir=tmp_path / "briefs",
+        state_dir=tmp_path / "jarvis_intel",
         auto_persist=False,
     )
     assert brief.n_verdicts == 0
@@ -256,6 +257,7 @@ def test_daily_brief_to_dict_serializable(tmp_path: Path) -> None:
     brief = generate_daily_brief(
         n_hours_back=24,
         output_dir=tmp_path / "briefs",
+        state_dir=tmp_path / "jarvis_intel",
         auto_persist=False,
     )
     s = json.dumps(brief.to_dict())
@@ -266,7 +268,7 @@ def test_daily_brief_persists_md_and_json(tmp_path: Path) -> None:
     from eta_engine.brain.jarvis_v3.daily_brief import generate_daily_brief
     out = tmp_path / "briefs"
     generate_daily_brief(
-        n_hours_back=24, output_dir=out, auto_persist=True,
+        n_hours_back=24, output_dir=out, state_dir=tmp_path / "jarvis_intel", auto_persist=True,
     )
     files_md = list(out.glob("*.md"))
     files_json = list(out.glob("*.json"))

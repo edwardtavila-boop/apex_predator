@@ -30,7 +30,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BRIEF_DIR = ROOT / "state" / "jarvis_intel" / "daily_briefs"
+DEFAULT_STATE_DIR = ROOT / "state" / "jarvis_intel"
+DEFAULT_BRIEF_DIR = DEFAULT_STATE_DIR / "daily_briefs"
 
 
 @dataclass
@@ -156,14 +157,16 @@ def generate_daily_brief(
     *,
     n_hours_back: float = 24,
     output_dir: Path = DEFAULT_BRIEF_DIR,
+    state_dir: Path | None = None,
     auto_persist: bool = True,
 ) -> DailyBrief:
     """Build the daily brief by aggregating every JARVIS state source."""
     cutoff = datetime.now(UTC) - timedelta(hours=n_hours_back)
     today = datetime.now(UTC).date().isoformat()
+    state_root = Path(state_dir) if state_dir is not None else DEFAULT_STATE_DIR
 
     # --- Verdicts ---
-    verdict_log = ROOT / "state" / "jarvis_intel" / "verdicts.jsonl"
+    verdict_log = state_root / "verdicts.jsonl"
     verdicts = [
         v for v in _read_jsonl(verdict_log)
         if _within_window(v.get("ts"), cutoff)
@@ -179,7 +182,7 @@ def generate_daily_brief(
         breakdown[k] = breakdown.get(k, 0) + 1
 
     # --- Trades ---
-    trade_log = ROOT / "state" / "jarvis_intel" / "trade_closes.jsonl"
+    trade_log = state_root / "trade_closes.jsonl"
     trades = [
         t for t in _read_jsonl(trade_log)
         if _within_window(t.get("ts"), cutoff)
@@ -194,7 +197,7 @@ def generate_daily_brief(
         win_rate = 0.0
 
     # --- Thesis breaches ---
-    breach_log = ROOT / "state" / "jarvis_intel" / "thesis_breaches.jsonl"
+    breach_log = state_root / "thesis_breaches.jsonl"
     breaches = [
         b for b in _read_jsonl(breach_log)
         if _within_window(b.get("ts"), cutoff)
@@ -205,7 +208,7 @@ def generate_daily_brief(
     ]
 
     # --- Postmortems ---
-    pm_dir = ROOT / "state" / "jarvis_intel" / "postmortems"
+    pm_dir = state_root / "postmortems"
     new_pms: list[str] = []
     if pm_dir.exists():
         for f in pm_dir.glob("*.json"):

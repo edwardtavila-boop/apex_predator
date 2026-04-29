@@ -75,6 +75,40 @@ def _check_data_available(symbol: str, timeframe: str) -> bool:
     return default_library().get(symbol=symbol, timeframe=timeframe) is not None
 
 
+def _check_data_freshness(
+    symbol: str,
+    timeframe: str,
+    *,
+    generated_at: datetime | None = None,
+) -> dict[str, object] | None:
+    """Return freshness metadata for the launch dataset, if available."""
+    from eta_engine.data.library import default_library
+    from eta_engine.scripts.announce_data_library import _dataset_freshness
+
+    dataset = default_library().get(symbol=symbol, timeframe=timeframe)
+    if dataset is None:
+        return None
+    freshness = _dataset_freshness(dataset, generated_at or datetime.now(UTC))
+    return {
+        "dataset_key": dataset.key,
+        "end": dataset.end_ts.isoformat(),
+        "rows": dataset.row_count,
+        **freshness,
+    }
+
+
+def _data_freshness_warning(symbol: str, timeframe: str, freshness: dict[str, object]) -> str | None:
+    """Human-readable warning for stale launch data."""
+    if freshness.get("status") != "stale":
+        return None
+    age = freshness.get("age_days")
+    end = freshness.get("end")
+    if isinstance(age, (int, float)) and isinstance(end, str):
+        end_date = end.split("T", 1)[0]
+        return f"stale data: {symbol}/{timeframe} ended {end_date} ({age:.2f}d old)"
+    return f"stale data: {symbol}/{timeframe}"
+
+
 def _check_bot_dir_exists(bot_id: str) -> bool:
     """Heuristic: variant bots share a dir with a base bot.
     True if either bots/{bot_id}/ exists OR the bot is in
@@ -269,6 +303,17 @@ def _audit_bot(assignment: Any) -> dict:  # noqa: ANN401
         issues.append(
             f"no data file for {assignment.symbol}/{assignment.timeframe}",
         )
+    else:
+        data_freshness = _check_data_freshness(assignment.symbol, assignment.timeframe)
+        if data_freshness is not None:
+            evidence["data_freshness"] = data_freshness
+            freshness_warning = _data_freshness_warning(
+                assignment.symbol,
+                assignment.timeframe,
+                data_freshness,
+            )
+            if freshness_warning is not None:
+                warnings.append(freshness_warning)
 
     # 3. Bot directory exists
     if not _check_bot_dir_exists(assignment.bot_id):

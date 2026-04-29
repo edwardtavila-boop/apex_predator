@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from eta_engine.scripts import paper_live_launch_check as mod
+
+
+@pytest.fixture(autouse=True)
+def _neutral_data_freshness(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "_check_data_freshness", lambda *_args, **_kwargs: None)
 
 
 def test_deactivated_bot_is_ready_even_when_data_is_absent(monkeypatch) -> None:
@@ -165,3 +172,35 @@ def test_research_candidate_without_tune_keeps_generic_warning(monkeypatch) -> N
     assert result["status"] == "WARN"
     assert result["warnings"] == ["research_candidate (gate not fully passed)"]
     assert result["evidence"]["baseline_summary"] == "BTC compression strict gate FAIL."
+
+
+def test_stale_launch_data_warns_without_blocking(monkeypatch) -> None:
+    assignment = SimpleNamespace(
+        bot_id="mnq_futures_sage",
+        strategy_id="mnq_orb_sage_v1",
+        strategy_kind="orb_sage_gated",
+        symbol="MNQ1",
+        timeframe="5m",
+        extras={"promotion_status": "promoted"},
+    )
+    monkeypatch.setattr(mod, "_check_data_available", lambda *_: True)
+    monkeypatch.setattr(
+        mod,
+        "_check_data_freshness",
+        lambda *_args, **_kwargs: {
+            "dataset_key": "MNQ1/5m/history",
+            "status": "stale",
+            "age_days": 15.02,
+            "end": "2026-04-14T19:00:00+00:00",
+            "rows": 490_103,
+        },
+    )
+    monkeypatch.setattr(mod, "_check_bot_dir_exists", lambda *_: True)
+    monkeypatch.setattr(mod, "_load_baseline_entry", lambda *_: {"strategy_id": "mnq_orb_sage_v1"})
+
+    result = mod._audit_bot(assignment)
+
+    assert result["status"] == "WARN"
+    assert result["issues"] == []
+    assert result["warnings"] == ["stale data: MNQ1/5m ended 2026-04-14 (15.02d old)"]
+    assert result["evidence"]["data_freshness"]["dataset_key"] == "MNQ1/5m/history"

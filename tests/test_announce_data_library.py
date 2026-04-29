@@ -59,6 +59,10 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
     assert payload["generated_at"] == "2026-04-29T12:00:00+00:00"
     assert payload["dataset_count"] == 1
     assert payload["datasets"][0]["symbol"] == "BTC"
+    assert payload["datasets"][0]["freshness"]["status"] == "stale"
+    assert payload["datasets"][0]["freshness"]["age_days"] == 483.46
+    assert payload["freshness"]["counts"] == {"fresh": 0, "warm": 0, "stale": 1}
+    assert payload["freshness"]["stale"][0]["key"] == "BTC/1h/history"
     assert payload["bot_coverage"]["total"] == 2
     assert payload["bot_coverage"]["blocked_count"] == 1
     assert payload["bot_coverage"]["deactivated_count"] == 1
@@ -70,7 +74,9 @@ def test_build_inventory_snapshot_includes_dataset_and_bot_coverage(tmp_path: Pa
         "critical": True,
         "note": "",
     }
-    assert payload["bot_coverage"]["items"][0]["available"][0]["dataset"]["key"] == "BTC/1h/history"
+    available_dataset = payload["bot_coverage"]["items"][0]["available"][0]["dataset"]
+    assert available_dataset["key"] == "BTC/1h/history"
+    assert available_dataset["freshness"]["status"] == "stale"
 
 
 def test_write_inventory_snapshot_creates_parent_and_pretty_json(tmp_path: Path) -> None:

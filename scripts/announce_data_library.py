@@ -46,6 +46,12 @@ if TYPE_CHECKING:
 _DEFAULT_JOURNAL = ETA_RUNTIME_DECISION_JOURNAL_PATH
 _DEFAULT_SNAPSHOT = ETA_DATA_INVENTORY_SNAPSHOT_PATH
 
+_INTRADAY_TIMEFRAMES = frozenset({"1s", "5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "4h"})
+_FRESHNESS_THRESHOLDS_DAYS = {
+    "intraday": {"fresh": 2.0, "warm": 10.0},
+    "daily_or_higher": {"fresh": 3.0, "warm": 14.0},
+}
+
 
 def _requirement_payload(req: DataRequirement) -> dict[str, Any]:
     return {
@@ -57,8 +63,33 @@ def _requirement_payload(req: DataRequirement) -> dict[str, Any]:
     }
 
 
-def _dataset_payload(dataset: DatasetMeta) -> dict[str, Any]:
+def _freshness_family(timeframe: str) -> str:
+    return "intraday" if timeframe in _INTRADAY_TIMEFRAMES else "daily_or_higher"
+
+
+def _dataset_freshness(dataset: DatasetMeta, generated_at: datetime) -> dict[str, Any]:
+    now = generated_at if generated_at.tzinfo is not None else generated_at.replace(tzinfo=UTC)
+    end_ts = dataset.end_ts if dataset.end_ts.tzinfo is not None else dataset.end_ts.replace(tzinfo=UTC)
+    age_days = max(0.0, (now - end_ts).total_seconds() / 86_400.0)
+    family = _freshness_family(dataset.timeframe)
+    thresholds = _FRESHNESS_THRESHOLDS_DAYS[family]
+    if age_days <= thresholds["fresh"]:
+        status = "fresh"
+    elif age_days <= thresholds["warm"]:
+        status = "warm"
+    else:
+        status = "stale"
     return {
+        "status": status,
+        "age_days": round(age_days, 2),
+        "family": family,
+        "fresh_days": thresholds["fresh"],
+        "warm_days": thresholds["warm"],
+    }
+
+
+def _dataset_payload(dataset: DatasetMeta, *, generated_at: datetime | None = None) -> dict[str, Any]:
+    payload = {
         "key": dataset.key,
         "symbol": dataset.symbol,
         "timeframe": dataset.timeframe,
@@ -69,9 +100,12 @@ def _dataset_payload(dataset: DatasetMeta) -> dict[str, Any]:
         "days": round(dataset.days_span(), 2),
         "path": str(dataset.path),
     }
+    if generated_at is not None:
+        payload["freshness"] = _dataset_freshness(dataset, generated_at)
+    return payload
 
 
-def _audit_payload(audit: BotAudit) -> dict[str, Any]:
+def _audit_payload(audit: BotAudit, *, generated_at: datetime | None = None) -> dict[str, Any]:
     return {
         "bot_id": audit.bot_id,
         "runnable": audit.is_runnable,
@@ -80,13 +114,32 @@ def _audit_payload(audit: BotAudit) -> dict[str, Any]:
         "available": [
             {
                 "requirement": _requirement_payload(req),
-                "dataset": _dataset_payload(dataset),
+                "dataset": _dataset_payload(dataset, generated_at=generated_at),
             }
             for req, dataset in audit.available
         ],
         "missing_critical": [_requirement_payload(req) for req in audit.missing_critical],
         "missing_optional": [_requirement_payload(req) for req in audit.missing_optional],
         "sources_hint": list(audit.sources_hint),
+    }
+
+
+def _freshness_summary(datasets: list[DatasetMeta], generated_at: datetime) -> dict[str, Any]:
+    items = [
+        {
+            **_dataset_payload(dataset),
+            "freshness": _dataset_freshness(dataset, generated_at),
+        }
+        for dataset in datasets
+    ]
+    counts = {"fresh": 0, "warm": 0, "stale": 0}
+    for item in items:
+        counts[item["freshness"]["status"]] += 1
+    return {
+        "thresholds_days": _FRESHNESS_THRESHOLDS_DAYS,
+        "counts": counts,
+        "stale": [item for item in items if item["freshness"]["status"] == "stale"],
+        "warm": [item for item in items if item["freshness"]["status"] == "warm"],
     }
 
 
@@ -98,7 +151,8 @@ def build_inventory_snapshot(
 ) -> dict[str, Any]:
     """Build the latest data inventory payload for dashboards and gates."""
     ts = generated_at or datetime.now(UTC)
-    dataset_payload = lib.summary_jarvis_payload()
+    datasets = lib.list()
+    dataset_payload = [_dataset_payload(dataset, generated_at=ts) for dataset in datasets]
     runnable = [a.bot_id for a in audits if a.is_runnable and not a.deactivated]
     blocked = [a for a in audits if not a.is_runnable]
     deactivated = [a.bot_id for a in audits if a.deactivated]
@@ -110,6 +164,7 @@ def build_inventory_snapshot(
         "timeframe_count": len(lib.timeframes()),
         "roots": [str(r) for r in lib.roots],
         "datasets": dataset_payload,
+        "freshness": _freshness_summary(datasets, ts),
         "bot_coverage": {
             "total": len(audits),
             "runnable_count": len(runnable),
@@ -124,7 +179,7 @@ def build_inventory_snapshot(
                 for a in blocked
             },
             "deactivated": deactivated,
-            "items": [_audit_payload(a) for a in audits],
+            "items": [_audit_payload(a, generated_at=ts) for a in audits],
         },
     }
 
@@ -180,7 +235,8 @@ def main(argv: list[str] | None = None) -> int:
         print("(dry-run: no JARVIS event or snapshot written)")
         return 0
 
-    payload = lib.summary_jarvis_payload()
+    inventory_snapshot = build_inventory_snapshot(lib, audits)
+    payload = inventory_snapshot["datasets"]
     runnable = [a.bot_id for a in audits if a.is_runnable and not a.deactivated]
     deactivated = [a.bot_id for a in audits if a.deactivated]
     blocked = {
@@ -218,12 +274,12 @@ def main(argv: list[str] | None = None) -> int:
                 "runnable_bots": runnable,
                 "deactivated_bots": deactivated,
                 "blocked_bots": blocked,
+                "freshness": inventory_snapshot["freshness"],
             },
         )
     )
     if not args.no_snapshot:
-        snapshot = build_inventory_snapshot(lib, audits)
-        write_inventory_snapshot(args.snapshot, snapshot)
+        write_inventory_snapshot(args.snapshot, inventory_snapshot)
         print(f"[announce_data_library] latest inventory snapshot written to {args.snapshot}")
     print(f"[announce_data_library] JARVIS event appended to {args.journal}")
     return 0 if not blocked else 1

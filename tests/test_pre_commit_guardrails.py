@@ -47,6 +47,24 @@ def test_pre_commit_allows_source_files() -> None:
     assert forbidden == []
 
 
+def test_pre_commit_selects_text_files_for_stale_path_lint() -> None:
+    candidates = _pre_commit_check._stale_path_lint_candidates_from_lines(
+        [
+            "docs\\guide.md",
+            "scripts/runtime.py",
+            "deploy/run.ps1",
+            "assets/chart.png",
+            "state/cache.parquet",
+        ]
+    )
+
+    assert candidates == [
+        "docs/guide.md",
+        "scripts/runtime.py",
+        "deploy/run.ps1",
+    ]
+
+
 def test_pre_commit_surfaces_docstring_ratchet_advisory() -> None:
     specs = _pre_commit_check._advisory_audit_specs()
 

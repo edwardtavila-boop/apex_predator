@@ -8,6 +8,7 @@ proceed if either fails. Exit codes:
   2 -> pytest failed
   3 -> setup error (e.g. cannot find pytest or ruff)
   4 -> forbidden runtime artifact staged
+  5 -> stale external path reference staged
 
 Usage
 -----
@@ -70,6 +71,22 @@ FORBIDDEN_STAGED_REGEXES = (
         r"^docs/(broker_connections|btc_live|btc_paper|btc_inventory)/.*_20\d{6}T.*Z\.json$",
     ),
 )
+STALE_PATH_LINT_EXTENSIONS = frozenset(
+    {
+        ".bat",
+        ".cmd",
+        ".json",
+        ".md",
+        ".ps1",
+        ".py",
+        ".sh",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".yaml",
+        ".yml",
+    }
+)
 
 
 def _run(cmd: list[str], *, cwd: Path) -> int:
@@ -126,6 +143,33 @@ def _forbidden_staged_check(*, root: Path) -> int:
         file=sys.stderr,
     )
     return 4
+
+
+def _stale_path_lint_candidates_from_lines(lines: list[str]) -> list[str]:
+    """Return staged text/config files that should be stale-path linted."""
+    normalized = [line.replace("\\", "/") for line in lines]
+    return [
+        line
+        for line in normalized
+        if Path(line).suffix.lower() in STALE_PATH_LINT_EXTENSIONS
+    ]
+
+
+def _stale_path_lint_check(*, root: Path) -> int:
+    """Block staged references to legacy external runtime roots."""
+    candidates = _stale_path_lint_candidates_from_lines(_staged_files(root=root))
+    if not candidates:
+        print("[pre-commit] no staged text/config files for stale-path lint", file=sys.stderr)
+        return 0
+
+    rc = _run(["python", "scripts/lint_stale_paths.py", *candidates], cwd=root)
+    if rc != 0:
+        print(
+            f"[pre-commit] FAIL: stale-path lint rejected {len(candidates)} staged file(s)",
+            file=sys.stderr,
+        )
+        return 5
+    return 0
 
 
 def _ruff_check(*, root: Path) -> int:
@@ -204,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
         return _install_hook(root=ROOT)
 
     rc = _forbidden_staged_check(root=ROOT)
+    if rc != 0:
+        return rc
+
+    print("[pre-commit] running stale-path lint...", file=sys.stderr)
+    rc = _stale_path_lint_check(root=ROOT)
     if rc != 0:
         return rc
 

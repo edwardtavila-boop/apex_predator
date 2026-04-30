@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-30T02:50:08.7828272Z",
+  "last_updated": "2026-04-30T03:18:16.3242926Z",
   "overall_progress_pct": 100,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -9,7 +9,7 @@
     "mnq_test_suite_passing": 749,
     "mnq_test_suite_failing": 0,
     "eta_engine_python_files": 389,
-    "eta_engine_tests_passing": 5194,
+    "eta_engine_tests_passing": 5199,
     "eta_engine_tests_failing": 0,
     "eta_engine_bot_readiness_fleet_ui": {
       "timestamp_utc": "2026-04-29T23:05:37.1013765Z",
@@ -229,6 +229,39 @@
         "tests/test_data_tradingview_client.py::test_default_journal_root_uses_canonical_workspace_live_data",
         "tests/test_workspace_path_cleanup.py::test_tradingview_runtime_defaults_use_workspace_paths",
         "tests/test_workspace_path_cleanup.py::test_workspace_roots_point_inside_canonical_repo"
+      ]
+    },
+    "eta_engine_systemd_install_runtime_paths_canonical": {
+      "timestamp_utc": "2026-04-30T03:10:26.6322811Z",
+      "surface": "JARVIS live, Avengers fleet, dashboard systemd units, and install_vps.sh use var/eta_engine/state and logs/eta_engine instead of per-user home .local ETA state/log paths",
+      "fields": [
+        "jarvis-live.service",
+        "avengers-fleet.service",
+        "eta-dashboard.service",
+        "install_vps.sh",
+        "ReadWritePaths",
+        "StandardOutput"
+      ],
+      "tests": [
+        "tests/test_workspace_path_cleanup.py::test_systemd_install_defaults_use_workspace_state_and_log_paths"
+      ]
+    },
+    "eta_engine_strategy_supercharge_scorecard": {
+      "timestamp_utc": "2026-04-30T03:18:16.3242926Z",
+      "surface": "Strategy supercharge scorecard ranks A+C paper/research/shadow/data-repair targets before B live-preflight retunes and exposes the queue through a canonical runtime artifact plus /api/jarvis/strategy_supercharge_scorecard",
+      "fields": [
+        "strategy_supercharge_scorecard_latest.json",
+        "supercharge_phase",
+        "next_gate",
+        "next_targets",
+        "b_later",
+        "hold",
+        "safe_to_mutate_live"
+      ],
+      "tests": [
+        "tests/test_strategy_supercharge_scorecard.py",
+        "tests/test_dashboard_api.py::TestDashboardAPI::test_jarvis_strategy_supercharge_scorecard_endpoint",
+        "tests/test_dashboard_api.py::TestDashboardAPI::test_jarvis_strategy_supercharge_scorecard_endpoint_fails_soft"
       ]
     },
     "eta_engine_verify_all": "17/17 PASS",
@@ -5365,7 +5398,7 @@
     "amplitude": "needs_auth",
     "coupler": "needs_auth"
   },
-  "last_updated_utc": "2026-04-30T02:50:08.7828272Z",
+  "last_updated_utc": "2026-04-30T03:18:16.3242926Z",
   "milestones": [
     {
       "version": "v0.1.31",

@@ -305,6 +305,46 @@ class TestDashboardAPI:
         assert r.json()["rows_by_bot"] == {}
         assert r.json()["top_actions"] == []
 
+    def test_jarvis_strategy_supercharge_scorecard_endpoint(self, app_client, monkeypatch):
+        from eta_engine.scripts import strategy_supercharge_scorecard
+
+        monkeypatch.setattr(
+            strategy_supercharge_scorecard,
+            "build_scorecard",
+            lambda: {
+                "source": "strategy_supercharge_scorecard",
+                "status": "ready",
+                "summary": {"next_best_bot": "eth_compression", "a_c_targets": 4},
+                "rows": [{"bot_id": "eth_compression", "supercharge_phase": "A_C_PAPER_SOAK"}],
+                "rows_by_bot": {"eth_compression": {"bot_id": "eth_compression"}},
+            },
+        )
+
+        r = app_client.get("/api/jarvis/strategy_supercharge_scorecard")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["summary"]["next_best_bot"] == "eth_compression"
+        assert data["rows"][0]["supercharge_phase"] == "A_C_PAPER_SOAK"
+        assert "no-store" in r.headers["Cache-Control"]
+
+    def test_jarvis_strategy_supercharge_scorecard_endpoint_fails_soft(self, app_client, monkeypatch):
+        from eta_engine.scripts import strategy_supercharge_scorecard
+
+        def boom() -> dict[str, object]:
+            raise RuntimeError("scorecard exploded")
+
+        monkeypatch.setattr(strategy_supercharge_scorecard, "build_scorecard", boom)
+
+        r = app_client.get("/api/jarvis/strategy_supercharge_scorecard")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "unreadable"
+        assert data["error"] == "scorecard exploded"
+        assert data["rows"] == []
+        assert data["rows_by_bot"] == {}
+
     def test_dashboard_card_health_contract_has_no_dead_or_stale_cards(self, app_client):
         r = app_client.get("/api/dashboard/card-health")
         assert r.status_code == 200

@@ -15,14 +15,14 @@ WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
 ExecStart=__INSTALL_DIR__/.venv/bin/python -m eta_engine.scripts.jarvis_live \
   --inputs __INSTALL_DIR__/docs/premarket_inputs.json \
-  --out-dir %h/.local/state/eta_engine \
+  --out-dir __INSTALL_DIR__/../var/eta_engine/state \
   --interval 60
 Restart=always
 RestartSec=15
 # If WatchdogSec triggers, escalate to a full restart (don't just kill).
 WatchdogSignal=SIGTERM
-StandardOutput=append:%h/.local/log/eta_engine/jarvis-live.log
-StandardError=append:%h/.local/log/eta_engine/jarvis-live.err
+StandardOutput=append:__INSTALL_DIR__/../logs/eta_engine/jarvis-live.log
+StandardError=append:__INSTALL_DIR__/../logs/eta_engine/jarvis-live.err
 
 # ------------------------------------------------------------------
 # Hardening (see obs.vps_hardening for rationale)
@@ -31,7 +31,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/state/eta_engine %h/.local/log/eta_engine __INSTALL_DIR__/docs __INSTALL_DIR__/runs
+ReadWritePaths=__INSTALL_DIR__/../var/eta_engine/state __INSTALL_DIR__/../logs/eta_engine __INSTALL_DIR__/docs __INSTALL_DIR__/runs
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

@@ -154,6 +154,8 @@ surfaces:
 python -m eta_engine.scripts.jarvis_status --json
 curl http://127.0.0.1:8000/api/jarvis/bot_strategy_readiness
 curl http://127.0.0.1:8000/api/jarvis/bot_strategy_readiness/nq_daily_drb
+python -m eta_engine.scripts.strategy_supercharge_scorecard
+curl http://127.0.0.1:8000/api/jarvis/strategy_supercharge_scorecard
 ```
 
 The JARVIS readiness payload includes `row_count`, the full machine-readable
@@ -167,6 +169,14 @@ one stable object. The dashboard rollup also embeds
 lanes and next actions. The V1 Command Center renders the same feed in the
 JARVIS view and the top-bar `bots` chip, so readiness posture remains visible
 even when the panel itself is off-screen.
+
+The strategy supercharge scorecard is the retune queue for the approved
+`A+C then B` sequence. It writes
+`C:\EvolutionaryTradingAlgo\var\eta_engine\state\strategy_supercharge_scorecard_latest.json`
+and ranks `paper_soak`, `research`, data/shadow repair, and only then
+`live_preflight` bots. This is advisory launch evidence only: the scorecard
+does not promote a bot, change broker permissions, or make `can_live_trade`
+true.
 
 Wakeup automation gets the same posture through the operator queue snapshot
 and heartbeat:

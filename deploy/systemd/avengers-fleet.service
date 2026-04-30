@@ -14,20 +14,20 @@ WatchdogSec=120
 WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
 ExecStart=__INSTALL_DIR__/.venv/bin/python -m deploy.scripts.avengers_daemon \
-  --state-dir %h/.local/state/eta_engine \
-  --log-dir %h/.local/log/eta_engine
+  --state-dir __INSTALL_DIR__/../var/eta_engine/state \
+  --log-dir __INSTALL_DIR__/../logs/eta_engine
 Restart=always
 RestartSec=15
 WatchdogSignal=SIGTERM
-StandardOutput=append:%h/.local/log/eta_engine/avengers-fleet.log
-StandardError=append:%h/.local/log/eta_engine/avengers-fleet.err
+StandardOutput=append:__INSTALL_DIR__/../logs/eta_engine/avengers-fleet.log
+StandardError=append:__INSTALL_DIR__/../logs/eta_engine/avengers-fleet.err
 
 # Hardening
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/state/eta_engine %h/.local/log/eta_engine __INSTALL_DIR__/docs __INSTALL_DIR__/runs
+ReadWritePaths=__INSTALL_DIR__/../var/eta_engine/state __INSTALL_DIR__/../logs/eta_engine __INSTALL_DIR__/docs __INSTALL_DIR__/runs
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

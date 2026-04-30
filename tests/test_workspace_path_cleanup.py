@@ -335,6 +335,26 @@ def test_tradingview_runtime_defaults_use_workspace_paths() -> None:
     )
 
 
+def test_systemd_install_defaults_use_workspace_state_and_log_paths() -> None:
+    unit_targets = (
+        "eta_engine/deploy/systemd/jarvis-live.service",
+        "eta_engine/deploy/systemd/avengers-fleet.service",
+        "eta_engine/deploy/systemd/eta-dashboard.service",
+    )
+    for rel_path in unit_targets:
+        text = _read(rel_path)
+        assert "%h/.local/state/eta_engine" not in text
+        assert "%h/.local/log/eta_engine" not in text
+        assert "__INSTALL_DIR__/../var/eta_engine/state" in text
+        assert "__INSTALL_DIR__/../logs/eta_engine" in text
+
+    installer = _read("eta_engine/deploy/install_vps.sh")
+    assert "$HOME/.local/state/eta_engine" not in installer
+    assert "$HOME/.local/log/eta_engine" not in installer
+    assert "$INSTALL_DIR/../var/eta_engine/state" in installer
+    assert "$INSTALL_DIR/../logs/eta_engine" in installer
+
+
 def test_doc_cleanup_wave_drops_legacy_paths() -> None:
     targets = (
         "eta_engine/docs/research_log/2026-04-26_post_rebrand_baseline.md",

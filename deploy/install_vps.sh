@@ -194,8 +194,8 @@ fi
 log "Step 6/8 -- systemd --user units"
 UNIT_DIR="$HOME/.config/systemd/user"
 mkdir -p "$UNIT_DIR"
-mkdir -p "$HOME/.local/state/eta_engine"
-mkdir -p "$HOME/.local/log/eta_engine"
+mkdir -p "$INSTALL_DIR/../var/eta_engine/state"
+mkdir -p "$INSTALL_DIR/../logs/eta_engine"
 
 for unit in jarvis-live.service avengers-fleet.service eta-dashboard.service; do
   SRC="$INSTALL_DIR/deploy/systemd/$unit"

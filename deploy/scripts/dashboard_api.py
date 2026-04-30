@@ -769,6 +769,37 @@ def _bot_strategy_readiness_bot_payload(bot_id: str) -> dict:
     }
 
 
+def _strategy_supercharge_scorecard_payload() -> dict:
+    """Return conservative strategy-supercharge targets without breaking the dashboard."""
+    try:
+        from eta_engine.scripts.strategy_supercharge_scorecard import build_scorecard
+
+        payload = build_scorecard()
+    except Exception as exc:  # noqa: BLE001 -- dashboard should render degraded state
+        return {
+            "source": "strategy_supercharge_scorecard",
+            "status": "unreadable",
+            "error": str(exc),
+            "summary": {},
+            "rows": [],
+            "rows_by_bot": {},
+            "next_targets": [],
+            "b_later": [],
+            "hold": [],
+        }
+    return payload if isinstance(payload, dict) else {
+        "source": "strategy_supercharge_scorecard",
+        "status": "unreadable",
+        "error": "strategy supercharge scorecard returned a non-object payload",
+        "summary": {},
+        "rows": [],
+        "rows_by_bot": {},
+        "next_targets": [],
+        "b_later": [],
+        "hold": [],
+    }
+
+
 def _append_dashboard_event(event: str, payload: dict) -> None:
     """Best-effort append to local dashboard event log."""
     row = {"ts": time.time(), "event": event, **payload}
@@ -1148,6 +1179,13 @@ def jarvis_bot_strategy_readiness_bot(bot_id: str, response: Response) -> dict:
     """Current strategy/data readiness for a single bot id."""
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return _bot_strategy_readiness_bot_payload(bot_id)
+
+
+@app.get("/api/jarvis/strategy_supercharge_scorecard")
+def jarvis_strategy_supercharge_scorecard(response: Response) -> dict:
+    """Current conservative strategy-supercharge target scorecard."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return _strategy_supercharge_scorecard_payload()
 
 
 @app.get("/api/last-task")

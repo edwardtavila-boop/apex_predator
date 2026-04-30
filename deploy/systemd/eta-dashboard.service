@@ -11,14 +11,14 @@ ExecStart=__INSTALL_DIR__/.venv/bin/python -m uvicorn \
   eta_engine.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
-StandardOutput=append:%h/.local/log/eta_engine/eta-dashboard.log
-StandardError=append:%h/.local/log/eta_engine/eta-dashboard.err
+StandardOutput=append:__INSTALL_DIR__/../logs/eta_engine/eta-dashboard.log
+StandardError=append:__INSTALL_DIR__/../logs/eta_engine/eta-dashboard.err
 
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/state/eta_engine %h/.local/log/eta_engine
+ReadWritePaths=__INSTALL_DIR__/../var/eta_engine/state __INSTALL_DIR__/../logs/eta_engine
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

@@ -31,9 +31,11 @@ back one stage, or RETIRE if already at SHADOW.
 
 State
 -----
-JSON file at ``~/.jarvis/promotion.json`` with a dict of specs keyed by
-``strategy_id``. Append-only JSONL audit log at
-``~/.jarvis/promotion.jsonl``.
+JSON file at ``var/eta_engine/state/promotion.json`` with a dict of specs
+keyed by ``strategy_id``. Append-only JSONL audit log at
+``var/eta_engine/state/promotion.jsonl``. If no canonical state exists yet,
+an older ``~/.jarvis/promotion.json`` file is read so migration preserves
+strategy promotion stages.
 """
 
 from __future__ import annotations
@@ -42,12 +44,19 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-PROMOTION_STATE: Path = Path.home() / ".jarvis" / "promotion.json"
-PROMOTION_JOURNAL: Path = Path.home() / ".jarvis" / "promotion.jsonl"
+from eta_engine.scripts import workspace_roots
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+PROMOTION_STATE: Path = workspace_roots.ETA_PROMOTION_STATE_PATH
+PROMOTION_JOURNAL: Path = workspace_roots.ETA_PROMOTION_JOURNAL_PATH
+LEGACY_PROMOTION_STATE: Path = workspace_roots.ETA_LEGACY_PROMOTION_STATE_PATH
+LEGACY_PROMOTION_JOURNAL: Path = workspace_roots.ETA_LEGACY_PROMOTION_JOURNAL_PATH
 
 
 class PromotionStage(StrEnum):
@@ -340,7 +349,7 @@ class PromotionGate:
     ----------
     state_path
         JSON file holding ``{strategy_id: PromotionSpec}``. Defaults to
-        ``~/.jarvis/promotion.json``.
+        ``var/eta_engine/state/promotion.json``.
     thresholds
         Per-stage thresholds. Defaults to the hardcoded ladder.
     demote_dd_pct
@@ -383,10 +392,11 @@ class PromotionGate:
     # --- state i/o ---------------------------------------------------------
 
     def _load_state(self) -> None:
-        if not self.state_path.exists():
+        state_path = self._state_read_path()
+        if state_path is None:
             return
         try:
-            raw = json.loads(self.state_path.read_text(encoding="utf-8"))
+            raw = json.loads(state_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return
         for sid, payload in (raw or {}).items():
@@ -394,6 +404,14 @@ class PromotionGate:
                 self._specs[sid] = PromotionSpec.model_validate(payload)
             except ValueError:
                 continue
+
+    def _state_read_path(self) -> Path | None:
+        """Prefer canonical state, with legacy readback during migration."""
+        if self.state_path.exists():
+            return self.state_path
+        if self.state_path == PROMOTION_STATE and LEGACY_PROMOTION_STATE.exists():
+            return LEGACY_PROMOTION_STATE
+        return None
 
     def _persist_state(self) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -680,6 +698,8 @@ __all__ = [
     "DEFAULT_TRADES_SAFETY_FACTOR",
     "PROMOTION_JOURNAL",
     "PROMOTION_STATE",
+    "LEGACY_PROMOTION_JOURNAL",
+    "LEGACY_PROMOTION_STATE",
     "RED_TEAM_GATED_TRANSITIONS",
     "PromotionAction",
     "PromotionDecision",

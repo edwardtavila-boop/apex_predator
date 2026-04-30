@@ -475,6 +475,48 @@ class TestPromotionGate:
             journal_path=tmp_path / "promotion.jsonl",
         )
 
+    def test_default_paths_are_canonical_workspace_state(self) -> None:
+        from eta_engine.brain.avengers import PROMOTION_JOURNAL, PROMOTION_STATE
+
+        assert PROMOTION_STATE == workspace_roots.ETA_PROMOTION_STATE_PATH
+        assert PROMOTION_JOURNAL == workspace_roots.ETA_PROMOTION_JOURNAL_PATH
+        assert "EvolutionaryTradingAlgo" in str(PROMOTION_STATE)
+
+    def test_default_load_can_fall_back_to_legacy_home_state(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import eta_engine.brain.avengers.promotion as promotion
+
+        now = datetime(2026, 4, 30, 0, 28, tzinfo=UTC)
+        canonical_state = tmp_path / "state" / "promotion.json"
+        canonical_journal = tmp_path / "state" / "promotion.jsonl"
+        legacy_state = tmp_path / ".jarvis" / "promotion.json"
+        legacy_state.parent.mkdir(parents=True, exist_ok=True)
+        spec = PromotionSpec(
+            strategy_id="legacy_strat",
+            current_stage=PromotionStage.PAPER,
+            entered_stage_at=now,
+            metrics=StageMetrics(trades=12, days_active=3.0),
+        )
+        legacy_state.write_text(
+            json.dumps({"legacy_strat": spec.model_dump(mode="json")}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(promotion, "PROMOTION_STATE", canonical_state)
+        monkeypatch.setattr(promotion, "PROMOTION_JOURNAL", canonical_journal)
+        monkeypatch.setattr(promotion, "LEGACY_PROMOTION_STATE", legacy_state)
+
+        gate = PromotionGate(red_team_gate=None, clock=lambda: now)
+
+        assert gate.state_path == canonical_state
+        assert gate.journal_path == canonical_journal
+        loaded = gate.snapshot()
+        assert len(loaded) == 1
+        assert loaded[0].strategy_id == "legacy_strat"
+        assert loaded[0].current_stage is PromotionStage.PAPER
+        gate.register("new_strat")
+        assert canonical_state.exists()
+
     def test_hold_without_data(self, tmp_path: Path) -> None:
         gate = self._gate(tmp_path)
         gate.register("strat_A")

@@ -136,6 +136,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
   `var/eta_engine/state/operator_activity.jsonl`, while still reading a
   legacy home `.jarvis/operator.sentinel` if canonical state has not been
   created yet.
+- The JARVIS promotion gate now writes strategy stage state and audit events
+  to `var/eta_engine/state/promotion.json` and
+  `var/eta_engine/state/promotion.jsonl`, while still loading legacy home
+  `.jarvis/promotion.json` state if the canonical file has not been created.
 - JARVIS NL audit rollups now anchor relative windows to the latest audit-log
   timestamp when no explicit clock is supplied, so archived logs answer
   consistently instead of drifting with wall-clock time.

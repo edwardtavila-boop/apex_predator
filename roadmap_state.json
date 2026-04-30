@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-30T00:47:22.8710000Z",
+  "last_updated": "2026-04-30T01:13:25.6730000Z",
   "overall_progress_pct": 100,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -9,7 +9,7 @@
     "mnq_test_suite_passing": 749,
     "mnq_test_suite_failing": 0,
     "eta_engine_python_files": 389,
-    "eta_engine_tests_passing": 5179,
+    "eta_engine_tests_passing": 5181,
     "eta_engine_tests_failing": 0,
     "eta_engine_bot_readiness_fleet_ui": {
       "timestamp_utc": "2026-04-29T23:05:37.1013765Z",
@@ -129,6 +129,22 @@
         "tests/test_jarvis_hardening.py::TestPrecedentCache::test_default_cache_can_fall_back_to_legacy_avengers_journal",
         "tests/test_jarvis_hardening.py::TestCostForecast::test_default_forecast_can_fall_back_to_legacy_avengers_journal",
         "tests/test_jarvis_hardening.py::TestWatchdog::test_default_watchdog_can_fall_back_to_legacy_avengers_journal",
+        "tests/test_workspace_path_cleanup.py::test_workspace_roots_point_inside_canonical_repo",
+        "tests/test_workspace_path_cleanup.py::test_runtime_helpers_drop_localappdata_eta_state_paths"
+      ]
+    },
+    "eta_engine_calibration_journal_canonical": {
+      "timestamp_utc": "2026-04-30T01:13:25.6730000Z",
+      "surface": "Avengers calibration scoreboard writes to var/eta_engine/state/calibration.jsonl by default while rehydrate preserves legacy home calibration history when no canonical journal exists",
+      "fields": [
+        "ETA_CALIBRATION_JOURNAL_PATH",
+        "CALIBRATION_JOURNAL",
+        "LEGACY_CALIBRATION_JOURNAL",
+        "calibration_journal_read_path"
+      ],
+      "tests": [
+        "tests/test_jarvis_hardening.py::TestCalibrationLoop::test_default_journal_path_is_canonical_workspace_state",
+        "tests/test_jarvis_hardening.py::TestCalibrationLoop::test_default_rehydrate_can_fall_back_to_legacy_calibration_journal",
         "tests/test_workspace_path_cleanup.py::test_workspace_roots_point_inside_canonical_repo",
         "tests/test_workspace_path_cleanup.py::test_runtime_helpers_drop_localappdata_eta_state_paths"
       ]
@@ -5267,7 +5283,7 @@
     "amplitude": "needs_auth",
     "coupler": "needs_auth"
   },
-  "last_updated_utc": "2026-04-30T00:47:22.8710000Z",
+  "last_updated_utc": "2026-04-30T01:13:25.6730000Z",
   "milestones": [
     {
       "version": "v0.1.31",

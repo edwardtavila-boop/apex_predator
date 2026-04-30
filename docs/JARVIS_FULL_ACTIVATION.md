@@ -145,6 +145,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
   (`PrecedentCache`, `CostForecast`, and `Watchdog`) still fall back to a
   legacy home `.jarvis/avengers.jsonl` when canonical history has not been
   created.
+- The Avengers calibration scoreboard now writes to
+  `var/eta_engine/state/calibration.jsonl`, while default rehydrate can seed
+  persona/category weights from a legacy home `.jarvis/calibration.jsonl`
+  until the canonical journal exists.
 - JARVIS NL audit rollups now anchor relative windows to the latest audit-log
   timestamp when no explicit clock is supplied, so archived logs answer
   consistently instead of drifting with wall-clock time.

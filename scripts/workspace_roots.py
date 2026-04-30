@@ -40,6 +40,7 @@ ETA_DEADMAN_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "operator_activity.jsonl"
 ETA_PROMOTION_STATE_PATH = ETA_RUNTIME_STATE_DIR / "promotion.json"
 ETA_PROMOTION_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "promotion.jsonl"
 ETA_AVENGERS_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "avengers.jsonl"
+ETA_CALIBRATION_JOURNAL_PATH = ETA_RUNTIME_STATE_DIR / "calibration.jsonl"
 ETA_RUNTIME_ALERTS_LOG_PATH = ETA_RUNTIME_LOG_DIR / "alerts_log.jsonl"
 ETA_RUNTIME_LOG_PATH = ETA_RUNTIME_LOG_DIR / "runtime_log.jsonl"
 ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH = ETA_ENGINE_ROOT / "docs" / "drift_watchdog.jsonl"
@@ -52,6 +53,7 @@ ETA_LEGACY_DEADMAN_JOURNAL_PATH = Path.home() / ".jarvis" / "operator_activity.j
 ETA_LEGACY_PROMOTION_STATE_PATH = Path.home() / ".jarvis" / "promotion.json"
 ETA_LEGACY_PROMOTION_JOURNAL_PATH = Path.home() / ".jarvis" / "promotion.jsonl"
 ETA_LEGACY_AVENGERS_JOURNAL_PATH = Path.home() / ".jarvis" / "avengers.jsonl"
+ETA_LEGACY_CALIBRATION_JOURNAL_PATH = Path.home() / ".jarvis" / "calibration.jsonl"
 
 
 def ensure_dir(path: Path) -> Path:

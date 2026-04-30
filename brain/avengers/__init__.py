@@ -80,8 +80,10 @@ from eta_engine.brain.avengers.base import (
 from eta_engine.brain.avengers.batman import Batman
 from eta_engine.brain.avengers.calibration_loop import (
     CALIBRATION_JOURNAL,
+    LEGACY_CALIBRATION_JOURNAL,
     CalibrationLoop,
     PersonaScore,
+    calibration_journal_read_path,
 )
 from eta_engine.brain.avengers.circuit_breaker import (
     BreakerState,
@@ -203,6 +205,7 @@ __all__ = [
     "FLEET_PERSONAS",
     "LEGACY_BREAKER_PATH",
     "LEGACY_AVENGERS_JOURNAL",
+    "LEGACY_CALIBRATION_JOURNAL",
     "LEGACY_DEADMAN_JOURNAL",
     "LEGACY_DEADMAN_SENTINEL",
     "PERSONA_BUCKET",
@@ -285,6 +288,7 @@ __all__ = [
     "append_journal",
     "avengers_journal_read_path",
     "bucket_for",
+    "calibration_journal_read_path",
     "default_bus",
     "default_red_team_gate",
     "describe_persona",

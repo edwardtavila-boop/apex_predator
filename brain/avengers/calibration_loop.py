@@ -15,7 +15,8 @@ that downstream code can multiply into its vote tally.
 
 Design
 ------
-* Append-only JSONL outcome log at ``~/.jarvis/calibration.jsonl``.
+* Append-only JSONL outcome log at
+  ``var/eta_engine/state/calibration.jsonl``.
 * ``PersonaScore`` tracks (successes, failures, last_seen) for one
   (persona, category) bucket.
 * ``CalibrationLoop.record(result)`` is the Fleet hook -- called from
@@ -31,14 +32,33 @@ import contextlib
 import json
 from collections import defaultdict
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eta_engine.brain.avengers.base import PersonaId, TaskEnvelope, TaskResult
 from eta_engine.brain.model_policy import TaskCategory
+from eta_engine.scripts import workspace_roots
 
-CALIBRATION_JOURNAL: Path = Path.home() / ".jarvis" / "calibration.jsonl"
+if TYPE_CHECKING:
+    from pathlib import Path
+
+CALIBRATION_JOURNAL: Path = workspace_roots.ETA_CALIBRATION_JOURNAL_PATH
+LEGACY_CALIBRATION_JOURNAL: Path = workspace_roots.ETA_LEGACY_CALIBRATION_JOURNAL_PATH
+
+
+def calibration_journal_read_path(path: Path | None = None) -> Path:
+    """Return the journal path to read when rehydrating calibration state.
+
+    Writes default to canonical workspace state. Default rehydrate can still
+    seed the in-memory scoreboard from the older home journal until a
+    canonical calibration journal exists.
+    """
+    if path is not None:
+        return path
+    if CALIBRATION_JOURNAL.exists() or not LEGACY_CALIBRATION_JOURNAL.exists():
+        return CALIBRATION_JOURNAL
+    return LEGACY_CALIBRATION_JOURNAL
 
 
 class PersonaScore(BaseModel):
@@ -71,9 +91,10 @@ class CalibrationLoop:
     Parameters
     ----------
     journal_path
-        JSONL outcome log. Defaults to ``~/.jarvis/calibration.jsonl``.
+        JSONL outcome log. Defaults to the canonical workspace state path.
     rehydrate
-        If True, load existing journal on init. Tests pass False.
+        If True, load existing journal on init. Default rehydrate can read
+        legacy home history when the canonical journal has not been created.
     """
 
     def __init__(
@@ -86,13 +107,13 @@ class CalibrationLoop:
         self._scores: dict[tuple[str, str], PersonaScore] = {}
         self._by_persona: dict[str, int] = defaultdict(int)
         if rehydrate:
-            self._rehydrate()
+            self._rehydrate(calibration_journal_read_path(journal_path))
 
-    def _rehydrate(self) -> None:
-        if not self.journal_path.exists():
+    def _rehydrate(self, path: Path) -> None:
+        if not path.exists():
             return
         try:
-            for raw in self.journal_path.read_text(encoding="utf-8").splitlines():
+            for raw in path.read_text(encoding="utf-8").splitlines():
                 raw = raw.strip()
                 if not raw:
                     continue
@@ -191,6 +212,8 @@ class CalibrationLoop:
 
 __all__ = [
     "CALIBRATION_JOURNAL",
+    "LEGACY_CALIBRATION_JOURNAL",
     "CalibrationLoop",
     "PersonaScore",
+    "calibration_journal_read_path",
 ]

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from eta_engine.brain.avengers import (
+    CALIBRATION_JOURNAL,
     DRIFT_JOURNAL,
     RED_TEAM_GATED_TRANSITIONS,
     AlertLevel,
@@ -233,6 +234,11 @@ class TestPrecedentCache:
 
 
 class TestCalibrationLoop:
+    def test_default_journal_path_is_canonical_workspace_state(self) -> None:
+        from eta_engine.scripts import workspace_roots
+
+        assert CALIBRATION_JOURNAL == workspace_roots.ETA_CALIBRATION_JOURNAL_PATH
+
     def test_weight_bounded_in_unit_interval(self, tmp_path: Path) -> None:
         cal = CalibrationLoop(
             journal_path=tmp_path / "calibration.jsonl",
@@ -266,6 +272,43 @@ class TestCalibrationLoop:
         snap = [s for s in cal.snapshot() if s.persona == PersonaId.ALFRED.value]
         assert snap, "expected at least one bucket after rehydrate"
         assert snap[0].successes == 1
+
+    def test_default_rehydrate_can_fall_back_to_legacy_calibration_journal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import eta_engine.brain.avengers.calibration_loop as calibration_loop
+
+        canonical = tmp_path / "state" / "calibration.jsonl"
+        legacy = tmp_path / ".jarvis" / "calibration.jsonl"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(
+            json.dumps(
+                {
+                    "ts": datetime.now(UTC).isoformat(),
+                    "persona": PersonaId.ALFRED.value,
+                    "category": TaskCategory.STRATEGY_EDIT.value,
+                    "success": True,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(calibration_loop, "CALIBRATION_JOURNAL", canonical)
+        monkeypatch.setattr(
+            calibration_loop,
+            "LEGACY_CALIBRATION_JOURNAL",
+            legacy,
+            raising=False,
+        )
+
+        cal = CalibrationLoop(rehydrate=True)
+
+        assert cal.journal_path == canonical
+        snap = [s for s in cal.snapshot() if s.persona == PersonaId.ALFRED.value]
+        assert snap
+        assert snap[0].successes == 1
+        cal.record(_env(), _result(persona_id=PersonaId.ALFRED))
+        assert canonical.exists()
 
 
 # ---------------------------------------------------------------------------

@@ -59,6 +59,9 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.ETA_AVENGERS_JOURNAL_PATH == (
         ROOT / "var" / "eta_engine" / "state" / "avengers.jsonl"
     )
+    assert workspace_roots.ETA_CALIBRATION_JOURNAL_PATH == (
+        ROOT / "var" / "eta_engine" / "state" / "calibration.jsonl"
+    )
     assert workspace_roots.ETA_LEGACY_SHARED_BREAKER_STATE_PATH.name == "breaker.json"
     assert workspace_roots.ETA_LEGACY_SHARED_BREAKER_STATE_PATH.parent.name == ".jarvis"
     assert workspace_roots.ETA_LEGACY_DEADMAN_SENTINEL_PATH.name == "operator.sentinel"
@@ -67,6 +70,8 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.ETA_LEGACY_PROMOTION_STATE_PATH.parent.name == ".jarvis"
     assert workspace_roots.ETA_LEGACY_AVENGERS_JOURNAL_PATH.name == "avengers.jsonl"
     assert workspace_roots.ETA_LEGACY_AVENGERS_JOURNAL_PATH.parent.name == ".jarvis"
+    assert workspace_roots.ETA_LEGACY_CALIBRATION_JOURNAL_PATH.name == "calibration.jsonl"
+    assert workspace_roots.ETA_LEGACY_CALIBRATION_JOURNAL_PATH.parent.name == ".jarvis"
     assert workspace_roots.ETA_RUNTIME_ALERTS_LOG_PATH == ROOT / "logs" / "eta_engine" / "alerts_log.jsonl"
     assert workspace_roots.ETA_RUNTIME_LOG_PATH == ROOT / "logs" / "eta_engine" / "runtime_log.jsonl"
     assert workspace_roots.ETA_LEGACY_DOCS_DRIFT_WATCHDOG_LOG_PATH == (
@@ -230,6 +235,10 @@ def test_runtime_helpers_drop_localappdata_eta_state_paths() -> None:
         "eta_engine/brain/avengers/promotion.py"
     )
     assert "workspace_roots.ETA_AVENGERS_JOURNAL_PATH" in _read("eta_engine/brain/avengers/base.py")
+    assert "workspace_roots.ETA_CALIBRATION_JOURNAL_PATH" in _read(
+        "eta_engine/brain/avengers/calibration_loop.py"
+    )
+    assert "calibration_journal_read_path" in _read("eta_engine/brain/avengers/calibration_loop.py")
     assert "avengers_journal_read_path" in _read("eta_engine/brain/avengers/precedent_cache.py")
     assert "avengers_journal_read_path" in _read("eta_engine/brain/avengers/cost_forecast.py")
     assert "avengers_journal_read_path" in _read("eta_engine/brain/avengers/watchdog.py")

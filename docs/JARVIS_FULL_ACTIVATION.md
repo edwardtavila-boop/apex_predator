@@ -159,6 +159,10 @@ final flip from JarvisAdmin-only mode to the full intelligence layer.
 - The deploy Avenger fleet daemon now defaults its long-running state and log
   directories to `var/eta_engine/state` and `logs/eta_engine`, eliminating the
   last home `.local` write defaults from that deploy entrypoint.
+- TradingView capture auth, data, sidecar, and systemd paths now default to
+  `var/eta_engine/state/tradingview_auth.json`,
+  `var/eta_engine/state/live_data/tradingview`, and `logs/eta_engine`, keeping
+  browser-derived runtime artifacts inside the canonical workspace.
 - JARVIS NL audit rollups now anchor relative windows to the latest audit-log
   timestamp when no explicit clock is supplied, so archived logs answer
   consistently instead of drifting with wall-clock time.

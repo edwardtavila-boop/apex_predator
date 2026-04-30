@@ -7,12 +7,12 @@ Operator flow (VPS-side, runs as a systemd service)::
 
     python -m eta_engine.scripts.run_tradingview_capture \
         --config        configs/tradingview.yaml          \
-        --auth-state    ~/.local/state/eta_engine/tradingview_auth.json \
-        --data-root     ~/apex_data/tradingview
+        --auth-state    var/eta_engine/state/tradingview_auth.json \
+        --data-root     var/eta_engine/state/live_data/tradingview
 
 The auth-state file MUST be generated locally on a workstation via
-``scripts.tradingview_auth_refresh`` and then ``rsync``-ed to the VPS at
-``~/.local/state/eta_engine/tradingview_auth.json`` (mode 0600).
+``scripts.tradingview_auth_refresh`` and then copied to the VPS at
+``var/eta_engine/state/tradingview_auth.json`` (mode 0600).
 
 Exit codes:
     0  clean shutdown (signal received)
@@ -87,11 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--auth-state", type=Path, default=None,
         help="path to Playwright storage_state JSON (default: "
-             "~/.local/state/eta_engine/tradingview_auth.json)",
+             "var/eta_engine/state/tradingview_auth.json)",
     )
     p.add_argument(
         "--data-root", type=Path, default=None,
-        help="output directory (default ~/apex_data/tradingview)",
+        help="output directory (default var/eta_engine/state/live_data/tradingview)",
     )
     p.add_argument(
         "--max-runtime-seconds", type=int, default=0,

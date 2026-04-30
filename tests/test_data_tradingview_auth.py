@@ -14,11 +14,13 @@ from pathlib import Path  # noqa: TC003 -- runtime via tmp_path
 import pytest
 
 from eta_engine.data.tradingview.auth import (
+    DEFAULT_AUTH_PATH,
     AuthState,
     AuthStateError,
     load_auth_state,
     save_auth_state,
 )
+from eta_engine.scripts import workspace_roots
 
 
 def _ok_state() -> dict[str, object]:
@@ -29,6 +31,10 @@ def _ok_state() -> dict[str, object]:
         ],
         "origins": [],
     }
+
+
+def test_default_auth_path_uses_canonical_workspace_state() -> None:
+    assert DEFAULT_AUTH_PATH == workspace_roots.ETA_TRADINGVIEW_AUTH_STATE_PATH
 
 
 def test_save_and_load_roundtrip(tmp_path: Path) -> None:

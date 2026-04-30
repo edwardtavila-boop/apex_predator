@@ -2,7 +2,7 @@
 #
 # Sidecar manager for the lightweight always-on processes that don't
 # need a full systemd unit. Runs under the operator's user, restarted
-# on crash, logs to ~/.local/log/eta_engine/sidecars.log.
+# on crash, logs to ../logs/eta_engine/sidecars.log.
 #
 # Why not just systemd?
 #   * The five sidecars below depend on each other in ways that are
@@ -22,7 +22,7 @@
 
 version: "0.5"
 
-log_location: "${HOME}/.local/log/eta_engine/sidecars.log"
+log_location: "../logs/eta_engine/sidecars.log"
 log_level: info
 
 processes:
@@ -97,7 +97,7 @@ processes:
     command: |
       bash -c '
         while true; do
-          AUTH=${HOME}/.local/state/eta_engine/tradingview_auth.json
+          AUTH=${ETA_TRADINGVIEW_AUTH_STATE:-../var/eta_engine/state/tradingview_auth.json}
           if [[ -f "$$AUTH" ]]; then
             AGE=$$(( $$(date +%s) - $$(stat -c %Y "$$AUTH") ))
             DAYS=$$(( AGE / 86400 ))

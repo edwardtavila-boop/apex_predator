@@ -7,7 +7,7 @@ Run this on a workstation (NOT the VPS). It opens a real, visible
 Chromium window pointed at TradingView's signin page. The operator logs
 in (including 2FA), navigates to the chart pages they want indicators
 loaded on, and closes the window. The script then writes the resulting
-``storage_state`` JSON to ``~/.local/state/eta_engine/tradingview_auth.json``
+``storage_state`` JSON to ``var/eta_engine/state/tradingview_auth.json``
 (0600 mode) -- ``rsync`` that file to the VPS.
 
 Usage::
@@ -16,7 +16,7 @@ Usage::
     python -m eta_engine.scripts.tradingview_auth_refresh --out /tmp/tv.json
 
 Flags:
-    --out PATH        write target (default ``~/.local/state/eta_engine/tradingview_auth.json``)
+    --out PATH        write target (default ``var/eta_engine/state/tradingview_auth.json``)
     --start-url URL   landing page (default ``https://www.tradingview.com/#signin``)
     --signed-in-host  hostname Playwright should reach before exit-on-close
                       (default ``www.tradingview.com``)
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--out", type=Path, default=None,
-        help="output path (default ~/.local/state/eta_engine/tradingview_auth.json)",
+        help="output path (default var/eta_engine/state/tradingview_auth.json)",
     )
     p.add_argument(
         "--start-url",
@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("tradingview auth state written: %s", path)
         if path.parent.exists():
             log.info(
-                "rsync -av %s vps:~/.local/state/eta_engine/tradingview_auth.json",
+                "copy %s to the VPS canonical workspace path: var/eta_engine/state/tradingview_auth.json",
                 path,
             )
         return 0

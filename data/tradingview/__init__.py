@@ -15,13 +15,13 @@ Pulls four streams without a private API key:
 The capture daemon (``scripts.run_tradingview_capture``) runs the
 ``TradingViewClient`` in a long-lived loop, persisting:
 
-* ``~/apex_data/tradingview/bars/<symbol>/<YYYY-MM-DD>.jsonl.gz``
-* ``~/apex_data/tradingview/indicators.jsonl``
-* ``~/apex_data/tradingview/watchlist.json``
-* ``~/apex_data/tradingview/alerts.jsonl``
+* ``var/eta_engine/state/live_data/tradingview/bars/<symbol>/<YYYY-MM-DD>.jsonl.gz``
+* ``var/eta_engine/state/live_data/tradingview/indicators.jsonl``
+* ``var/eta_engine/state/live_data/tradingview/watchlist.json``
+* ``var/eta_engine/state/live_data/tradingview/alerts.jsonl``
 
 Auth state (cookies + localStorage) lives under
-``~/.local/state/eta_engine/tradingview_auth.json``. Operators run
+``var/eta_engine/state/tradingview_auth.json``. Operators run
 ``scripts.tradingview_auth_refresh`` locally (a real Chrome window pops up
 for the manual login), then ``rsync`` the resulting auth-state file to the
 VPS. The VPS-side capture daemon is fully headless.

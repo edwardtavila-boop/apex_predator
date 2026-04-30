@@ -27,7 +27,8 @@ from eta_engine.data.tradingview.client import (
     TradingViewConfig,
     TradingViewUnavailable,
 )
-from eta_engine.data.tradingview.journal import TradingViewJournal
+from eta_engine.data.tradingview.journal import DEFAULT_DATA_ROOT, TradingViewJournal
+from eta_engine.scripts import workspace_roots
 
 
 def _auth(has_sess: bool = True) -> AuthState:
@@ -37,6 +38,10 @@ def _auth(has_sess: bool = True) -> AuthState:
             "name": "sessionid", "value": "x", "domain": ".tradingview.com",
         })
     return AuthState(cookies=cookies, origins=[])
+
+
+def test_default_journal_root_uses_canonical_workspace_live_data() -> None:
+    assert DEFAULT_DATA_ROOT == workspace_roots.ETA_TRADINGVIEW_DATA_ROOT
 
 
 def test_client_rejects_empty_config(tmp_path) -> None:  # noqa: ANN001

@@ -26,6 +26,12 @@ def test_workspace_roots_point_inside_canonical_repo() -> None:
     assert workspace_roots.ETA_LIVE_DATA_RUNTIME_DIR == (
         ROOT / "var" / "eta_engine" / "state" / "live_data"
     )
+    assert workspace_roots.ETA_TRADINGVIEW_AUTH_STATE_PATH == (
+        ROOT / "var" / "eta_engine" / "state" / "tradingview_auth.json"
+    )
+    assert workspace_roots.ETA_TRADINGVIEW_DATA_ROOT == (
+        ROOT / "var" / "eta_engine" / "state" / "live_data" / "tradingview"
+    )
     assert workspace_roots.ETA_OPERATOR_QUEUE_SNAPSHOT_PATH == (
         ROOT / "var" / "eta_engine" / "state" / "operator_queue_snapshot.json"
     )
@@ -295,6 +301,38 @@ def test_deploy_runbooks_use_workspace_state_and_log_dirs() -> None:
         assert "~/.local/log/eta_engine" not in text
         assert "var/eta_engine/state" in text
         assert "logs/eta_engine" in text
+
+
+def test_tradingview_runtime_defaults_use_workspace_paths() -> None:
+    targets = (
+        "eta_engine/data/tradingview/auth.py",
+        "eta_engine/data/tradingview/journal.py",
+        "eta_engine/data/tradingview/__init__.py",
+        "eta_engine/scripts/run_tradingview_capture.py",
+        "eta_engine/scripts/tradingview_auth_refresh.py",
+        "eta_engine/deploy/systemd/eta-tradingview-capture.service",
+        "eta_engine/deploy/configs/process-compose.yaml",
+    )
+    for rel_path in targets:
+        text = _read(rel_path)
+        assert "~/.local/state/eta_engine" not in text
+        assert "${HOME}/.local/state/eta_engine" not in text
+        assert "%h/.local/state/eta_engine" not in text
+        assert "~/apex_data/tradingview" not in text
+        assert "%h/apex_data/tradingview" not in text
+
+    assert "workspace_roots.ETA_TRADINGVIEW_AUTH_STATE_PATH" in _read(
+        "eta_engine/data/tradingview/auth.py"
+    )
+    assert "workspace_roots.ETA_TRADINGVIEW_DATA_ROOT" in _read(
+        "eta_engine/data/tradingview/journal.py"
+    )
+    assert "../var/eta_engine/state/tradingview_auth.json" in _read(
+        "eta_engine/deploy/systemd/eta-tradingview-capture.service"
+    )
+    assert "../var/eta_engine/state/live_data/tradingview" in _read(
+        "eta_engine/deploy/systemd/eta-tradingview-capture.service"
+    )
 
 
 def test_doc_cleanup_wave_drops_legacy_paths() -> None:

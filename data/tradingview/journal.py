@@ -43,9 +43,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from eta_engine.scripts import workspace_roots
+
 log = logging.getLogger(__name__)
 
-DEFAULT_DATA_ROOT = Path("~/apex_data/tradingview").expanduser()
+DEFAULT_DATA_ROOT = workspace_roots.ETA_TRADINGVIEW_DATA_ROOT
 
 
 # ---------------------------------------------------------------------------

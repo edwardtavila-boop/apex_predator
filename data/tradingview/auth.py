@@ -17,8 +17,8 @@ Operator flow:
    A real Chrome window pops; operator logs in (incl. 2FA), then closes
    the window. The script writes ``tradingview_auth.json`` to the path.
 
-2. ``rsync`` that file to the VPS, into
-   ``~/.local/state/eta_engine/tradingview_auth.json``.
+2. Copy that file to the VPS into the canonical workspace state path:
+   ``var/eta_engine/state/tradingview_auth.json``.
 
 3. The capture daemon ``run_tradingview_capture`` loads it via
    :func:`load_auth_state` and hands it to Playwright as ``storage_state``.
@@ -40,11 +40,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eta_engine.scripts import workspace_roots
+
 log = logging.getLogger(__name__)
 
-DEFAULT_AUTH_PATH = (
-    Path("~/.local/state/eta_engine/tradingview_auth.json").expanduser()
-)
+DEFAULT_AUTH_PATH = workspace_roots.ETA_TRADINGVIEW_AUTH_STATE_PATH
 
 
 class AuthStateError(Exception):

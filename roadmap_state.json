@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-30T03:49:55.5832277Z",
+  "last_updated": "2026-04-30T04:03:25.7222724Z",
   "overall_progress_pct": 100,
   "current_phase": "P9_ROLLOUT",
   "mnq_engine_bridge": "docs/MNQ_ENGINE_BRIDGE.md",
@@ -9,7 +9,7 @@
     "mnq_test_suite_passing": 749,
     "mnq_test_suite_failing": 0,
     "eta_engine_python_files": 389,
-    "eta_engine_tests_passing": 5212,
+    "eta_engine_tests_passing": 5215,
     "eta_engine_tests_failing": 0,
     "eta_engine_bot_readiness_fleet_ui": {
       "timestamp_utc": "2026-04-29T23:05:37.1013765Z",
@@ -265,11 +265,14 @@
       ]
     },
     "eta_engine_strategy_supercharge_manifest": {
-      "timestamp_utc": "2026-04-30T03:49:55.5832277Z",
-      "surface": "Strategy supercharge manifest converts the A+C then B scorecard into executable runtime-only retest commands, exposes next_batch through /api/jarvis/strategy_supercharge_manifest and /api/dashboard, renders the Command Center strategy-supercharge card, and emits timeframe-aware smoke commands that produce real walk-forward windows",
+      "timestamp_utc": "2026-04-30T04:03:25.7222724Z",
+      "surface": "Cross-asset strategy supercharge manifest converts the A+C then B scorecard into executable runtime-only retest commands, exposes next_batch through /api/jarvis/strategy_supercharge_manifest and /api/dashboard, renders the Command Center strategy-supercharge card, emits timeframe-aware smoke commands, and groups the full queue by ticker and strategy style",
       "fields": [
         "strategy_supercharge_manifest_latest.json",
         "cc-strategy-supercharge",
+        "scope",
+        "groups.by_symbol",
+        "groups.by_strategy_kind",
         "next_batch",
         "commands",
         "smoke_command",
@@ -289,10 +292,13 @@
       ]
     },
     "eta_engine_strategy_supercharge_results": {
-      "timestamp_utc": "2026-04-30T03:47:13.3392417Z",
-      "surface": "Strategy supercharge results collector parses current-batch runtime research-grid reports into strategy_supercharge_results_latest.json, exposes /api/jarvis/strategy_supercharge_results and /api/dashboard, and separates stale historical reports from current A+C evidence",
+      "timestamp_utc": "2026-04-30T04:03:25.7222724Z",
+      "surface": "Cross-asset strategy supercharge results collector parses current-batch runtime research-grid reports into strategy_supercharge_results_latest.json, exposes /api/jarvis/strategy_supercharge_results and /api/dashboard, separates stale historical reports from current A+C evidence, ranks near-misses, and groups results by ticker and strategy style",
       "fields": [
         "strategy_supercharge_results_latest.json",
+        "scope",
+        "groups.by_symbol",
+        "groups.by_strategy_kind",
         "tested",
         "passed",
         "failed",
@@ -306,14 +312,40 @@
       "tests": [
         "tests/test_strategy_supercharge_results.py",
         "tests/test_dashboard_api.py::TestDashboardAPI::test_jarvis_strategy_supercharge_results_endpoint",
-        "tests/test_dashboard_api.py::TestDashboardAPI::test_jarvis_strategy_supercharge_results_endpoint_fails_soft"
+        "tests/test_dashboard_api.py::TestDashboardAPI::test_jarvis_strategy_supercharge_results_endpoint_fails_soft",
+        "tests/test_strategy_supercharge_results.py::test_results_group_scope_by_symbol_and_strategy_style"
       ],
       "current_batch": {
-        "tested": 4,
+        "tested": 11,
         "passed": 0,
-        "failed": 4,
-        "pending": 7,
-        "next_pending_bot": "btc_hybrid_sage"
+        "failed": 11,
+        "pending": 0,
+        "best_near_miss_bot": "sol_perp",
+        "next_pending_bot": "",
+        "symbols": [
+          "BTC",
+          "ETH",
+          "MNQ1",
+          "SOL"
+        ],
+        "strategy_styles": [
+          "compression_breakout",
+          "crypto_macro_confluence",
+          "crypto_orb",
+          "ensemble_voting",
+          "orb",
+          "orb_sage_gated",
+          "sage_consensus",
+          "sage_daily_gated"
+        ]
+      },
+      "scoped_retunes": {
+        "sol_perp": {
+          "cells": 31,
+          "pass_configs": 0,
+          "closest_fail": "crypto_orb: corb r240/atr2.0/rr2.0",
+          "report": "C:\\EvolutionaryTradingAlgo\\var\\eta_engine\\state\\strategy_supercharge_retunes\\fleet_optimization_20260430T035838Z.md"
+        }
       }
     },
     "eta_engine_verify_all": "17/17 PASS",
@@ -5450,7 +5482,7 @@
     "amplitude": "needs_auth",
     "coupler": "needs_auth"
   },
-  "last_updated_utc": "2026-04-30T03:49:55.5832277Z",
+  "last_updated_utc": "2026-04-30T04:03:25.7222724Z",
   "milestones": [
     {
       "version": "v0.1.31",

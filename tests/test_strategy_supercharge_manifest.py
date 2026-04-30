@@ -10,6 +10,7 @@ def _row(
     gate: str,
     rank: int,
     strategy_kind: str = "crypto_orb",
+    symbol: str = "BTC",
     timeframe: str = "1h",
     window_days: int = 90,
 ) -> dict[str, object]:
@@ -17,7 +18,7 @@ def _row(
         "bot_id": bot_id,
         "strategy_id": f"{bot_id}_v1",
         "strategy_kind": strategy_kind,
-        "symbol": "BTC",
+        "symbol": symbol,
         "timeframe": timeframe,
         "window_days": window_days,
         "supercharge_phase": phase,
@@ -132,3 +133,49 @@ def test_manifest_smoke_cap_covers_walk_forward_window() -> None:
     smoke = manifest["next_batch"][0]["smoke_command"]
     max_bars = int(smoke[smoke.index("--max-bars-per-cell") + 1])
     assert max_bars >= 3240
+
+
+def test_manifest_declares_cross_asset_multi_style_scope() -> None:
+    from eta_engine.scripts.strategy_supercharge_manifest import build_manifest
+
+    manifest = build_manifest(
+        scorecard={
+            "source": "strategy_supercharge_scorecard",
+            "strategy": "A_C_THEN_B",
+            "summary": {"total_bots": 3},
+            "rows": [
+                _row(
+                    "btc_ensemble_2of3",
+                    phase="A_C_PAPER_SOAK",
+                    gate="paper_soak_retest",
+                    rank=0,
+                    symbol="BTC",
+                    strategy_kind="ensemble_voting",
+                ),
+                _row(
+                    "sol_perp",
+                    phase="A_C_SHADOW_REPAIR",
+                    gate="shadow_repair_retest",
+                    rank=2,
+                    symbol="SOL",
+                    strategy_kind="crypto_orb",
+                ),
+                _row(
+                    "nq_daily_drb",
+                    phase="B_LIVE_PREFLIGHT_LATER",
+                    gate="live_preflight_regression_guard",
+                    rank=4,
+                    symbol="NQ1",
+                    timeframe="D",
+                    strategy_kind="drb",
+                ),
+            ],
+        },
+        generated_at="2026-04-30T04:00:00+00:00",
+    )
+
+    assert manifest["scope"]["label"] == "cross_asset_multi_style"
+    assert manifest["scope"]["symbols"] == ["BTC", "NQ1", "SOL"]
+    assert manifest["scope"]["strategy_kinds"] == ["crypto_orb", "drb", "ensemble_voting"]
+    assert manifest["groups"]["by_symbol"]["NQ1"]["b_deferred"] == 1
+    assert manifest["groups"]["by_strategy_kind"]["crypto_orb"]["a_c_now"] == 1

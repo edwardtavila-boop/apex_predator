@@ -4,7 +4,12 @@ import json
 import os
 
 
-def _manifest(bot_ids: list[str], *, generated_at: str = "2026-04-30T03:00:00+00:00") -> dict[str, object]:
+def _manifest(
+    bot_ids: list[str],
+    *,
+    generated_at: str = "2026-04-30T03:00:00+00:00",
+    metadata: dict[str, dict[str, str]] | None = None,
+) -> dict[str, object]:
     rows = [
         {
             "bot_id": bot_id,
@@ -12,6 +17,7 @@ def _manifest(bot_ids: list[str], *, generated_at: str = "2026-04-30T03:00:00+00
             "execution_phase": "A_C_NOW",
             "safe_to_mutate_live": False,
             "writes_live_routing": False,
+            **((metadata or {}).get(bot_id) or {}),
         }
         for bot_id in bot_ids
     ]
@@ -208,6 +214,50 @@ def test_results_rank_near_misses_for_next_retune(tmp_path) -> None:  # type: ig
     assert results["summary"]["best_near_miss_bot"] == "sol_perp"
     assert [row["bot_id"] for row in results["near_misses"][:2]] == ["sol_perp", "eth_compression"]
     assert all(row["result_status"] == "fail" for row in results["near_misses"])
+
+
+def test_results_group_scope_by_symbol_and_strategy_style(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from eta_engine.scripts.strategy_supercharge_results import build_results
+
+    _report(
+        tmp_path,
+        "research_grid_20260430_034500_sol.md",
+        "sol_perp",
+        windows=2,
+        oos_sharpe=2.405,
+        dsr_pass=50.0,
+        verdict="FAIL",
+    )
+    _report(
+        tmp_path,
+        "research_grid_20260430_034500_mnq.md",
+        "mnq_futures",
+        windows=3,
+        oos_sharpe=-1.355,
+        dsr_pass=0.0,
+        verdict="FAIL",
+    )
+
+    results = build_results(
+        manifest=_manifest(
+            ["sol_perp", "mnq_futures"],
+            metadata={
+                "sol_perp": {"symbol": "SOL", "timeframe": "1h", "strategy_kind": "crypto_orb"},
+                "mnq_futures": {"symbol": "MNQ1", "timeframe": "5m", "strategy_kind": "orb"},
+            },
+        ),
+        report_dir=tmp_path,
+        generated_at="2026-04-30T04:05:00+00:00",
+    )
+
+    assert results["scope"]["label"] == "cross_asset_multi_style"
+    assert results["scope"]["symbols"] == ["MNQ1", "SOL"]
+    assert results["scope"]["strategy_kinds"] == ["crypto_orb", "orb"]
+    assert results["groups"]["by_symbol"]["SOL"]["total_targets"] == 1
+    assert results["groups"]["by_symbol"]["SOL"]["best_near_miss_bot"] == "sol_perp"
+    assert results["groups"]["by_symbol"]["MNQ1"]["failed"] == 1
+    assert results["groups"]["by_strategy_kind"]["crypto_orb"]["symbols"] == ["SOL"]
+    assert results["groups"]["by_strategy_kind"]["orb"]["symbols"] == ["MNQ1"]
 
 
 def test_results_write_snapshot_round_trips(tmp_path) -> None:  # type: ignore[no-untyped-def]

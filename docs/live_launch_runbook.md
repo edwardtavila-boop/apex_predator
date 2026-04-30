@@ -192,6 +192,13 @@ runtime-only research-grid/data-repair commands plus timeframe-aware
 remain deferred until A+C is stable; every row keeps
 `safe_to_mutate_live=false` and `writes_live_routing=false`.
 
+This is a cross-asset, multi-style supercharge queue, not an MNQ-only lane. The
+manifest `scope` and `groups` fields currently cover `BTC`, `ETH`, `SOL`,
+`MNQ1`, and `NQ1` across ensemble voting, sage daily/gated, compression,
+crypto ORB, regime/macro confluence, ORB, DRB, and legacy confluence rows. NQ
+appears in the B-later live-preflight bucket, so it may be absent from current
+A+C retest results while still being part of the full strategy queue.
+
 The strategy supercharge results collector turns runtime research-grid markdown
 reports back into JSON. It writes
 `C:\EvolutionaryTradingAlgo\var\eta_engine\state\strategy_supercharge_results_latest.json`
@@ -199,6 +206,9 @@ and exposes `tested`, `passed`, `failed`, `pending`, stale report references,
 and per-bot retest metrics through `/api/jarvis/strategy_supercharge_results`
 and `/api/dashboard`. It loads the canonical manifest snapshot first so older
 research reports cannot be mistaken for current-batch A+C evidence.
+The results payload also exposes `scope` and `groups.by_symbol` /
+`groups.by_strategy_kind` so framework clients can see which tickers and
+strategy styles have been retested.
 
 Wakeup automation gets the same posture through the operator queue snapshot
 and heartbeat:

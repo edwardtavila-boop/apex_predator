@@ -149,6 +149,91 @@ def _near_miss_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     )
 
 
+def _symbol_for(row: dict[str, object]) -> str:
+    symbol = str(row.get("symbol") or "").strip()
+    if symbol:
+        return symbol
+    sym_tf = str(row.get("symbol_timeframe") or "").strip()
+    if "/" in sym_tf:
+        return sym_tf.split("/", 1)[0].strip()
+    return "UNKNOWN"
+
+
+def _timeframe_for(row: dict[str, object]) -> str:
+    timeframe = str(row.get("timeframe") or "").strip()
+    if timeframe:
+        return timeframe
+    sym_tf = str(row.get("symbol_timeframe") or "").strip()
+    if "/" in sym_tf:
+        return sym_tf.split("/", 1)[1].strip()
+    return ""
+
+
+def _strategy_kind_for(row: dict[str, object]) -> str:
+    return str(row.get("strategy_kind") or "unknown").strip() or "unknown"
+
+
+def _with_scope_fields(row: dict[str, object]) -> dict[str, object]:
+    return {
+        **row,
+        "symbol": _symbol_for(row),
+        "timeframe": _timeframe_for(row),
+        "strategy_kind": _strategy_kind_for(row),
+    }
+
+
+def _counts(rows: list[dict[str, object]]) -> dict[str, int]:
+    return {
+        "total_targets": len(rows),
+        "tested": sum(1 for row in rows if row.get("result_status") in {"pass", "fail"}),
+        "passed": sum(1 for row in rows if row.get("result_status") == "pass"),
+        "failed": sum(1 for row in rows if row.get("result_status") == "fail"),
+        "pending": sum(1 for row in rows if row.get("result_status") == "pending"),
+    }
+
+
+def _group_payload(rows: list[dict[str, object]], key: str) -> dict[str, dict[str, object]]:
+    groups: dict[str, dict[str, object]] = {}
+    for value in sorted({str(row.get(key) or "UNKNOWN") for row in rows}):
+        grouped = [row for row in rows if str(row.get(key) or "UNKNOWN") == value]
+        near_misses = _near_miss_rows(grouped)
+        groups[value] = {
+            **_counts(grouped),
+            "symbols": sorted({_symbol_for(row) for row in grouped}),
+            "strategy_kinds": sorted({_strategy_kind_for(row) for row in grouped}),
+            "best_near_miss_bot": str(near_misses[0].get("bot_id") or "") if near_misses else "",
+        }
+    return groups
+
+
+def _scope_label(symbols: list[str], strategy_kinds: list[str]) -> str:
+    if len(symbols) > 1 and len(strategy_kinds) > 1:
+        return "cross_asset_multi_style"
+    if len(symbols) > 1:
+        return "cross_asset_single_style"
+    if len(strategy_kinds) > 1:
+        return "single_asset_multi_style"
+    if symbols and strategy_kinds:
+        return f"{symbols[0]}_{strategy_kinds[0]}"
+    if symbols:
+        return symbols[0]
+    if strategy_kinds:
+        return strategy_kinds[0]
+    return "unknown"
+
+
+def _scope_payload(rows: list[dict[str, object]]) -> dict[str, object]:
+    symbols = sorted({_symbol_for(row) for row in rows})
+    strategy_kinds = sorted({_strategy_kind_for(row) for row in rows})
+    return {
+        "label": _scope_label(symbols, strategy_kinds),
+        "symbols": symbols,
+        "timeframes": sorted({_timeframe_for(row) for row in rows if _timeframe_for(row)}),
+        "strategy_kinds": strategy_kinds,
+        "note": "Scope is derived from manifest target symbols and strategy kinds; this is not an MNQ-only surface.",
+    }
+
+
 def build_results(
     *,
     manifest: dict[str, object] | None = None,
@@ -196,7 +281,7 @@ def build_results(
                 "safe_to_mutate_live": False,
                 "writes_live_routing": False,
             }
-        rows.append(row)
+        rows.append(_with_scope_fields(row))
     passed = [row for row in rows if row.get("result_status") == "pass"]
     failed = [row for row in rows if row.get("result_status") == "fail"]
     pending = [row for row in rows if row.get("result_status") == "pending"]
@@ -211,6 +296,7 @@ def build_results(
         "generated_at": generated_at or datetime.now(UTC).isoformat(),
         "source": "strategy_supercharge_results",
         "status": "ready",
+        "scope": _scope_payload(rows),
         "manifest_summary": manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {},
         "summary": {
             "total_targets": len(rows),
@@ -224,6 +310,10 @@ def build_results(
         },
         "rows": rows,
         "rows_by_bot": rows_by_bot,
+        "groups": {
+            "by_symbol": _group_payload(rows, "symbol"),
+            "by_strategy_kind": _group_payload(rows, "strategy_kind"),
+        },
         "tested": passed + failed,
         "passed": passed,
         "failed": failed,

@@ -187,6 +187,67 @@ def _sorted_rows(scorecard: dict[str, object]) -> list[dict[str, object]]:
     return sorted(dict_rows, key=lambda row: (_rank(row), _bot_id(row)))
 
 
+def _symbol_for(row: dict[str, object]) -> str:
+    return str(row.get("symbol") or "UNKNOWN").strip() or "UNKNOWN"
+
+
+def _strategy_kind_for(row: dict[str, object]) -> str:
+    return str(row.get("strategy_kind") or "unknown").strip() or "unknown"
+
+
+def _timeframe_for(row: dict[str, object]) -> str:
+    return str(row.get("timeframe") or "").strip()
+
+
+def _lane_counts(rows: list[dict[str, object]]) -> dict[str, int]:
+    return {
+        "total_targets": len(rows),
+        "a_c_now": sum(1 for row in rows if _phase(row).startswith(_A_C_PREFIX)),
+        "b_deferred": sum(1 for row in rows if _phase(row).startswith(_B_PREFIX)),
+        "hold": sum(1 for row in rows if _phase(row).startswith(_HOLD_PREFIX)),
+    }
+
+
+def _group_payload(rows: list[dict[str, object]], key: str) -> dict[str, dict[str, object]]:
+    groups: dict[str, dict[str, object]] = {}
+    for value in sorted({str(row.get(key) or "UNKNOWN") for row in rows}):
+        grouped = [row for row in rows if str(row.get(key) or "UNKNOWN") == value]
+        groups[value] = {
+            **_lane_counts(grouped),
+            "symbols": sorted({_symbol_for(row) for row in grouped}),
+            "strategy_kinds": sorted({_strategy_kind_for(row) for row in grouped}),
+        }
+    return groups
+
+
+def _scope_label(symbols: list[str], strategy_kinds: list[str]) -> str:
+    if len(symbols) > 1 and len(strategy_kinds) > 1:
+        return "cross_asset_multi_style"
+    if len(symbols) > 1:
+        return "cross_asset_single_style"
+    if len(strategy_kinds) > 1:
+        return "single_asset_multi_style"
+    if symbols and strategy_kinds:
+        return f"{symbols[0]}_{strategy_kinds[0]}"
+    if symbols:
+        return symbols[0]
+    if strategy_kinds:
+        return strategy_kinds[0]
+    return "unknown"
+
+
+def _scope_payload(rows: list[dict[str, object]]) -> dict[str, object]:
+    symbols = sorted({_symbol_for(row) for row in rows})
+    strategy_kinds = sorted({_strategy_kind_for(row) for row in rows})
+    return {
+        "label": _scope_label(symbols, strategy_kinds),
+        "symbols": symbols,
+        "timeframes": sorted({_timeframe_for(row) for row in rows if _timeframe_for(row)}),
+        "strategy_kinds": strategy_kinds,
+        "note": "Scope is derived from manifest target symbols and strategy kinds; this is not an MNQ-only queue.",
+    }
+
+
 def build_manifest(
     *,
     scorecard: dict[str, object] | None = None,
@@ -226,6 +287,7 @@ def build_manifest(
         "source": "strategy_supercharge_manifest",
         "status": "ready",
         "strategy": str(scorecard.get("strategy") or "A_C_THEN_B"),
+        "scope": _scope_payload(rows),
         "scorecard_summary": scorecard.get("summary") if isinstance(scorecard.get("summary"), dict) else {},
         "summary": {
             "total_bots": len(rows),
@@ -238,6 +300,10 @@ def build_manifest(
         },
         "rows": rows,
         "rows_by_bot": rows_by_bot,
+        "groups": {
+            "by_symbol": _group_payload(rows, "symbol"),
+            "by_strategy_kind": _group_payload(rows, "strategy_kind"),
+        },
         "next_batch": batch,
         "b_later": b_later,
         "hold": hold,

@@ -68,7 +68,6 @@ def pop_last(symbol: str, side: str = "") -> Any | None:  # noqa: ANN401 -- duck
     with _LOCK:
         if side:
             return _CACHE.pop((symbol, side), None)
-        # Side-agnostic: pop any entry matching symbol
         match_key = next(
             (k for k in _CACHE if k[0] == symbol),
             None,
@@ -76,6 +75,23 @@ def pop_last(symbol: str, side: str = "") -> Any | None:  # noqa: ANN401 -- duck
         if match_key is None:
             return None
         return _CACHE.pop(match_key)
+
+
+def pop_last_any() -> Any | None:  # noqa: ANN401 -- duck-typed SageReport
+    """Remove + return the most recent cached SageReport from any symbol.
+
+    Best-effort attribution: trades close asynchronously and the bot
+    may not track which symbol/side produced the report. This pops
+    the most recently set entry regardless of identity.
+
+    Returns ``None`` when nothing's cached.
+    """
+    with _LOCK:
+        if not _CACHE:
+            return None
+        # Pop the most recently inserted entry (last key in dict order)
+        key = next(reversed(_CACHE.keys()))
+        return _CACHE.pop(key)
 
 
 def cache_size() -> int:

@@ -70,6 +70,7 @@ import signal as os_signal
 import sys
 import time
 import uuid
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -201,9 +202,12 @@ class BotInstance:
     last_bar_ts: str = ""
     last_signal_at: str = ""
     last_jarvis_verdict: str = ""
+    sage_bars: deque = field(default_factory=lambda: deque(maxlen=200))
 
     def to_state(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d.pop("sage_bars", None)
+        return d
 
 
 # ─── Mock data feed (random-walk synthetic) ───────────────────────
@@ -556,6 +560,7 @@ class JarvisStrategySupervisor:
         # 1. Get a fresh bar
         bar = self.feed.get_bar(bot.symbol)
         bot.last_bar_ts = bar["ts"]
+        bot.sage_bars.append(bar)
 
         # 2. If no open position, evaluate entry
         if bot.open_position is None:
@@ -586,20 +591,36 @@ class JarvisStrategySupervisor:
             return
 
         signal_id = f"{bot.bot_id}_{uuid.uuid4().hex[:8]}"
+        entry_price = float(bar["close"])
+        side = "long" if bot.direction == "long" else "short"
+
+        # Consult Sage with accumulated bar buffer for v22 modulation
+        sage_report = self._consult_sage_for_bot(bot, bar, side, entry_price)
+
+        payload = {
+            "regime": "neutral",
+            "session": "rth",
+            "stress": 0.4,
+            "direction": bot.direction,
+            "sentiment": 0.0,
+            "side": "buy" if bot.direction == "long" else "sell",
+            "qty": 1.0,
+            "symbol": bot.symbol,
+            "confidence": 0.55,
+            "entry_price": entry_price,
+        }
+
+        if sage_report is not None:
+            payload["sage_score"] = sage_report.conviction
+            payload["sage_bars"] = list(bot.sage_bars)
+            payload["sage_alignment"] = sage_report.alignment_score
+            payload["sage_composite_bias"] = sage_report.composite_bias.value
+        else:
+            payload["sage_score"] = 0.5
+
         verdict = self._consult_jarvis(
             bot=bot, signal_id=signal_id, action="ORDER_PLACE",
-            payload={
-                "regime": "neutral",
-                "session": "rth",
-                "stress": 0.4,
-                "direction": bot.direction,
-                "sentiment": 0.0,
-                "sage_score": 0.5,
-                "side": "buy" if bot.direction == "long" else "sell",
-                "qty": 1.0,
-                "symbol": bot.symbol,
-                "confidence": 0.55,
-            },
+            payload=payload,
             narrative=f"mock-entry {bot.bot_id} @ {bar['close']:.2f}",
         )
         bot.last_jarvis_verdict = verdict.consolidated.final_verdict if verdict else "NONE"
@@ -653,6 +674,28 @@ class JarvisStrategySupervisor:
             self._propagate_close(bot, rec)
 
     # ── JARVIS consultation ─────────────────────────────────
+
+    def _consult_sage_for_bot(self, bot: BotInstance, bar: dict, side: str, entry_price: float):
+        """Consult Sage schools with the bot's accumulated bar buffer.
+
+        Returns a SageReport or None if Sage isn't available or the
+        buffer has fewer than 30 bars.
+        """
+        bars = list(bot.sage_bars)
+        if len(bars) < 30:
+            return None
+        try:
+            from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage
+            ctx = MarketContext(
+                bars=bars,
+                side=side,
+                entry_price=entry_price,
+                symbol=bot.symbol,
+            )
+            return consult_sage(ctx)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("sage consultation for %s failed (non-fatal): %s", bot.bot_id, exc)
+            return None
 
     def _consult_jarvis(  # noqa: ANN202 -- FullJarvisVerdict is opt-imported
         self,

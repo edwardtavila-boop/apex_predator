@@ -113,14 +113,7 @@ def pytest_collection_modifyitems(config, items):  # noqa: ARG001, ANN001
     coverage; instead we surgically skip the orphan classes so the
     rest of the file still runs.
     """
-    skip_classes = {
-        # avengers.daemon helpers not implemented:
-        # _build_anthropic_http_client, _run_local_background_task,
-        # _default_fleet — referenced only from these test classes.
-        "TestAnthropicClientFallback",
-        "TestTick",
-        "TestRunDaemonCli",
-    }
+    skip_classes: set[str] = set()
     import pytest as _pytest  # local import to avoid unused-import lint
 
     skip_marker = _pytest.mark.skip(

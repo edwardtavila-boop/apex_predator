@@ -19,9 +19,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
@@ -32,7 +30,6 @@ if hasattr(sys.stdout, "reconfigure"):
     except (AttributeError, OSError):
         pass
 
-from eta_engine.scripts import workspace_roots  # noqa: E402
 
 
 @dataclass
@@ -100,7 +97,7 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
     if ds is None:
         raise ValueError(f"No data for {assignment.symbol}/{assignment.timeframe}")
 
-    bars = lib.load_bars(ds, limit=min(bar_limit or 999999, max_bars))
+    bars = lib.load_bars(ds, limit=min(bar_limit or 999999, max_bars), require_positive_prices=True)
     if len(bars) < 50:
         raise ValueError(f"Not enough bars: {len(bars)}")
 
@@ -288,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Avg PnL/trade:      ${result.avg_pnl_per_trade:+.2f}")
         print(f"  Max drawdown:       ${result.max_dd_usd:.2f}")
         if result.trades:
-            print(f"\n  Last 5 trades:")
+            print("\n  Last 5 trades:")
             for t in result.trades[-5:]:
                 print(f"    {t.exit_ts[:10]} {t.side:<6} entry={t.entry_price:.1f} exit={t.exit_price:.1f} "
                       f"pnl=${t.pnl_usd:+.2f} ({t.exit_reason})")

@@ -16,6 +16,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 class WyckoffSchool(SchoolBase):
@@ -48,17 +49,14 @@ class WyckoffSchool(SchoolBase):
         closes = ctx.closes()
         volumes = ctx.volumes()
 
-        # Range over the prior 20 bars. Excluding the active bar is essential:
-        # otherwise a new spring/upthrust wick becomes the range edge and can
-        # never pierce it.
-        range_high = max(highs[-21:-1])
-        range_low = min(lows[-21:-1])
+        range_high = get_or_compute(ctx, "range_high_20", lambda: max(highs[-21:-1]))
+        range_low = get_or_compute(ctx, "range_low_20", lambda: min(lows[-21:-1]))
+        avg_vol = get_or_compute(ctx, "avg_vol_20", lambda: sum(volumes[-20:]) / 20 if volumes[-20:] else 0)
         last = bars[-1]
         last_close = float(last["close"])
         last_low = float(last["low"])
         last_high = float(last["high"])
         last_vol = float(last.get("volume", 0))
-        avg_vol = sum(volumes[-20:]) / 20 if volumes[-20:] else 0
 
         # Spring: last bar's low pierced range_low BUT closed back inside on volume
         spring = (

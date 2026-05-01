@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +28,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_PATH = Path(__file__).resolve().parents[3] / "state" / "sage" / "edge_tracker.json"
+SAVE_INTERVAL_SECONDS: float = 30.0  # batch I/O: flush disk at most every 30s
+OBSERVE_BATCH_SIZE: int = 20  # also save every N observations regardless of time
 
 
 @dataclass
@@ -84,6 +87,8 @@ class EdgeTracker:
         self.state_path = state_path
         self._lock = threading.Lock()
         self._edges: dict[str, SchoolEdge] = {}
+        self._last_save_at: float = 0.0
+        self._obs_since_save: int = 0
         self._load()
 
     def _load(self) -> None:
@@ -126,6 +131,24 @@ class EdgeTracker:
         except OSError as exc:
             logger.warning("edge tracker save failed: %s", exc)
 
+    def _maybe_save(self, force: bool = False) -> None:
+        """Flush to disk if enough time or observations have passed."""
+        if force:
+            self._save()
+            self._last_save_at = time.time()
+            self._obs_since_save = 0
+            return
+        self._obs_since_save += 1
+        now = time.time()
+        if (
+            self._obs_since_save >= OBSERVE_BATCH_SIZE
+            or (self._last_save_at == 0 and self._obs_since_save >= 1)
+            or (self._last_save_at > 0 and now - self._last_save_at >= SAVE_INTERVAL_SECONDS)
+        ):
+            self._save()
+            self._last_save_at = now
+            self._obs_since_save = 0
+
     def observe(
         self,
         *,
@@ -153,7 +176,12 @@ class EdgeTracker:
             # If school was neutral or disagreed, just bump n_obs (sample
             # of activity but not a trade attribution)
             e.last_updated = datetime.now(UTC).isoformat()
-            self._save()
+            self._maybe_save()
+
+    def flush(self) -> None:
+        """Force an immediate save to disk."""
+        with self._lock:
+            self._maybe_save(force=True)
 
     def edge_for(self, school: str) -> SchoolEdge:
         """Return the SchoolEdge for `school`. Returns an empty one if

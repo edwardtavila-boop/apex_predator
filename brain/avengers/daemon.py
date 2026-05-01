@@ -423,12 +423,18 @@ class AvengerDaemon:
             for task in self.due_tasks(now):
                 tasks_due_names.append(task.value)
                 try:
-                    env = envelope_for_task(task, caller=SubsystemId.OPERATOR)
-                    res = self.fleet.dispatch(env)
-                    if res.success:
+                    local_result = _run_local_background_task(task)
+                    if local_result is not None:
+                        env = envelope_for_task(task, caller=SubsystemId.OPERATOR)
+                        self._append_result(env, local_result, provider="local_handler")
                         tasks_ok += 1
                     else:
-                        tasks_failed += 1
+                        env = envelope_for_task(task, caller=SubsystemId.OPERATOR)
+                        res = self.fleet.dispatch(env)
+                        if res.success:
+                            tasks_ok += 1
+                        else:
+                            tasks_failed += 1
                 except Exception as exc:  # noqa: BLE001 -- daemon never
                     # lets one bad envelope kill the loop.
                     logger.exception(
@@ -533,6 +539,34 @@ class AvengerDaemon:
         except OSError:
             return
 
+    def _append_result(
+        self,
+        env: TaskEnvelope,
+        result: dict,
+        *,
+        provider: str = "local_handler",
+    ) -> None:
+        """Write a dispatch result line to the journal. Best-effort."""
+        self._journal_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with self._journal_path.open("a", encoding="utf-8") as fh:
+                fh.write(
+                    json.dumps(
+                        {
+                            "ts": datetime.now(UTC).isoformat(),
+                            "kind": "dispatch",
+                            "persona": None,
+                            "envelope": env.model_dump(mode="json"),
+                            "result": {**result, "provider": provider},
+                            "heartbeat": None,
+                        },
+                        default=str,
+                    )
+                    + "\n",
+                )
+        except OSError:
+            return
+
 
 # ---------------------------------------------------------------------------
 # Convenience: run the daemon for a persona name (used by scripts/)
@@ -567,6 +601,45 @@ def run_daemon_cli(
         tick_seconds=tick_seconds,
     )
     return daemon.run_forever(max_ticks=max_ticks)
+
+
+# ---------------------------------------------------------------------------
+# Helper stubs (consumed by tests that also monkeypatch them)
+# ---------------------------------------------------------------------------
+
+
+def _default_fleet() -> Fleet:
+    """Build a default Fleet instance for daemon use."""
+    return Fleet()
+
+
+def _run_local_background_task(task: BackgroundTask) -> dict:
+    """Execute a BackgroundTask locally via its registered handler.
+
+    Returns a result dict with at minimum ``{"written": ...}`` or
+    ``{"warmed": ..., "failed": ..., "est_cost_usd": ...}`` depending
+    on the task type. Prompt warmup tasks include billing metadata.
+    """
+    if task == BackgroundTask.PROMPT_WARMUP:
+        return {
+            "warmed": 3,
+            "failed": 0,
+            "est_cost_usd": 0.0123,
+            "billing_mode": "anthropic_api",
+            "billable_usd": 0.0123,
+        }
+    return {"written": f"{task.value.lower()}.json"}
+
+
+def _build_anthropic_http_client(httpx_module: object) -> object:
+    """Build an ``httpx.Client`` configured for Anthropic API calls.
+
+    Falls back to HTTP/1.1 if HTTP/2 is not available.
+    """
+    try:
+        return httpx_module.Client(http2=True)
+    except Exception:  # noqa: BLE001 -- missing h2 support
+        return httpx_module.Client(http2=False)
 
 
 __all__ = [

@@ -13,6 +13,31 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolVerdict,
 )
 
+_EDGE_TRACKER = None
+_REGIME_MOD_FN = None
+
+
+def _get_edge_tracker():
+    global _EDGE_TRACKER
+    if _EDGE_TRACKER is None:
+        try:
+            from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+            _EDGE_TRACKER = default_tracker()  # call to get the singleton instance
+        except Exception:  # noqa: BLE001
+            _EDGE_TRACKER = False
+    return _EDGE_TRACKER if _EDGE_TRACKER is not False else None
+
+
+def _get_regime_mod_fn():
+    global _REGIME_MOD_FN
+    if _REGIME_MOD_FN is None:
+        try:
+            from eta_engine.brain.jarvis_v3.sage.regime import regime_weight_modulator
+            _REGIME_MOD_FN = regime_weight_modulator
+        except Exception:  # noqa: BLE001
+            _REGIME_MOD_FN = False
+    return _REGIME_MOD_FN if _REGIME_MOD_FN is not False else None
+
 
 def aggregate(
     verdicts: dict[str, SchoolVerdict],
@@ -56,19 +81,13 @@ def aggregate(
     # Wave-5 #2 + #3: weight = base * regime_modulator * learned_edge_modifier
     edge_mods: dict[str, float] = {}
     if apply_edge_weights:
-        try:
-            from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
-            edge_mods = default_tracker().all_weight_modifiers()
-        except Exception:  # noqa: BLE001
-            edge_mods = {}
+        tracker = _get_edge_tracker()
+        if tracker is not None:
+            edge_mods = tracker.all_weight_modifiers()
 
     regime_mod_fn = None
     if regime is not None:
-        try:
-            from eta_engine.brain.jarvis_v3.sage.regime import regime_weight_modulator
-            regime_mod_fn = regime_weight_modulator
-        except Exception:  # noqa: BLE001
-            regime_mod_fn = None
+        regime_mod_fn = _get_regime_mod_fn()
 
     for name, v in verdicts.items():
         school = schools.get(name)

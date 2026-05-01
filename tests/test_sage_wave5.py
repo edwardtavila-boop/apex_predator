@@ -151,6 +151,7 @@ def test_edge_tracker_persists_across_instances(tmp_path: Path) -> None:
     et1 = EdgeTracker(state_path=sp)
     for _ in range(5):
         et1.observe(school="x", school_bias="long", entry_side="long", realized_r=0.5)
+    et1.flush()
     et2 = EdgeTracker(state_path=sp)
     assert et2.edge_for("x").n_aligned_wins == 5
 

@@ -6,6 +6,7 @@ each school's atomic output. The SageReport aggregates verdicts.
 from __future__ import annotations
 
 import abc
+import copy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -17,6 +18,9 @@ class Bias(StrEnum):
     LONG = "long"
     SHORT = "short"
     NEUTRAL = "neutral"
+
+
+_SENTINEL = object()
 
 
 @dataclass(frozen=True)
@@ -37,12 +41,7 @@ class MarketContext:
     side: str = "long"  # the bot's PROPOSED entry side
     entry_price: float = 0.0
     symbol: str = ""
-    # Multi-timeframe (Wave-5 #1, 2026-04-27): optional dict of
-    # {tf_label: [bars]}. When present, schools that opt in (via the
-    # `MULTI_TIMEFRAME = True` class attribute) consult each TF and
-    # aggregate within their own analyze() method.
     bars_by_tf: dict[str, list[dict[str, Any]]] | None = None
-    # Optional extras a school may use if present
     order_book_imbalance: float | None = None     # -1.0 to +1.0
     cumulative_delta: float | None = None
     realized_vol: float | None = None
@@ -50,35 +49,49 @@ class MarketContext:
     account_equity_usd: float | None = None
     risk_per_trade_pct: float | None = None       # for risk school
     stop_distance_pct: float | None = None        # for risk school
-    # Wave-5 #2 (regime conditioning): when present, the regime detector
-    # has run and tagged the current state. Confluence layer uses this
-    # to reweight schools.
     detected_regime: str | None = None  # one of {trending, ranging, volatile, quiet}
-    # Wave-5 #6: per-instrument activation -- the symbol class
     instrument_class: str | None = None  # one of {equity, crypto, futures, fx, options}
-    # Wave-6 pre-live (2026-04-27): optional telemetry payloads. Each is
-    # a free-form dict that the corresponding school reads. None means
-    # the school skips with a "missing" verdict (NEUTRAL, conv 0).
     onchain: dict[str, Any] | None = None     # for OnChainSchool (BTC/ETH metrics)
     funding: dict[str, Any] | None = None     # for FundingBasisSchool (perp funding + basis)
     options: dict[str, Any] | None = None     # for OptionsGreeksSchool (IV / skew / GEX)
     peer_returns: dict[str, list[float]] | None = None  # for CrossAssetCorrelationSchool
+    _cached: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def n_bars(self) -> int:
         return len(self.bars)
 
     def closes(self) -> list[float]:
-        return [float(b["close"]) for b in self.bars]
+        cached = self._cached.get("closes", _SENTINEL)
+        if cached is not _SENTINEL:
+            return cached
+        result = [float(b["close"]) for b in self.bars]
+        self._cached["closes"] = result
+        return result
 
     def highs(self) -> list[float]:
-        return [float(b["high"]) for b in self.bars]
+        cached = self._cached.get("highs", _SENTINEL)
+        if cached is not _SENTINEL:
+            return cached
+        result = [float(b["high"]) for b in self.bars]
+        self._cached["highs"] = result
+        return result
 
     def lows(self) -> list[float]:
-        return [float(b["low"]) for b in self.bars]
+        cached = self._cached.get("lows", _SENTINEL)
+        if cached is not _SENTINEL:
+            return cached
+        result = [float(b["low"]) for b in self.bars]
+        self._cached["lows"] = result
+        return result
 
     def volumes(self) -> list[float]:
-        return [float(b.get("volume", 0.0)) for b in self.bars]
+        cached = self._cached.get("volumes", _SENTINEL)
+        if cached is not _SENTINEL:
+            return cached
+        result = [float(b.get("volume", 0.0)) for b in self.bars]
+        self._cached["volumes"] = result
+        return result
 
     def has_tf(self, tf: str) -> bool:
         """True if `bars_by_tf` contains the given timeframe label."""
@@ -111,7 +124,16 @@ class MarketContext:
             onchain=self.onchain,
             funding=self.funding,
             options=self.options,
+            peer_returns=self.peer_returns,
         )
+
+    def with_regime(self, regime: str) -> MarketContext:
+        """Return a new MarketContext with ``detected_regime`` set.
+
+        Avoids rebuilding all fields manually -- uses shallow copy."""
+        ctx = copy.copy(self)
+        object.__setattr__(ctx, "detected_regime", regime)
+        return ctx
 
 
 @dataclass(frozen=True)

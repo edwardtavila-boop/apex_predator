@@ -365,7 +365,15 @@ class TestTick:
             dm,
             "_run_local_background_task",
             lambda task: (
-                {"warmed": 3, "failed": 0, "est_cost_usd": 0.0123} if task is BackgroundTask.PROMPT_WARMUP else None
+                {
+                    "warmed": 3,
+                    "failed": 0,
+                    "est_cost_usd": 0.0123,
+                    "billing_mode": "anthropic_api",
+                    "billable_usd": 0.0123,
+                }
+                if task is BackgroundTask.PROMPT_WARMUP
+                else None
             ),
         )
 

@@ -21,10 +21,15 @@ This is the bridge between v17's risk gating and the sage's
 fundamental-school read of the tape. The sage is consulted ONLY when
 the bot supplies bars in the request payload (key: ``payload['sage_bars']``)
 -- otherwise v22 is identical to v17.
+
+Thresholds are dynamically tuned from EdgeTracker realized-R data when
+enough observations exist; fall back to env-var overrides, then to
+hardcoded defaults.
 """
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from eta_engine.brain.jarvis_admin import (
@@ -40,18 +45,63 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Sage conviction floor; below this we don't modulate
-SAGE_CONVICTION_FLOOR: float = 0.35
+#: Hardcoded defaults (used when no edge-tracker data available)
+_SAGE_CONVICTION_FLOOR_DEFAULT: float = 0.35
+_SAGE_CONVICTION_HIGH_DEFAULT: float = 0.65
+_SAGE_AGREE_THRESHOLD_DEFAULT: float = 0.70
+_SAGE_DISAGREE_THRESHOLD_DEFAULT: float = 0.30
+_SAGE_DISAGREE_TIGHTEN_CAP_DEFAULT: float = 0.30
 
-#: Sage conviction ceiling for "high conviction"
-SAGE_CONVICTION_HIGH: float = 0.65
 
-#: Alignment thresholds
-SAGE_AGREE_THRESHOLD: float = 0.70
-SAGE_DISAGREE_THRESHOLD: float = 0.30
+def _load_threshold(name: str, default: float) -> float:
+    """Load a threshold from env var override, with explicit default."""
+    env_key = f"ETA_V22_{name.upper()}"
+    if env_key in os.environ:
+        try:
+            return float(os.environ[env_key])
+        except ValueError:
+            logger.warning("invalid env var %s, using default %s", env_key, default)
+    return default
 
-#: Cap modulation when sage disagrees strongly
-SAGE_DISAGREE_TIGHTEN_CAP: float = 0.30
+
+def get_sage_thresholds() -> dict[str, float]:
+    """Return the active v22 sage modulation thresholds.
+
+    Loads from ETA_V22_* env vars with defaults, then applies light
+    self-tuning from EdgeTracker aggregate edge data when available.
+    """
+    c_floor = _load_threshold("sage_conviction_floor", _SAGE_CONVICTION_FLOOR_DEFAULT)
+    c_high = _load_threshold("sage_conviction_high", _SAGE_CONVICTION_HIGH_DEFAULT)
+    agree = _load_threshold("sage_agree_threshold", _SAGE_AGREE_THRESHOLD_DEFAULT)
+    disagree = _load_threshold("sage_disagree_threshold", _SAGE_DISAGREE_THRESHOLD_DEFAULT)
+    tighten = _load_threshold("sage_disagree_tighten_cap", _SAGE_DISAGREE_TIGHTEN_CAP_DEFAULT)
+
+    # Self-tune: if edge tracker has >=50 total observations across
+    # all schools, nudge thresholds based on aggregate edge.
+    try:
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        edges = tracker.all_weight_modifiers()
+        if edges:
+            avg_mod = sum(edges.values()) / len(edges)
+            # avg_mod > 1.0 means schools are net positive -> loosen thresholds
+            # avg_mod < 1.0 means schools are net negative -> tighten thresholds
+            if avg_mod > 1.1:
+                c_floor = max(0.20, c_floor - 0.05)
+                c_high = max(0.50, c_high - 0.05)
+            elif avg_mod < 0.9:
+                c_floor = min(0.50, c_floor + 0.05)
+                c_high = min(0.80, c_high + 0.05)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "conviction_floor": round(c_floor, 3),
+        "conviction_high": round(c_high, 3),
+        "agree_threshold": round(agree, 3),
+        "disagree_threshold": round(disagree, 3),
+        "disagree_tighten_cap": round(tighten, 3),
+    }
 
 #: Symbol-prefix map for instrument-class auto-detection. Bots can
 #: always override by passing ``instrument_class`` in the payload.
@@ -94,6 +144,7 @@ def _infer_instrument_class(symbol: str) -> str | None:
 
 def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
     """v22: modulate v17 verdicts using multi-school sage confluence."""
+    t = get_sage_thresholds()
     base = evaluate_request(req, ctx)
     if base.verdict not in (Verdict.APPROVED, Verdict.CONDITIONAL):
         return base
@@ -160,13 +211,13 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
         logger.debug("last_report_cache.set_last raised %s (non-fatal)", exc)
 
     # Below conviction floor -> don't modulate
-    if report.conviction < SAGE_CONVICTION_FLOOR:
+    if report.conviction < t["conviction_floor"]:
         return base
 
     # High-conviction agreement -> loosen
     if (
-        report.conviction >= SAGE_CONVICTION_HIGH
-        and report.alignment_score >= SAGE_AGREE_THRESHOLD
+        report.conviction >= t["conviction_high"]
+        and report.alignment_score >= t["agree_threshold"]
         and base.verdict == Verdict.CONDITIONAL
     ):
         # Loosen the cap (boost up to 1.0)
@@ -180,16 +231,16 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
 
     # High-conviction disagreement -> tighten or defer
     if (
-        report.conviction >= SAGE_CONVICTION_HIGH
-        and report.alignment_score <= SAGE_DISAGREE_THRESHOLD
+        report.conviction >= t["conviction_high"]
+        and report.alignment_score <= t["disagree_threshold"]
     ):
         if base.verdict == Verdict.APPROVED:
             return base.model_copy(update={
                 "verdict": Verdict.CONDITIONAL,
-                "size_cap_mult": SAGE_DISAGREE_TIGHTEN_CAP,
+                "size_cap_mult": t["disagree_tighten_cap"],
                 "reason": (
                     f"{base.reason} [v22 sage disagrees strongly "
-                    f"({report.summary_line()}) -> downgrade APPROVED to CONDITIONAL@{SAGE_DISAGREE_TIGHTEN_CAP}]"
+                    f"({report.summary_line()}) -> downgrade APPROVED to CONDITIONAL@{t['disagree_tighten_cap']}]"
                 ),
                 "conditions": [*base.conditions, "v22_sage_disagree_tighten"],
             })
@@ -218,11 +269,9 @@ register_candidate(
         "order flow + risk + Gann + NEoWave + Weis-Wyckoff)"
     ),
     metadata={
-        "sage_conviction_floor": SAGE_CONVICTION_FLOOR,
-        "sage_conviction_high": SAGE_CONVICTION_HIGH,
-        "sage_agree_threshold": SAGE_AGREE_THRESHOLD,
-        "sage_disagree_threshold": SAGE_DISAGREE_THRESHOLD,
+        **get_sage_thresholds(),
         "kaizen_ticket": "KZN-2026-04-27-sage-confluence-modulation",
+        "thresholds_self_tune": True,
     },
     overwrite=True,
 )

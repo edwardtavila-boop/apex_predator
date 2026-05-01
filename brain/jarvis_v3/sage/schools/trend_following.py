@@ -12,6 +12,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 def _ema(values: list[float], period: int) -> list[float]:
@@ -49,8 +50,8 @@ class TrendFollowingSchool(SchoolBase):
             )
 
         closes = ctx.closes()
-        fast_ema = _ema(closes, self.FAST_PERIOD)
-        slow_ema = _ema(closes, self.SLOW_PERIOD)
+        fast_ema = get_or_compute(ctx, f"ema_{self.FAST_PERIOD}", lambda: _ema(closes, self.FAST_PERIOD))
+        slow_ema = get_or_compute(ctx, f"ema_{self.SLOW_PERIOD}", lambda: _ema(closes, self.SLOW_PERIOD))
         last_fast = fast_ema[-1]
         last_slow = slow_ema[-1]
         # Slope = (fast_now - fast_lookback_ago) / fast_lookback_ago

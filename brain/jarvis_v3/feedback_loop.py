@@ -163,7 +163,26 @@ def close_trade(
     except Exception as exc:  # noqa: BLE001
         layer_errors.append(f"calibrator: {exc}")
 
-    # 6. Persist trade-close audit record
+    # 6. Per-school edge tracker -- attribute realized R to each school
+    #    that was consulted during the trade's entry signal.
+    try:
+        from eta_engine.brain.jarvis_v3.sage.last_report_cache import pop_last_any
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        report = pop_last_any()
+        if report is not None:
+            for school_name, verdict in report.per_school.items():
+                tracker.observe(
+                    school=school_name,
+                    school_bias=verdict.bias.value,
+                    entry_side=direction,
+                    realized_r=realized_r,
+                )
+            layers_updated.append("sage_edge_tracker")
+    except Exception as exc:  # noqa: BLE001
+        layer_errors.append(f"sage_edge_tracker: {exc}")
+
+    # 7. Persist trade-close audit record
     record = TradeCloseRecord(
         ts=datetime.now(UTC).isoformat(),
         signal_id=signal_id,

@@ -12,7 +12,10 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
-from eta_engine.brain.jarvis_v3.sage.schools.support_resistance import _find_pivots
+from eta_engine.brain.jarvis_v3.sage.schools.support_resistance import (
+    _cached_pivots_high,
+    _cached_pivots_low,
+)
 
 
 class SmcIctSchool(SchoolBase):
@@ -41,9 +44,8 @@ class SmcIctSchool(SchoolBase):
         lows = ctx.lows()
         last_close = float(ctx.bars[-1]["close"])
 
-        # Pivot structure: find swing highs + lows
-        pivot_highs = _find_pivots(highs, kind="high")
-        pivot_lows = _find_pivots(lows, kind="low")
+        pivot_highs = _cached_pivots_high(ctx)
+        pivot_lows = _cached_pivots_low(ctx)
         if len(pivot_highs) < 2 or len(pivot_lows) < 2:
             return SchoolVerdict(
                 school=self.NAME, bias=Bias.NEUTRAL, conviction=0.10,

@@ -315,6 +315,14 @@ class JarvisContext(BaseModel):
             "trial_budget_remaining."
         ),
     )
+    sage_summary: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "v22 Sage confluence state: composite_bias, conviction, "
+            "alignment_score, schools_consulted, per_school_snapshot, "
+            "edge_health, modulation_active."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1173,6 +1181,42 @@ def build_explanation(
 # ---------------------------------------------------------------------------
 
 
+def _build_sage_summary() -> dict[str, Any] | None:
+    """Best-effort Sage telemetry snapshot for dashboard / JarvisContext.
+
+    Pulls the current edge tracker health, the last sage report from the
+    cache, and the active v22 threshold set. Returns None when Sage isn't
+    reachable (import failure, no state, etc.).
+    """
+    state: dict[str, Any] = {}
+    try:
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        state["edge_health"] = tracker.snapshot()
+        mods = tracker.all_weight_modifiers()
+        if mods:
+            state["avg_weight_modifier"] = round(sum(mods.values()) / len(mods), 4)
+    except Exception:  # noqa: BLE001
+        state["edge_health"] = {}
+    try:
+        from eta_engine.brain.jarvis_v3.policies.v22_sage_confluence import get_sage_thresholds
+        state["v22_thresholds"] = get_sage_thresholds()
+    except Exception:  # noqa: BLE001
+        state["v22_thresholds"] = {}
+    try:
+        from eta_engine.brain.jarvis_v3.sage.last_report_cache import cache_size
+        state["last_report_cache_size"] = cache_size()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        monitor = default_monitor()
+        state["school_health"] = monitor.check_health() if monitor else {}
+    except Exception:  # noqa: BLE001
+        state["school_health"] = {}
+    return state if state.get("edge_health") else None
+
+
 def build_snapshot(
     *,
     macro: MacroSnapshot,
@@ -1218,6 +1262,7 @@ def build_snapshot(
     if summary is None and market_context is not None:
         summary = build_market_context_summary(market_context)
     summary_text = format_market_context_summary(summary) if summary else None
+    sage_summary = _build_sage_summary()
     return JarvisContext(
         ts=now,
         macro=macro,
@@ -1236,6 +1281,7 @@ def build_snapshot(
         market_context=market_context,
         market_context_summary=summary,
         market_context_summary_text=summary_text,
+        sage_summary=sage_summary,
     )
 
 

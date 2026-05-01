@@ -95,27 +95,28 @@ _CACHE_MAX = 256
 
 
 def _cache_key(ctx: MarketContext, enabled: frozenset[str] | None) -> str:
-    payload = {
-        "bars": ctx.bars,
-        "bars_by_tf": ctx.bars_by_tf,
-        "side": ctx.side,
-        "entry_price": ctx.entry_price,
-        "symbol": ctx.symbol,
-        "order_book_imbalance": ctx.order_book_imbalance,
-        "cumulative_delta": ctx.cumulative_delta,
-        "realized_vol": ctx.realized_vol,
-        "session_phase": ctx.session_phase,
-        "account_equity_usd": ctx.account_equity_usd,
-        "risk_per_trade_pct": ctx.risk_per_trade_pct,
-        "stop_distance_pct": ctx.stop_distance_pct,
-        "detected_regime": ctx.detected_regime,
-        "instrument_class": ctx.instrument_class,
-        "onchain": ctx.onchain,
-        "funding": ctx.funding,
-        "options": ctx.options,
-        "peer_returns": ctx.peer_returns,
-        "enabled": sorted(enabled) if enabled else None,
-    }
+    first_ts = ctx.bars[0].get("ts", "") if ctx.bars else ""
+    last_ts = ctx.bars[-1].get("ts", "") if ctx.bars else ""
+    last_close = ctx.bars[-1].get("close", 0) if ctx.bars else 0
+    payload = (
+        ctx.symbol,
+        ctx.side,
+        round(ctx.entry_price, 4),
+        ctx.n_bars,
+        str(first_ts),
+        str(last_ts),
+        round(float(last_close) if last_close else 0, 4),
+        ctx.detected_regime or "",
+        ctx.instrument_class or "",
+        ctx.order_book_imbalance,
+        ctx.cumulative_delta,
+        ctx.realized_vol,
+        ctx.session_phase or "",
+        ctx.account_equity_usd,
+        ctx.risk_per_trade_pct,
+        ctx.stop_distance_pct,
+        sorted(enabled) if enabled else None,
+    )
     encoded = json.dumps(
         payload,
         sort_keys=True,
@@ -172,27 +173,7 @@ def consult_sage(
     # Wave-5 #2: auto-detect regime if not already tagged
     if ctx.detected_regime is None and ctx.n_bars >= 25:
         regime, _signals = detect_regime(ctx)
-        ctx = MarketContext(
-            bars=ctx.bars,
-            side=ctx.side,
-            entry_price=ctx.entry_price,
-            symbol=ctx.symbol,
-            bars_by_tf=ctx.bars_by_tf,
-            order_book_imbalance=ctx.order_book_imbalance,
-            cumulative_delta=ctx.cumulative_delta,
-            realized_vol=ctx.realized_vol,
-            session_phase=ctx.session_phase,
-            account_equity_usd=ctx.account_equity_usd,
-            risk_per_trade_pct=ctx.risk_per_trade_pct,
-            stop_distance_pct=ctx.stop_distance_pct,
-            detected_regime=regime.value,
-            instrument_class=ctx.instrument_class,
-            # Wave-6 pre-live: preserve optional telemetry payloads on rebuild
-            onchain=ctx.onchain,
-            funding=ctx.funding,
-            options=ctx.options,
-            peer_returns=ctx.peer_returns,
-        )
+        ctx = ctx.with_regime(regime.value)
 
     # Filter to applicable schools (instrument/regime gates + enabled set)
     schools_to_run = []
@@ -244,6 +225,13 @@ def consult_sage(
             _CACHE.move_to_end(key)
             while len(_CACHE) > _CACHE_MAX:
                 _CACHE.popitem(last=False)
+
+    # Drop per-ctx feature cache to prevent unbounded memory growth
+    try:
+        from eta_engine.brain.jarvis_v3.sage.feature_cache import clear_for_ctx
+        clear_for_ctx(ctx)
+    except Exception:  # noqa: BLE001
+        pass
 
     return report
 

@@ -11,6 +11,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 def _find_pivots(values: list[float], lookback: int = 3, *, kind: str = "high") -> list[tuple[int, float]]:
@@ -26,6 +27,14 @@ def _find_pivots(values: list[float], lookback: int = 3, *, kind: str = "high") 
         if kind == "high" and values[i] == max(window) or kind == "low" and values[i] == min(window):
             out.append((i, values[i]))
     return out
+
+
+def _cached_pivots_high(ctx: MarketContext) -> list[tuple[int, float]]:
+    return get_or_compute(ctx, "pivot_highs", lambda: _find_pivots(ctx.highs(), kind="high"))
+
+
+def _cached_pivots_low(ctx: MarketContext) -> list[tuple[int, float]]:
+    return get_or_compute(ctx, "pivot_lows", lambda: _find_pivots(ctx.lows(), kind="low"))
 
 
 class SupportResistanceSchool(SchoolBase):
@@ -52,8 +61,8 @@ class SupportResistanceSchool(SchoolBase):
         lows = ctx.lows()
         last_close = float(ctx.bars[-1]["close"])
 
-        pivot_highs = [v for _, v in _find_pivots(highs, kind="high")]
-        pivot_lows = [v for _, v in _find_pivots(lows, kind="low")]
+        pivot_highs = [v for _, v in _cached_pivots_high(ctx)]
+        pivot_lows = [v for _, v in _cached_pivots_low(ctx)]
         if not pivot_highs or not pivot_lows:
             return SchoolVerdict(
                 school=self.NAME, bias=Bias.NEUTRAL, conviction=0.10,

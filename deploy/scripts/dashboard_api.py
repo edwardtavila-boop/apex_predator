@@ -132,6 +132,14 @@ DASHBOARD_CARD_REGISTRY = (
         "stale_after_s": 45,
     },
     {
+        "id": "cc-sage-registry",
+        "title": "School Registry",
+        "source": "endpoint",
+        "endpoint": "/api/jarvis/sage_school_registry",
+        "required": True,
+        "stale_after_s": 300,
+    },
+    {
         "id": "cc-edge-leaderboard",
         "title": "Edge Leaderboard",
         "source": "endpoint",
@@ -1474,6 +1482,39 @@ def sage_timeline_endpoint(symbol: str = "MNQ", hours: int = 24, side: str = "lo
 
 
 # ─── Sage disagreement heatmap (Wave-6 #5, 2026-04-27) ─────────────
+@app.get("/api/jarvis/sage_school_registry")
+def sage_school_registry_endpoint() -> dict:
+    """All 23 schools with metadata, weight, edge health, and activation status."""
+    from eta_engine.brain.jarvis_v3.sage import SCHOOLS
+    from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+    from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+    tracker = default_tracker()
+    edges = tracker.snapshot()
+    monitor = default_monitor()
+    issues = {i.school: i for i in monitor.check_health()}
+    schools = []
+    for name, s in SCHOOLS.items():
+        edge = edges.get(name, {})
+        issue = issues.get(name)
+        schools.append({
+            "name": name,
+            "weight": s.WEIGHT,
+            "knowledge": s.KNOWLEDGE[:120] + "..." if len(s.KNOWLEDGE) > 120 else s.KNOWLEDGE,
+            "instruments": list(s.INSTRUMENTS) if s.INSTRUMENTS else ["all"],
+            "regimes": list(s.REGIMES) if s.REGIMES else ["all"],
+            "multi_timeframe": s.MULTI_TIMEFRAME,
+            "edge_hit_rate": edge.get("hit_rate", 0.0),
+            "edge_expectancy": edge.get("expectancy", 0.0),
+            "edge_weight_modifier": edge.get("weight_modifier", 1.0),
+            "edge_n_obs": edge.get("n_obs", 0),
+            "health_issue": {"severity": issue.severity, "detail": issue.detail} if issue else None,
+        })
+    return {
+        "n_schools": len(schools),
+        "schools": sorted(schools, key=lambda s: s["edge_expectancy"], reverse=True),
+    }
+
+
 @app.get("/api/jarvis/sage_disagreement_heatmap")
 def sage_disagreement_heatmap_endpoint(symbol: str = "MNQ") -> dict:
     """Per-school disagreement counts vs the current composite bias

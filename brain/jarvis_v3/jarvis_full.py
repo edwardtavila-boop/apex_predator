@@ -168,6 +168,34 @@ class JarvisFull:
             kaizen_engine=kaizen_engine,
         )
 
+    # Wave-18: Override retro logger + LLM narrative + verdict dispatch
+    _override_retro: object = None
+    _verdict_dispatcher: object = None
+
+    @classmethod
+    def bootstrap(
+        cls,
+        *,
+        admin: JarvisAdmin,
+        memory: HierarchicalMemory | None = None,
+        enable_intelligence: bool = True,
+        quantum_agent: object | None = None,
+        kaizen_engine: object | None = None,
+    ) -> JarvisFull:
+        inst = super().bootstrap(
+            admin=admin,
+            memory=memory,
+            enable_intelligence=enable_intelligence,
+            quantum_agent=quantum_agent,
+            kaizen_engine=kaizen_engine,
+        )
+        from eta_engine.brain.jarvis_v3.override_retrospective import (
+            OverrideRetroLogger,
+        )
+        inst._override_retro = OverrideRetroLogger.default()
+        inst._verdict_dispatcher = None
+        return inst
+
     def consult(
         self,
         req: ActionRequest,
@@ -260,13 +288,36 @@ class JarvisFull:
         if self.operator_coach is not None:
             try:
                 payload = getattr(req, "payload", {}) or {}
+                regime = str(payload.get("regime", "neutral"))
+                session = str(payload.get("session", "rth"))
+                action = str(getattr(req, "action_type", "ORDER"))
                 advice = self.operator_coach.should_defer_to_operator(
-                    regime=str(payload.get("regime", "neutral")),
-                    session=str(payload.get("session", "rth")),
-                    action=str(getattr(req, "action_type", "ORDER")),
+                    regime=regime, session=session, action=action,
                 )
                 coach_rec = advice.recommendation
                 coach_shrink = advice.suggested_size_shrink
+
+                # Wave-18: capture operator overrides for retrospective logging
+                override_level = getattr(consolidated, "operator_override_level", "")
+                if override_level in ("HARD_PAUSE", "KILL", "SOFT_PAUSE"):
+                    retro = getattr(self, "_override_retro", None)
+                    if retro is not None:
+                        try:
+                            event = retro.capture(
+                                request_id=str(getattr(req, "request_id", "")),
+                                subsystem=str(getattr(req, "subsystem", "")),
+                                action=action,
+                                regime=regime,
+                                session=session,
+                                jarvis_verdict=str(consolidated.final_verdict),
+                                operator_override_level=override_level,
+                                override_reason=str(consolidated.base_reason),
+                            )
+                            retro.generate_retrospective(
+                                event, coach=self.operator_coach,
+                            )
+                        except Exception as exc2:
+                            layer_errors.append(f"override_retro: {exc2}")
             except Exception as exc:  # noqa: BLE001
                 layer_errors.append(f"operator_coach: {exc}")
 
@@ -332,21 +383,30 @@ class JarvisFull:
             final_size *= max(0.0, 1.0 - kill_prob)
         final_size = max(0.0, min(2.0, final_size))
 
-        # 7. Narratives
+        # 7. Narratives (Wave-18: LLM-augmented with template fallback)
         narrative_terse = ""
         narrative_standard = ""
         try:
-            from eta_engine.brain.jarvis_v3.narrative_generator import (
-                verdict_to_narrative,
-            )
-            narrative_terse = verdict_to_narrative(
+            from eta_engine.brain.jarvis_v3.llm_narrative import llm_narrative
+            narrative_terse = llm_narrative(
                 consolidated, verbosity="terse",
+                force_template=getattr(self, "_override_retro", None) is None,
             )
-            narrative_standard = verdict_to_narrative(
+            narrative_standard = llm_narrative(
                 consolidated, verbosity="standard",
             )
         except Exception as exc:  # noqa: BLE001
             layer_errors.append(f"narrative: {exc}")
+            try:
+                from eta_engine.brain.jarvis_v3.narrative_generator import (
+                    verdict_to_narrative,
+                )
+                if not narrative_terse:
+                    narrative_terse = verdict_to_narrative(consolidated, verbosity="terse")
+                if not narrative_standard:
+                    narrative_standard = verdict_to_narrative(consolidated, verbosity="standard")
+            except Exception:
+                pass
 
         return FullJarvisVerdict(
             consolidated=consolidated,

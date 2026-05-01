@@ -62,6 +62,8 @@ _SPARSE_OK: frozenset[BackgroundTask] = frozenset(
         BackgroundTask.DASHBOARD_ASSEMBLE,
         BackgroundTask.LOG_COMPACT,
         BackgroundTask.SHADOW_TICK,
+        BackgroundTask.SAGE_ONCHAIN_WARM,
+        BackgroundTask.SAGE_BACKTEST,
     }
 )
 

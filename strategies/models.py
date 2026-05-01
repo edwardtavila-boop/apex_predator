@@ -54,6 +54,11 @@ class StrategyId(StrEnum):
     REGISTRY_COMPRESSION_BREAKOUT = "registry_compression_breakout"
     REGISTRY_CRYPTO_MEANREV = "registry_crypto_meanrev"
     REGISTRY_CONFLUENCE = "registry_confluence"
+    REGISTRY_HTF_ROUTED = "registry_htf_routed"
+    REGISTRY_CONFLUENCE_SCORECARD = "registry_confluence_scorecard"
+    REGISTRY_SWEEP_RECLAIM = "registry_sweep_reclaim"
+    REGISTRY_REGIME_GATED = "registry_regime_gated"
+    REGISTRY_MTF_SCALP = "registry_mtf_scalp"
 
 
 # ---------------------------------------------------------------------------

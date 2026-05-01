@@ -117,6 +117,12 @@ class KaizenEngine:
     with MasterLock, and auto-apply approved changes. Supports
     multi-instrument, strategy lifecycle management, and quantum
     cost discipline.
+
+    Hardened with KaizenGuard:
+      - Max changes per cycle / per day / per instrument
+      - Drawdown circuit breaker (pauses kaizen during crisis)
+      - Parameter cooldown (no rapid re-tweaking)
+      - Auto-rollback on performance degradation
     """
 
     # How many trades before kaizen triggers per instrument
@@ -137,13 +143,20 @@ class KaizenEngine:
         instruments: list[InstrumentConfig],
         state_dir: Path | str | None = None,
         ledger: "KaizenLedger | None" = None,
+        guard: "KaizenGuard | None" = None,
     ) -> None:
         self._instruments = {c.symbol: c for c in instruments}
         self._state_dir = Path(state_dir) if state_dir else Path("state/kaizen")
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         from eta_engine.brain.jarvis_v3.kaizen import KaizenLedger
+        from eta_engine.brain.jarvis_v3.kaizen_guard import KaizenGuard
+
         self._ledger = ledger or KaizenLedger()
+        self._guard = guard or KaizenGuard(
+            max_daily_loss=min(c.max_daily_loss for c in instruments) if instruments else 150.0,
+            state_dir=self._state_dir,
+        )
 
         # Parameter drift tracking: {param_path: [(ts, value), ...]}
         self._parameter_history: dict[str, list[tuple[str, Any]]] = {}
@@ -155,6 +168,7 @@ class KaizenEngine:
 
         self._cycle_count = 0
         self._load_state()
+        self._guard.load_state()
 
     @classmethod
     def from_config(
@@ -196,6 +210,9 @@ class KaizenEngine:
         quantum_cost = 0.0
         quantum_skipped = 0
 
+        # Reset per-cycle counters
+        self._guard.reset_cycle()
+
         for symbol, cfg in self._instruments.items():
             trades = trades_by.get(symbol, [])
             if len(trades) < self.MIN_TRADES_PER_CYCLE:
@@ -229,6 +246,19 @@ class KaizenEngine:
 
             for r in results:
                 if r.approved:
+                    # ── Guard gate: safety net before applying ──
+                    current_dd = _max_drawdown([float(t.get("pnl_dollars", 0)) for t in trades])
+                    admission = self._guard.admit(
+                        parameter=r.proposal.parameter,
+                        instrument=symbol,
+                        current_drawdown=current_dd,
+                        daily_changes=self._guard.status().changes_today,
+                        change_type=r.proposal.axis,
+                    )
+                    if not admission.allowed:
+                        proposals_rejected += 1
+                        continue
+
                     proposals_approved += 1
                     change = ParameterChange(
                         parameter=r.proposal.parameter,
@@ -288,7 +318,45 @@ class KaizenEngine:
         )
 
         self._save_state()
+        self._guard.save_state()
+
+        # ── Notify operator via Hermes ──
+        self._notify_hermes(report)
+
         return report
+
+    def _notify_hermes(self, report: KaizenCycleReport) -> None:
+        try:
+            from hermes_jarvis_telegram.hermes_bridge import get_bridge
+            bridge = get_bridge()
+            bridge.notify_kaizen_cycle(
+                cycle_id=report.cycle_id,
+                proposals_approved=report.proposals_approved,
+                proposals_rejected=report.proposals_rejected,
+                strategies_promoted=report.strategies_promoted,
+                strategies_retired=report.strategies_retired,
+                quantum_count=report.quantum_invocations,
+                quantum_cost=report.quantum_cost_usd,
+                duration_ms=report.cycle_duration_ms,
+            )
+            for strategy in report.strategies_promoted:
+                parts = strategy.split("/", 1)
+                bridge.notify_strategy_lifecycle(
+                    strategy_name=parts[1] if len(parts) > 1 else strategy,
+                    instrument=parts[0] if parts else "",
+                    from_status="paper", to_status="live",
+                    reason="Kaizen auto-promotion — statistical gates passed",
+                )
+            for strategy in report.strategies_retired:
+                parts = strategy.split("/", 1)
+                bridge.notify_strategy_lifecycle(
+                    strategy_name=parts[1] if len(parts) > 1 else strategy,
+                    instrument=parts[0] if parts else "",
+                    from_status="live", to_status="retired",
+                    reason="Kaizen auto-retirement — persistent underperformance",
+                )
+        except Exception:
+            pass
 
     # ── Cost-aware quantum ─────────────────────────────────
 

@@ -115,46 +115,64 @@ class PrecedentCache:
     def _load(self) -> list[dict]:
         if not self.journal_path.exists():
             return []
+        # Delta-load: only read lines since last known position.
+        # On first call (or journal rotated), re-read from scratch.
+        current_size = self.journal_path.stat().st_size
+        cached_size = getattr(self, "_journal_size", 0)
+        cached_rows: list[dict] = getattr(self, "_cached_rows", [])
+        if cached_rows and current_size >= cached_size and current_size > 0:
+            if current_size == cached_size:
+                return cached_rows
+            # Incremental: read only new bytes
+            with self.journal_path.open("r", encoding="utf-8") as f:
+                f.seek(cached_size)
+                tail = f.read()
+            self._cached_rows = cached_rows + self._parse_lines(tail)
+            self._journal_size = current_size
+            return self._cached_rows
+        # Full load
+        text = self.journal_path.read_text(encoding="utf-8")
+        rows = self._parse_lines(text)
+        self._cached_rows = rows
+        self._journal_size = current_size
+        return rows
+
+    def _parse_lines(self, text: str) -> list[dict]:
         cutoff = datetime.now(UTC) - timedelta(days=self.lookback_days)
         out: list[dict] = []
-        try:
-            for raw in self.journal_path.read_text(encoding="utf-8").splitlines():
-                raw = raw.strip()
-                if not raw:
-                    continue
-                try:
-                    rec = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                if rec.get("kind") == "heartbeat":
-                    continue
-                env = rec.get("envelope") or {}
-                res = rec.get("result") or {}
-                if not env or not res:
-                    continue
-                ts_raw = rec.get("ts") or env.get("ts")
-                try:
-                    ts = datetime.fromisoformat(
-                        str(ts_raw).replace("Z", "+00:00"),
-                    )
-                    if ts.tzinfo is None:
-                        ts = ts.replace(tzinfo=UTC)
-                except (ValueError, TypeError):
-                    continue
-                if ts < cutoff:
-                    continue
-                out.append(
-                    {
-                        "ts": ts,
-                        "category": env.get("category", ""),
-                        "caller": env.get("caller", ""),
-                        "goal": env.get("goal", ""),
-                        "success": bool(res.get("success", False)),
-                        "artifact": res.get("artifact", "") or "",
-                    }
+        for raw in text.splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("kind") == "heartbeat":
+                continue
+            env = rec.get("envelope") or {}
+            res = rec.get("result") or {}
+            if not env or not res:
+                continue
+            ts_raw = rec.get("ts") or env.get("ts")
+            try:
+                ts = datetime.fromisoformat(
+                    str(ts_raw).replace("Z", "+00:00"),
                 )
-        except OSError:
-            return []
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=UTC)
+            except (ValueError, TypeError):
+                continue
+            if ts < cutoff:
+                continue
+            out.append({
+                "ts": ts,
+                "category": env.get("category", ""),
+                "caller": env.get("caller", ""),
+                "goal": env.get("goal", ""),
+                "success": bool(res.get("success", False)),
+                "artifact": res.get("artifact", "") or "",
+            })
         return out
 
     def lookup(self, envelope: TaskEnvelope, *, k: int = 5) -> list[PrecedentHit]:

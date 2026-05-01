@@ -52,6 +52,11 @@ _KIND_TO_SID: dict[str, StrategyId] = {
     "compression_breakout": StrategyId.REGISTRY_COMPRESSION_BREAKOUT,
     "crypto_meanrev": StrategyId.REGISTRY_CRYPTO_MEANREV,
     "confluence": StrategyId.REGISTRY_CONFLUENCE,
+    "htf_routed": StrategyId.REGISTRY_HTF_ROUTED,
+    "confluence_scorecard": StrategyId.REGISTRY_CONFLUENCE_SCORECARD,
+    "sweep_reclaim": StrategyId.REGISTRY_SWEEP_RECLAIM,
+    "regime_gated": StrategyId.REGISTRY_REGIME_GATED,
+    "mtf_scalp": StrategyId.REGISTRY_MTF_SCALP,
 }
 
 
@@ -184,6 +189,83 @@ def _build_callable_for_assignment(
             min_conviction=float(extras.get("sage_min_conviction", 0.75)),
         )
         return _wrap_strategy(SageConsensusStrategy(cfg))
+
+    if kind == "htf_routed":
+        from eta_engine.strategies.htf_routed_strategy import (
+            HtfRoutedConfig,
+            HtfRoutedStrategy,
+        )
+
+        cfg = HtfRoutedConfig()
+        stacked = extras.get("entry", extras)
+        if isinstance(stacked, dict):
+            tf_params = stacked.get("trend_follow", {}).get("params", {})
+            mr_params = stacked.get("mean_revert", {}).get("params", {})
+            if isinstance(tf_params, dict) and tf_params:
+                cfg.trend_follow_config = tf_params  # type: ignore[assignment]
+            if isinstance(mr_params, dict) and mr_params:
+                cfg.mean_revert_config = mr_params  # type: ignore[assignment]
+        return _wrap_strategy(HtfRoutedStrategy(cfg))
+
+    if kind == "sweep_reclaim":
+        from eta_engine.strategies.sweep_reclaim_strategy import (
+            SweepReclaimConfig,
+            SweepReclaimStrategy,
+        )
+
+        cfg = SweepReclaimConfig(
+            level_lookback=int(extras.get("level_lookback", 20)),
+            reclaim_window=int(extras.get("reclaim_window", 3)),
+            wick_pct_min=float(extras.get("wick_pct_min", 0.6)),
+            volume_z_min=float(extras.get("volume_z_min", 0.8)),
+            rr_target=float(extras.get("rr_target", 2.0)),
+            atr_stop_mult=float(extras.get("atr_stop_mult", 1.5)),
+        )
+        return _wrap_strategy(SweepReclaimStrategy(cfg))
+
+    if kind == "regime_gated":
+        from eta_engine.strategies.regime_gated_strategy import (
+            RegimeGatedConfig,
+            RegimeGatedStrategy,
+        )
+
+        cfg = RegimeGatedConfig()
+        return _wrap_strategy(RegimeGatedStrategy(cfg))
+
+    if kind == "mtf_scalp":
+        from eta_engine.strategies.mtf_scalp_strategy import (
+            MtfScalpConfig,
+            MtfScalpStrategy,
+        )
+
+        cfg = MtfScalpConfig()
+        return _wrap_strategy(MtfScalpStrategy(cfg))
+
+    if kind == "confluence_scorecard":
+        sub_kind = extras.get("sub_strategy_kind", "orb")
+        sub = _build_callable_for_assignment(
+            type("_Fake", (), {"strategy_kind": sub_kind, "extras": extras.get("sub_strategy_extras", {})})(),
+        )
+        if sub is None:
+            return None
+        from eta_engine.strategies.confluence_scorecard import (
+            ConfluenceScorecardConfig,
+            ConfluenceScorecardStrategy,
+        )
+
+        sc_cfg = extras.get("scorecard_config", {})
+        if isinstance(sc_cfg, dict):
+            cfg = ConfluenceScorecardConfig(
+                min_score=int(sc_cfg.get("min_score", 3)),
+                a_plus_score=int(sc_cfg.get("a_plus_score", 4)),
+                a_plus_size_mult=float(sc_cfg.get("a_plus_size_mult", 1.5)),
+                fast_ema=int(sc_cfg.get("fast_ema", 9)),
+                mid_ema=int(sc_cfg.get("mid_ema", 21)),
+                slow_ema=int(sc_cfg.get("slow_ema", 50)),
+            )
+        else:
+            cfg = ConfluenceScorecardConfig()
+        return _wrap_strategy(ConfluenceScorecardStrategy(None, cfg))
 
     return None
 

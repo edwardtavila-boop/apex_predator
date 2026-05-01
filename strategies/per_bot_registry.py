@@ -331,6 +331,17 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "sage_min_alignment": 0.55,
             "sage_lookback_bars": 200,
             "orb_range_minutes": 15,
+            "per_ticker_optimal": "MNQ",
+            "sage_schools_hint": [
+                "Dow", "Wyckoff", "Elliott", "SMC/ICT", "order flow",
+                "trend", "volume_profile", "market_profile", "seasonality",
+            ],
+            "warmup_policy": {
+                "promoted_on": "2026-04-30",
+                "warmup_days": 30,
+                "risk_multiplier_during_warmup": 0.5,
+            },
+            "daily_loss_limit_pct": 4.0,
         },
     ),
     # NQ futures — sage-gated ORB. Companion to nq_futures (plain
@@ -514,6 +525,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         extras={
             "promotion_status": "production_candidate",
             "underlying_strategy": "crypto_macro_confluence",
+            "per_ticker_optimal": "BTC",
             "crypto_regime_trend_config": {
                 "regime_ema": 100,
                 "pullback_ema": 21,

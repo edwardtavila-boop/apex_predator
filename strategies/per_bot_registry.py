@@ -977,7 +977,6 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "rr_target": 2.0,
             "atr_stop_mult": 1.5,
             "max_trades_per_day": 2,
-            "promotion_status": "research_candidate",
             "research_candidate": True,
         },
     ),

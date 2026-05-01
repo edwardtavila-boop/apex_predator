@@ -14,12 +14,12 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     """Point dashboard_api at a temp state dir + return a TestClient."""
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("APEX_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("ETA_LOG_DIR", str(tmp_path / "logs"))
     # Pin the BTC fleet dir so the dashboard doesn't accidentally see a
     # real fleet directory sitting in the dev package tree.
     monkeypatch.setenv(
-        "APEX_BTC_FLEET_DIR",
+        "ETA_BTC_FLEET_DIR",
         str(tmp_path / "state" / "broker_fleet"),
     )
     (tmp_path / "state").mkdir()
@@ -572,7 +572,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         audit = state / "jarvis_audit.jsonl"
         # 3 entries: one approved, one denied, one conditional
         rows = [
@@ -636,7 +636,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         audit = state / "jarvis_audit.jsonl"
         rows = [
             {
@@ -681,7 +681,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         audit = state / "jarvis_audit.jsonl"
         rows = [
             {
@@ -750,7 +750,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         fleet_dir = state / "broker_fleet"
         fleet_dir.mkdir(parents=True, exist_ok=True)
 
@@ -840,7 +840,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         fleet_dir = state / "broker_fleet"
         fleet_dir.mkdir(parents=True, exist_ok=True)
         ledger = fleet_dir / "btc_paper_trades.jsonl"
@@ -886,7 +886,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         fleet_dir = state / "broker_fleet"
         fleet_dir.mkdir(parents=True, exist_ok=True)
         ledger = fleet_dir / "btc_paper_trades.jsonl"
@@ -919,7 +919,7 @@ class TestDashboardAPI:
     ):
         mnq_dir = tmp_path / "mnq_live"
         mnq_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setenv("APEX_MNQ_SUPERVISOR_DIR", str(mnq_dir))
+        monkeypatch.setenv("ETA_MNQ_SUPERVISOR_DIR", str(mnq_dir))
 
         # Seed state
         (mnq_dir / "mnq_live_state.json").write_text(
@@ -1005,7 +1005,7 @@ class TestDashboardAPI:
     ):
         mnq_dir = tmp_path / "mnq_live"
         mnq_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setenv("APEX_MNQ_SUPERVISOR_DIR", str(mnq_dir))
+        monkeypatch.setenv("ETA_MNQ_SUPERVISOR_DIR", str(mnq_dir))
         (mnq_dir / "mnq_live_state.json").write_text(
             json.dumps(
                 {
@@ -1031,7 +1031,7 @@ class TestDashboardAPI:
         fleet_dir = tmp_path / "state" / "broker_fleet"
         fleet_dir.mkdir(parents=True, exist_ok=True)
         # Shadow the pinned env so /api/systems sees this path
-        monkeypatch.setenv("APEX_BTC_FLEET_DIR", str(fleet_dir))
+        monkeypatch.setenv("ETA_BTC_FLEET_DIR", str(fleet_dir))
         for i, (lane, broker) in enumerate(
             [
                 ("directional", "ibkr"),
@@ -1071,7 +1071,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         bot_dir = state / "bots" / "eth_compression"
         bot_dir.mkdir(parents=True, exist_ok=True)
         (bot_dir / "status.json").write_text(
@@ -1140,7 +1140,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         (state / "bots").mkdir(parents=True, exist_ok=True)
         readiness = tmp_path / "bot_strategy_readiness_latest.json"
         readiness.write_text(
@@ -1202,7 +1202,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         # Ensure state/bots/ exists but is empty (no legacy bots)
         (state / "bots").mkdir(parents=True, exist_ok=True)
 
@@ -1297,7 +1297,7 @@ class TestDashboardAPI:
         import os
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         (state / "bots").mkdir(parents=True, exist_ok=True)
         sup_dir = state / "jarvis_intel" / "supervisor"
         sup_dir.mkdir(parents=True, exist_ok=True)
@@ -1376,7 +1376,7 @@ class TestDashboardAPI:
         from datetime import UTC, datetime
         from pathlib import Path
 
-        state = Path(os.environ["APEX_STATE_DIR"])
+        state = Path(os.environ["ETA_STATE_DIR"])
         sup_dir = state / "jarvis_intel" / "supervisor"
         sup_dir.mkdir(parents=True, exist_ok=True)
         now = datetime.now(UTC).isoformat()

@@ -20,7 +20,7 @@ def fake_docs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     docs.mkdir()
     # v1 spec with per_bot
     v1 = {
-        "spec_id": "APEX_PAPER_RESULTS_v1",
+        "spec_id": "ETA_PAPER_RESULTS_v1",
         "harness_run": {
             "per_bot": {
                 "mnq": {"trades": 168, "expectancy_r": 0.473, "max_dd_pct": 6.83, "gate": "PASS"},
@@ -46,7 +46,7 @@ def test_pick_latest_spec(fake_docs: Path):
     # Create v2 newer than v1 with explicit mtime bump (filesystem may batch mtimes)
     v1 = fake_docs / "firm_spec_paper_results_v1.json"
     v2 = fake_docs / "firm_spec_paper_results_v2.json"
-    v2.write_text(json.dumps({"spec_id": "APEX_PAPER_RESULTS_v2"}))
+    v2.write_text(json.dumps({"spec_id": "ETA_PAPER_RESULTS_v2"}))
     now = time.time()
     os.utime(v1, (now - 10, now - 10))
     os.utime(v2, (now, now))
@@ -73,8 +73,8 @@ def test_metrics_from_spec_tier_a(fake_docs: Path):
 def test_metrics_from_spec_tier_b_falls_through_chain(fake_docs: Path):
     # Build v2 that points to v1 as parent
     v2 = {
-        "spec_id": "APEX_PAPER_RESULTS_v2",
-        "parent_spec": "APEX_PAPER_RESULTS_v1",
+        "spec_id": "ETA_PAPER_RESULTS_v2",
+        "parent_spec": "ETA_PAPER_RESULTS_v1",
         "harness_run_v2c": {
             "aggregate_tier_b": {
                 "total_trades": 687,
@@ -111,7 +111,7 @@ def test_write_emits_all_three_files(fake_docs: Path):
     entry = mod.ReviewEntry(
         generated_at_utc="2026-04-16T00:00:00+00:00",
         week_of="2026-W16",
-        spec_id="APEX_PAPER_RESULTS_v2",
+        spec_id="ETA_PAPER_RESULTS_v2",
         spec_path="/tmp/spec.json",
         tier="A",
         bots_in_scope=["mnq", "nq"],
@@ -132,7 +132,7 @@ def test_write_emits_all_three_files(fake_docs: Path):
     assert log_p.exists() and latest_j.exists() and latest_t.exists()
     hist = json.loads(log_p.read_text())
     assert isinstance(hist, list) and len(hist) == 1
-    assert hist[0]["spec_id"] == "APEX_PAPER_RESULTS_v2"
+    assert hist[0]["spec_id"] == "ETA_PAPER_RESULTS_v2"
 
     # Append idempotency — second write grows the log
     mod._write(entry, fake_docs, raw_firm_blob="")

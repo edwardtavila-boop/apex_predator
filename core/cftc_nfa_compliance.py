@@ -64,9 +64,9 @@ class ComplianceRuleId(StrEnum):
     NO_POOL_MANAGEMENT = "CFTC.NO_POOL_MANAGEMENT"
     NO_SELF_MATCH = "CFTC.NO_SELF_MATCH"
     NO_LAYER_CANCEL = "CFTC.NO_LAYER_CANCEL"
-    APEX_ONE_ACCOUNT = "APEX.ONE_ACCOUNT_PER_TRADE"
-    APEX_NO_CROSS_HEDGE = "APEX.NO_CROSS_HEDGE"
-    APEX_NEWS_BLACKOUT = "APEX.NEWS_BLACKOUT"
+    ETA_ONE_ACCOUNT = "APEX.ONE_ACCOUNT_PER_TRADE"
+    ETA_NO_CROSS_HEDGE = "APEX.NO_CROSS_HEDGE"
+    ETA_NEWS_BLACKOUT = "APEX.NEWS_BLACKOUT"
     NFA_2_29_PROMOTIONAL = "NFA.2_29_PROMOTIONAL"
 
 
@@ -213,7 +213,7 @@ def _check_apex_one_account(ctx: PreTradeContext) -> ComplianceViolation | None:
     # Apex account currently engaged in the same symbol.
     if ctx.eta_account_id is not None and len(ctx.other_eta_account_ids) > 0:
         return ComplianceViolation(
-            rule=ComplianceRuleId.APEX_ONE_ACCOUNT,
+            rule=ComplianceRuleId.ETA_ONE_ACCOUNT,
             severity=Severity.ADVISORY,
             message=(
                 "Multiple Apex accounts engaged simultaneously: "
@@ -227,7 +227,7 @@ def _check_apex_one_account(ctx: PreTradeContext) -> ComplianceViolation | None:
 def _check_apex_no_cross_hedge(ctx: PreTradeContext) -> ComplianceViolation | None:
     if ctx.eta_account_id is not None and ctx.has_opposing_apex_position:
         return ComplianceViolation(
-            rule=ComplianceRuleId.APEX_NO_CROSS_HEDGE,
+            rule=ComplianceRuleId.ETA_NO_CROSS_HEDGE,
             severity=Severity.BLOCKING,
             message=(
                 "Opposing Apex position detected on a related account. "
@@ -241,7 +241,7 @@ def _check_apex_no_cross_hedge(ctx: PreTradeContext) -> ComplianceViolation | No
 def _check_apex_news_blackout(ctx: PreTradeContext) -> ComplianceViolation | None:
     if ctx.news_blackout_active:
         return ComplianceViolation(
-            rule=ComplianceRuleId.APEX_NEWS_BLACKOUT,
+            rule=ComplianceRuleId.ETA_NEWS_BLACKOUT,
             severity=Severity.BLOCKING,
             message=(
                 "Apex news-blackout window is active (CPI/FOMC/NFP etc.). "

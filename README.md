@@ -28,7 +28,7 @@ if the mirror is unreachable.
 
 ## Internal codename note
 
-The codebase is mid-migration from a prior internal codename (`apex_predator`)
+The codebase is mid-migration from a prior internal codename (`evolutionary_trading_algo`)
 to the current `eta_engine` package layout. Some legacy identifiers persist
 inside historical files; a staged shim/re-export migration is in progress
 (see `eta_full_rebrand_override` decision, 2026-04-27).

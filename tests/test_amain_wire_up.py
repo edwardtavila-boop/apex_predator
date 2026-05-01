@@ -61,7 +61,7 @@ async def test_amain_dry_run_wires_broker_equity_into_runtime_log(
 
     log_path = tmp_path / "rt.jsonl"
     state_path = tmp_path / "s.json"
-    # Seed apex_go_state with the MNQ tier-A flag so at least one bot
+    # Seed eta_go_state with the MNQ tier-A flag so at least one bot
     # is active for the tick. With an empty go_state there's nothing to
     # tick, the runtime emits only runtime_start/runtime_stop, and the
     # broker_equity block (which lands in per-tick meta dicts) never
@@ -71,7 +71,7 @@ async def test_amain_dry_run_wires_broker_equity_into_runtime_log(
         json.dumps(
             {
                 "shared_artifacts": {
-                    "apex_go_state": {"tier_a_mnq_live": True},
+                    "eta_go_state": {"tier_a_mnq_live": True},
                 },
             }
         ),
@@ -163,7 +163,7 @@ async def test_amain_dry_run_emits_broker_equity_in_boot_banner(
     has no way to confirm from boot output that the reconciler
     is wired).
 
-    Seeds ``apex_go_state.tier_a_mnq_live = True`` so the runtime
+    Seeds ``eta_go_state.tier_a_mnq_live = True`` so the runtime
     ticks a real bot (otherwise zero-equity trips the kill-switch
     latch and the boot is refused before the banner prints).
     """
@@ -176,7 +176,7 @@ async def test_amain_dry_run_emits_broker_equity_in_boot_banner(
         json.dumps(
             {
                 "shared_artifacts": {
-                    "apex_go_state": {"tier_a_mnq_live": True},
+                    "eta_go_state": {"tier_a_mnq_live": True},
                 },
             }
         ),

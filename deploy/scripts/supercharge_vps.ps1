@@ -150,19 +150,19 @@ if ($existing -match [regex]::Escape($marker)) {
     $apexBlock = @"
 
 $marker
-`$global:APEX_ROOT    = "$InstallDir"
-`$global:APEX_PY      = "$InstallDir\.venv\Scripts\python.exe"
-`$global:APEX_STATE   = "$stateDir"
-`$global:APEX_LOGS    = "$logDir"
+`$global:ETA_ROOT    = "$InstallDir"
+`$global:ETA_PY      = "$InstallDir\.venv\Scripts\python.exe"
+`$global:ETA_STATE   = "$stateDir"
+`$global:ETA_LOGS    = "$logDir"
 
-function apex-status    { & `$global:APEX_PY -m deploy.scripts.smoke_check --skip-systemd }
-function apex-heartbeat { Get-Content "`$global:APEX_STATE\avengers_heartbeat.json" | ConvertFrom-Json | ConvertTo-Json }
-function eta-dashboard { Get-Content "`$global:APEX_STATE\dashboard_payload.json" | ConvertFrom-Json | ConvertTo-Json -Depth 6 }
+function apex-status    { & `$global:ETA_PY -m deploy.scripts.smoke_check --skip-systemd }
+function apex-heartbeat { Get-Content "`$global:ETA_STATE\avengers_heartbeat.json" | ConvertFrom-Json | ConvertTo-Json }
+function eta-dashboard { Get-Content "`$global:ETA_STATE\dashboard_payload.json" | ConvertFrom-Json | ConvertTo-Json -Depth 6 }
 function apex-tasks     { Get-ScheduledTask -TaskName "Apex-*" | Select-Object TaskName, State | Format-Table -AutoSize }
-function apex-logs      { param(`$n = 50) Get-Content "`$global:APEX_LOGS\avengers-fleet.log" -Tail `$n -Wait }
+function apex-logs      { param(`$n = 50) Get-Content "`$global:ETA_LOGS\avengers-fleet.log" -Tail `$n -Wait }
 function apex-restart   { Stop-ScheduledTask "Apex-Jarvis-Live","Apex-Avengers-Fleet","Apex-Dashboard" -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask "Apex-Jarvis-Live"; Start-ScheduledTask "Apex-Avengers-Fleet"; Start-ScheduledTask "Apex-Dashboard" }
-function apex-test      { & `$global:APEX_PY -m deploy.scripts.live_claude_smoke }
-function apex-task      { param([string]`$Task) & `$global:APEX_PY -m deploy.scripts.run_task `$Task --state-dir "`$global:APEX_STATE" --log-dir "`$global:APEX_LOGS" }
+function apex-test      { & `$global:ETA_PY -m deploy.scripts.live_claude_smoke }
+function apex-task      { param([string]`$Task) & `$global:ETA_PY -m deploy.scripts.run_task `$Task --state-dir "`$global:ETA_STATE" --log-dir "`$global:ETA_LOGS" }
 function apex-health    { Invoke-RestMethod http://127.0.0.1:8000/health }
 # --- END apex aliases ---
 "@

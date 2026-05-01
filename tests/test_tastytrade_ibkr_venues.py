@@ -71,7 +71,7 @@ def test_tastytrade_config_reads_mnq_runtime_secret_defaults(tmp_path: Path) -> 
     (secrets / "tastytrade_account_number.txt").write_text("5WT12345\n", encoding="utf-8")
     (secrets / "tastytrade_session_token.txt").write_text("runtime-token\n", encoding="utf-8")
 
-    config = TastytradeConfig.from_env({"APEX_RUNTIME_ROOT": str(tmp_path)})
+    config = TastytradeConfig.from_env({"ETA_RUNTIME_ROOT": str(tmp_path)})
 
     assert config.account_number == "5WT12345"
     assert config.session_token == "runtime-token"
@@ -94,7 +94,7 @@ def test_tastytrade_process_env_wins_over_mnq_runtime_env_file(tmp_path: Path) -
 
     config = TastytradeConfig.from_env(
         {
-            "APEX_RUNTIME_ROOT": str(tmp_path),
+            "ETA_RUNTIME_ROOT": str(tmp_path),
             "TASTY_ACCOUNT_NUMBER": "from-env",
             "TASTY_SESSION_TOKEN": "from-env-token",
         },
@@ -191,7 +191,7 @@ def test_ibkr_config_reads_mnq_runtime_secret_defaults(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    config = IbkrClientPortalConfig.from_env({"APEX_RUNTIME_ROOT": str(tmp_path)})
+    config = IbkrClientPortalConfig.from_env({"ETA_RUNTIME_ROOT": str(tmp_path)})
 
     assert config.account_id == "DU123456"
     assert config.conid_for("MNQM6") == 123456789
@@ -214,7 +214,7 @@ def test_ibkr_process_env_wins_over_mnq_runtime_env_file(tmp_path: Path) -> None
 
     config = IbkrClientPortalConfig.from_env(
         {
-            "APEX_RUNTIME_ROOT": str(tmp_path),
+            "ETA_RUNTIME_ROOT": str(tmp_path),
             "IBKR_ACCOUNT_ID": "DU123456",
             "IBKR_SYMBOL_CONID_MAP": json.dumps({"MNQM6": 123456789}),
         },

@@ -21,22 +21,22 @@ from pydantic import BaseModel, Field
 # Canonical metric names (keep as constants so call sites never typo)
 # ---------------------------------------------------------------------------
 
-TRADES_OPENED = "apex_trades_opened_total"
-TRADES_CLOSED = "apex_trades_closed_total"
-PNL_REALIZED_USD = "apex_pnl_realized_usd"
-LATENCY_ORDER_MS = "apex_order_latency_ms"
-CONFLUENCE_SCORE = "apex_confluence_score"
-EQUITY_USD = "apex_equity_usd"
-DRAWDOWN_PCT = "apex_drawdown_pct"
-KILL_SWITCH_TRIGGERED = "apex_kill_switch_triggered_total"
-FIRM_VERDICT = "apex_firm_verdict"
-VENUE_FAILOVER = "apex_venue_failover_total"
+TRADES_OPENED = "eta_trades_opened_total"
+TRADES_CLOSED = "eta_trades_closed_total"
+PNL_REALIZED_USD = "eta_pnl_realized_usd"
+LATENCY_ORDER_MS = "eta_order_latency_ms"
+CONFLUENCE_SCORE = "eta_confluence_score"
+EQUITY_USD = "eta_equity_usd"
+DRAWDOWN_PCT = "eta_drawdown_pct"
+KILL_SWITCH_TRIGGERED = "eta_kill_switch_triggered_total"
+FIRM_VERDICT = "eta_firm_verdict"
+VENUE_FAILOVER = "eta_venue_failover_total"
 
 # Gate-override telemetry -- "never on autopilot" discipline metric.
 # Every time an operator or agent overrides a protective gate, record why.
-GATE_OVERRIDES_TOTAL = "apex_gate_overrides_total"
-GATE_BLOCKS_TOTAL = "apex_gate_blocks_total"
-GATE_OVERRIDE_RATE = "apex_gate_override_rate"  # gauge 0..1
+GATE_OVERRIDES_TOTAL = "eta_gate_overrides_total"
+GATE_BLOCKS_TOTAL = "eta_gate_blocks_total"
+GATE_OVERRIDE_RATE = "eta_gate_override_rate"  # gauge 0..1
 
 HISTOGRAM_WINDOW = 1024  # ring-buffer size per histogram series
 

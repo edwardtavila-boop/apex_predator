@@ -57,9 +57,9 @@ _COLD_OP: str = "promote_strategy_to_live"
 def drill_two_factor(sandbox: Path) -> dict[str, Any]:  # noqa: ARG001
     """Drive the 2FA gate through three scenarios; verify each one."""
     secret = generate_base32_secret()
-    resolver = _FakeSecretsResolver({"APEX_TOTP": secret})
+    resolver = _FakeSecretsResolver({"ETA_TOTP": secret})
     registry = SecurityRegistry(
-        totp=TotpSecret(secret_ref="APEX_TOTP"),
+        totp=TotpSecret(secret_ref="ETA_TOTP"),
         policy=CopyPolicy.TOTP_ONLY,
         cold_wallet_ops_gated=True,
     )

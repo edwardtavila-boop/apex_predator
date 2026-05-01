@@ -42,7 +42,7 @@ def fake_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "overall_progress_pct": 72,
                 "shared_artifacts": {
                     "firm_board_latest": {
-                        "spec_id": "APEX_PAPER_RESULTS_v1",
+                        "spec_id": "ETA_PAPER_RESULTS_v1",
                         "final_verdict": "GO",
                     },
                 },
@@ -217,7 +217,7 @@ def test_gate_decisions_locked_pass(fake_root: Path):
     p.write_text(
         json.dumps(
             {
-                "spec_id": "APEX_DECISIONS_v1",
+                "spec_id": "ETA_DECISIONS_v1",
                 "tier_1_live_tiny_blockers": {"x": 1},
                 "tier_2_tier_b_blockers": {"x": 1},
                 "tier_3_operational_cadence": {"x": 1},
@@ -226,7 +226,7 @@ def test_gate_decisions_locked_pass(fake_root: Path):
     )
     g = mod._gate_decisions_locked()
     assert g.status == "PASS"
-    assert "APEX_DECISIONS_v1" in g.detail
+    assert "ETA_DECISIONS_v1" in g.detail
 
 
 def test_gate_decisions_locked_fail_on_missing_section(fake_root: Path):
@@ -235,7 +235,7 @@ def test_gate_decisions_locked_fail_on_missing_section(fake_root: Path):
     p.write_text(
         json.dumps(
             {
-                "spec_id": "APEX_DECISIONS_v1",
+                "spec_id": "ETA_DECISIONS_v1",
                 "tier_1_live_tiny_blockers": {},
                 "tier_2_tier_b_blockers": {},
             }
@@ -255,7 +255,7 @@ def test_gate_env_template_pass(fake_root: Path):
     p.write_text(
         "\n".join(
             [
-                "APEX_MODE=",
+                "ETA_MODE=",
                 "ANTHROPIC_API_KEY=",
                 "JARVIS_HOURLY_USD_BUDGET=",
                 "JARVIS_DAILY_USD_BUDGET=",

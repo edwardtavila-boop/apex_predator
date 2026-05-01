@@ -80,7 +80,7 @@ def test_patch_roadmap_state_sets_flags(fake_root: Path):
     e = mod.handle("GO APEX MNQ LIVE-TINY", reason="")
     mod._patch_roadmap_state(e)
     state = json.loads((fake_root / "roadmap_state.json").read_text())
-    go = state["shared_artifacts"]["apex_go_state"]
+    go = state["shared_artifacts"]["eta_go_state"]
     assert go["tier_a_mnq_live"] is True
     assert go["kill_switch_active"] is False
 
@@ -93,7 +93,7 @@ def test_kill_unsets_tier_flags(fake_root: Path):
     e2 = mod.handle("KILL APEX NOW", reason="crash")
     mod._patch_roadmap_state(e2)
     state = json.loads((fake_root / "roadmap_state.json").read_text())
-    go = state["shared_artifacts"]["apex_go_state"]
+    go = state["shared_artifacts"]["eta_go_state"]
     assert go["kill_switch_active"] is True
     assert go["tier_a_mnq_live"] is False
 
@@ -102,7 +102,7 @@ def test_resume_clears_kill(fake_root: Path):
     mod._patch_roadmap_state(mod.handle("KILL APEX NOW", reason=""))
     mod._patch_roadmap_state(mod.handle("RESUME APEX TIER-A", reason="reviewed"))
     state = json.loads((fake_root / "roadmap_state.json").read_text())
-    go = state["shared_artifacts"]["apex_go_state"]
+    go = state["shared_artifacts"]["eta_go_state"]
     assert go["kill_switch_active"] is False
 
 

@@ -127,9 +127,9 @@ def test_multiple_eta_accounts_is_advisory_not_blocking() -> None:
     )
     assert res.passed is True
     rules = [v.rule for v in res.violations]
-    assert ComplianceRuleId.APEX_ONE_ACCOUNT in rules
+    assert ComplianceRuleId.ETA_ONE_ACCOUNT in rules
     # Confirm severity is ADVISORY for this particular rule
-    v = next(v for v in res.violations if v.rule == ComplianceRuleId.APEX_ONE_ACCOUNT)
+    v = next(v for v in res.violations if v.rule == ComplianceRuleId.ETA_ONE_ACCOUNT)
     assert v.severity == Severity.ADVISORY
 
 
@@ -142,14 +142,14 @@ def test_opposing_apex_position_blocks() -> None:
     )
     assert res.passed is False
     rules = [v.rule for v in res.violations]
-    assert ComplianceRuleId.APEX_NO_CROSS_HEDGE in rules
+    assert ComplianceRuleId.ETA_NO_CROSS_HEDGE in rules
 
 
 def test_news_blackout_blocks() -> None:
     res = check_compliance(_ok_ctx(news_blackout_active=True))
     assert res.passed is False
     rules = [v.rule for v in res.violations]
-    assert ComplianceRuleId.APEX_NEWS_BLACKOUT in rules
+    assert ComplianceRuleId.ETA_NEWS_BLACKOUT in rules
 
 
 def test_apex_checks_skipped_when_not_eta_account() -> None:
@@ -254,7 +254,7 @@ def test_multiple_blocking_rules_all_surface() -> None:
     rules = [v.rule for v in res.violations]
     assert ComplianceRuleId.OWNS_ACCOUNT in rules
     assert ComplianceRuleId.NO_EXTERNAL_CAPITAL in rules
-    assert ComplianceRuleId.APEX_NEWS_BLACKOUT in rules
+    assert ComplianceRuleId.ETA_NEWS_BLACKOUT in rules
 
 
 def test_pretrade_context_rejects_zero_qty() -> None:

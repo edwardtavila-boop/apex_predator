@@ -11,7 +11,7 @@ Decisions source: docs/decisions_v1.json (#4, #12, #13, #16).
 The contract is explicit:
   - per_bucket.max_loss_usd           → flatten bot + pause until next session
   - per_bucket.consecutive_losses     → same
-  - apex_eval_preemptive              → flatten tier_a + CRITICAL alert
+  - eta_eval_preemptive              → flatten tier_a + CRITICAL alert
   - tier_b.correlation_kill           → flatten tier_b only, leave tier_a
   - tier_b.funding_veto               → soft = halve size, hard = flatten + 6h pause
   - global.daily_loss_cap_pct_of_port → flatten everything, pause until manual
@@ -153,7 +153,7 @@ def validate_apex_tick_cadence(
         Seconds between runtime ticks. From ``RuntimeConfig.tick_interval_s``.
     cushion_usd:
         Apex-preemptive cushion in USD. From ``kill_switch.yaml``:
-        ``tier_a.apex_eval_preemptive.cushion_usd``.
+        ``tier_a.eta_eval_preemptive.cushion_usd``.
     max_usd_move_per_sec:
         Conservative worst-case one-second equity move. Default tuned for
         MNQ at max Apex sizing (see module comment).
@@ -195,7 +195,7 @@ def validate_apex_tick_cadence(
             f"{max_usd_move_per_sec} * safety={safety_factor} = "
             f"${required:.0f} required, but cushion_usd=${cushion_usd:.0f}. "
             f"Either (a) drop tick_interval_s, or (b) raise cushion_usd in "
-            f"configs/kill_switch.yaml tier_a.apex_eval_preemptive."
+            f"configs/kill_switch.yaml tier_a.eta_eval_preemptive."
         )
         raise ApexTickCadenceError(msg)
 
@@ -212,7 +212,7 @@ class KillSwitch:
         portfolio=PortfolioSnapshot(...),
         correlations=CorrelationSnapshot(...),
         funding=FundingSnapshot(...),
-        apex_eval=ApexEvalSnapshot(...),
+        eta_eval=ApexEvalSnapshot(...),
     )
     for v in verdicts:
         act_on(v)
@@ -239,7 +239,7 @@ class KillSwitch:
         portfolio: PortfolioSnapshot,
         correlations: CorrelationSnapshot | None = None,
         funding: FundingSnapshot | None = None,
-        apex_eval: ApexEvalSnapshot | None = None,
+        eta_eval: ApexEvalSnapshot | None = None,
     ) -> list[KillVerdict]:
         verdicts: list[KillVerdict] = []
 
@@ -250,8 +250,8 @@ class KillSwitch:
             return verdicts  # global flatten supersedes everything
 
         # 2. Apex eval preemptive (Tier-A only)
-        if apex_eval is not None:
-            ae = self._check_apex_preemptive(apex_eval)
+        if eta_eval is not None:
+            ae = self._check_apex_preemptive(eta_eval)
             if ae:
                 verdicts.append(ae)
 
@@ -312,7 +312,7 @@ class KillSwitch:
         return None
 
     def _check_apex_preemptive(self, ae: ApexEvalSnapshot) -> KillVerdict | None:
-        spec = self._ta.get("apex_eval_preemptive", {}) or {}
+        spec = self._ta.get("eta_eval_preemptive", {}) or {}
         cushion = float(spec.get("cushion_usd", 500))
         if ae.distance_to_limit_usd <= cushion:
             return KillVerdict(

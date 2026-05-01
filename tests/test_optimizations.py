@@ -35,7 +35,7 @@ class TestMetaUpgrade:
         assert TASK_CADENCE[BackgroundTask.META_UPGRADE].startswith("30 4")
 
     def test_handler_skips_when_not_a_repo(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("APEX_REPO_DIR", str(tmp_path))
+        monkeypatch.setenv("ETA_REPO_DIR", str(tmp_path))
         from eta_engine.deploy.scripts.run_task import _task_meta_upgrade
 
         result = _task_meta_upgrade(tmp_path / "state")
@@ -406,7 +406,7 @@ class TestSuperchargeTasks:
         repo = tmp_path / "repo"
         repo.mkdir()
         (repo / ".env").write_text("DUMMY=1")
-        monkeypatch.setenv("APEX_REPO_DIR", str(repo))
+        monkeypatch.setenv("ETA_REPO_DIR", str(repo))
         from eta_engine.deploy.scripts.run_task import _task_backup
 
         out = _task_backup(state)
@@ -435,9 +435,9 @@ class TestSuperchargeTasks:
         prom_file = state / "prometheus" / "avengers.prom"
         assert prom_file.exists()
         text = prom_file.read_text(encoding="utf-8")
-        assert "apex_up 1" in text
-        assert "apex_quota_hourly_pct 0.05" in text
-        assert "apex_cache_hit_rate 0.88" in text
+        assert "eta_up 1" in text
+        assert "eta_quota_hourly_pct 0.05" in text
+        assert "eta_cache_hit_rate 0.88" in text
         assert out["metrics"] > 0
 
     def test_self_test_report_written(self, tmp_path, monkeypatch):
@@ -464,7 +464,7 @@ class TestSuperchargeTasks:
     def test_disk_cleanup_runs_without_error(self, tmp_path, monkeypatch):
         state = tmp_path / "state"
         state.mkdir()
-        monkeypatch.setenv("APEX_REPO_DIR", str(tmp_path / "nonexistent"))
+        monkeypatch.setenv("ETA_REPO_DIR", str(tmp_path / "nonexistent"))
         from eta_engine.deploy.scripts.run_task import _task_disk_cleanup
 
         out = _task_disk_cleanup(state)
@@ -476,7 +476,7 @@ class TestPrometheusEndpoint:
     """Dashboard API should expose /metrics."""
 
     def test_metrics_endpoint_exists(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
         import importlib
 
         import eta_engine.deploy.scripts.dashboard_api as mod
@@ -489,15 +489,15 @@ class TestPrometheusEndpoint:
         # Empty -- no metrics file yet
         r = client.get("/metrics")
         assert r.status_code == 200
-        assert "apex_up" in r.text
+        assert "eta_up" in r.text
 
         # Seed metrics file
         prom_dir = tmp_path / "prometheus"
         prom_dir.mkdir()
         (prom_dir / "avengers.prom").write_text(
-            "# HELP apex_up daemon alive\n# TYPE apex_up gauge\napex_up 1\n",
+            "# HELP eta_up daemon alive\n# TYPE eta_up gauge\napex_up 1\n",
         )
         r = client.get("/metrics")
         assert r.status_code == 200
-        assert "apex_up 1" in r.text
+        assert "eta_up 1" in r.text
         assert "text/plain" in r.headers["content-type"]

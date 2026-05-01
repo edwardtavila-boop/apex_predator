@@ -215,7 +215,7 @@
     },
     "eta_engine_tradingview_runtime_paths_canonical": {
       "timestamp_utc": "2026-04-30T02:50:08.7828272Z",
-      "surface": "TradingView auth state, capture data, sidecar logs, and capture systemd paths default under var/eta_engine/state, var/eta_engine/state/live_data/tradingview, and logs/eta_engine instead of home .local or apex_data paths",
+      "surface": "TradingView auth state, capture data, sidecar logs, and capture systemd paths default under var/eta_engine/state, var/eta_engine/state/live_data/tradingview, and logs/eta_engine instead of home .local or eta_data paths",
       "fields": [
         "ETA_TRADINGVIEW_AUTH_STATE_PATH",
         "ETA_TRADINGVIEW_DATA_ROOT",
@@ -515,7 +515,7 @@
     "n_trials_prior_7yr_databento": 22,
     "cycle_0003_data_policy": "MUST shift edge-discovery to untouched data \u2014 options: (1) ES/RTY/YM cross-sectional 7yr 1m (not yet mined), (2) post-lock self-capture via Tradovate md_ws cron (not started), (3) confluence-driven strategies using Databento MBP/trades microstructure (not yet used)",
     "firm_board_latest": {
-      "spec_id": "APEX_PAPER_RESULTS_v2",
+      "spec_id": "ETA_PAPER_RESULTS_v2",
       "final_verdict": "GO",
       "verdicts": {
         "quant": "GO",
@@ -537,20 +537,20 @@
         "redteam": "MODIFY"
       },
       {
-        "spec_id": "APEX_PAPER_PROMOTION_v1",
+        "spec_id": "ETA_PAPER_PROMOTION_v1",
         "final_verdict": "GO",
         "timestamp": "2026-04-16T18:28:51-04:00",
         "redteam": "CONTINUE"
       },
       {
-        "spec_id": "APEX_PAPER_RESULTS_v1",
+        "spec_id": "ETA_PAPER_RESULTS_v1",
         "final_verdict": "GO",
         "timestamp": "2026-04-16T18:38:00-04:00",
         "redteam": "CONTINUE",
         "note": "Split verdict: Tier A GO live-tiny, Tier B hold at paper"
       },
       {
-        "spec_id": "APEX_PAPER_RESULTS_v2",
+        "spec_id": "ETA_PAPER_RESULTS_v2",
         "final_verdict": "GO",
         "timestamp": "2026-04-16T19:03:37-04:00"
       }
@@ -658,8 +658,8 @@
       },
       "report_path": "eta_engine/docs/sweep_sim_report.json"
     },
-    "apex_decisions_v1": {
-      "spec_id": "APEX_DECISIONS_v1",
+    "eta_decisions_v1": {
+      "spec_id": "ETA_DECISIONS_v1",
       "path": "eta_engine/docs/decisions_v1.json",
       "locked_at_utc": "2026-04-16T23:28:25.567548+00:00",
       "tiers_locked": [
@@ -673,7 +673,7 @@
       "weekly_review_schedule": "Sunday 20:00 ET",
       "alerting_primary": "pushover"
     },
-    "apex_configs_written": {
+    "eta_configs_written": {
       "dir": "eta_engine/configs/",
       "files": [
         "tradovate.yaml",
@@ -683,12 +683,12 @@
       ],
       "count": 4
     },
-    "apex_env_template": {
+    "eta_env_template": {
       "path": "eta_engine/.env.example",
       "gitignored_real": ".env",
       "required_keys_count": 9
     },
-    "apex_go_state": {
+    "eta_go_state": {
       "tier_a_mnq_live": false,
       "tier_a_nq_live": false,
       "tier_b_testnet": false,
@@ -704,7 +704,7 @@
       "dry_run_default": true,
       "live_requires": "creds in .env + --live flag",
       "tick_pipeline": [
-        "refresh apex_go_state",
+        "refresh eta_go_state",
         "feed synthetic bar (real feed wires in via venues.*)",
         "build BotSnapshot/PortfolioSnapshot/ApexEvalSnapshot/FundingSnapshot/CorrelationSnapshot",
         "KillSwitch.evaluate()",
@@ -1321,9 +1321,9 @@
         "monthly_review_<YYYY>_<MM>.txt"
       ],
       "new_prometheus_metrics": [
-        "apex_gate_blocks_total",
-        "apex_gate_overrides_total",
-        "apex_gate_override_rate"
+        "eta_gate_blocks_total",
+        "eta_gate_overrides_total",
+        "eta_gate_override_rate"
       ],
       "command_center_integration": {
         "skill": "firm-tracker",
@@ -1885,11 +1885,11 @@
         },
         "isolation_guarantees": {
           "env_injected": [
-            "APEX_TENANT_ID",
-            "APEX_SKU",
-            "APEX_TIER",
-            "APEX_EXCHANGE",
-            "APEX_KEY_ID"
+            "ETA_TENANT_ID",
+            "ETA_SKU",
+            "ETA_TIER",
+            "ETA_EXCHANGE",
+            "ETA_KEY_ID"
           ],
           "env_never_contains_raw_secret": true,
           "strategy_mounts_read_only": [
@@ -1939,7 +1939,7 @@
         }
       },
       "btc_live_gate_four_gates": [
-        "APEX_BTC_LIVE == '1' (explicit env flag)",
+        "ETA_BTC_LIVE == '1' (explicit env flag)",
         "verify_verdict == 'PASS' in paper-run artifact",
         "verify_age_h <= max_age_h (default 48h)",
         "adapter_probe() returns True"
@@ -3885,7 +3885,7 @@
         ]
       },
       "design_notes": {
-        "mcp_taps_additive": "MCP taps are optional-parallel, not replacements. Existing BlockscoutClient and LunarCrushClient stay canonical. Operator opts in via APEX_USE_MCP_TAPS env var.",
+        "mcp_taps_additive": "MCP taps are optional-parallel, not replacements. Existing BlockscoutClient and LunarCrushClient stay canonical. Operator opts in via ETA_USE_MCP_TAPS env var.",
         "deribit_read_first": "Deribit venue rejects all order paths with NotImplementedError until allow_orders=True is explicitly flipped. Same pattern as v0.1.46 tail-hedge skeleton.",
         "calendar_bisect": "O(log n) next_event / blackout_active via bisect. High-impact tags: FOMC, CPI, PCE, NFP, ECB, etc.",
         "synthetic_seeded": "Every scenario run with the same seed emits byte-identical bars. Matches the CI replay contract."
@@ -4010,7 +4010,7 @@
         "D1_session_gate": "MnqBot.__init__ builds SessionGate from config; RouterAdapter receives the gate and rejects out-of-window entries with meta.gate_rejection.",
         "D2_trailing_dd_tracker": "ApexRuntime accepts trailing_dd_tracker kwarg. When attached, tick loop sums Tier-A equity, passes to tracker.update(), and uses the returned ApexEvalSnapshot in-place of build_apex_eval_snapshot. Legacy path preserved for rollout safety.",
         "D3_consistency_guard": "ApexRuntime accepts consistency_guard kwarg. Tick loop records today's tier-A session_realized_pnl via guard.record_eod; emits consistency_status alert + log entry exactly once on WARNING/VIOLATION enter.",
-        "D4_eod_flatten": "MnqBot.on_bar queries adapter.should_flatten_eod each bar close; routes reason=apex_eod_flatten through kill-switch dispatch.",
+        "D4_eod_flatten": "MnqBot.on_bar queries adapter.should_flatten_eod each bar close; routes reason=eta_eod_flatten through kill-switch dispatch.",
         "D5_kill_switch_latch": "run_eta_live calls KillSwitchLatch.boot_allowed() at startup -- refuses to init if tripped. record_verdict called at every FLATTEN_* verdict so latch state survives restarts. Cold-boot after a real flatten requires operator un-latch."
       },
       "bootstrap_ci_mnq_oos": {
@@ -4050,7 +4050,7 @@
       "theme": "A safety module that is wired but whose wiring has a silent-failure gap is worse than no module: it produces false confidence. Every BLOCKER that could let the Apex eval bust while the runtime appears green is closed.",
       "operator_directive_quote": "continue all.",
       "modules_modified": [
-        "eta_engine/core/consistency_guard.py (new apex_trading_day_iso helper + deprecation note on utc_today_iso)",
+        "eta_engine/core/consistency_guard.py (new eta_trading_day_iso helper + deprecation note on utc_today_iso)",
         "eta_engine/scripts/run_eta_live.py (B1 switch to session-day key; B2 live-mode tracker gate in ApexRuntime.__init__; B3 VIOLATION -> PAUSE_NEW_ENTRIES synthetic verdict + dispatch)"
       ],
       "docs_added": [
@@ -4065,7 +4065,7 @@
         "B1_session_day_bucketing": {
           "severity": "CRITICAL",
           "finding": "utc_today_iso keyed today's consistency-guard entry by UTC calendar midnight. US equity-futures RTH + Globex overnight straddle UTC midnight so a single Apex trading day's PnL was split across two keys -- biasing the 30%-rule ratio downward and hiding real concentration risk.",
-          "fix": "Added apex_trading_day_iso() using zoneinfo.ZoneInfo('America/Chicago') with 17:00 local rollover (DST-aware). Fallback to fixed 23:00-UTC rollover if zoneinfo unavailable. run_eta_live now calls this helper.",
+          "fix": "Added eta_trading_day_iso() using zoneinfo.ZoneInfo('America/Chicago') with 17:00 local rollover (DST-aware). Fallback to fixed 23:00-UTC rollover if zoneinfo unavailable. run_eta_live now calls this helper.",
           "tests": "TestApexTradingDayIso (11 tests)"
         },
         "B2_live_mode_tracker_gate": {
@@ -4098,7 +4098,7 @@
       "tests_passing_after": 3735,
       "tests_new": 236,
       "ruff_green_new_code": true,
-      "pre_existing_lint_debt": "ANN401/ANN002/ANN003 in run_eta_live.py pre-date v0.1.57; F841/E741/ANN204/TC003 in test files pre-date v0.1.57. Nothing new added by this bump. Two SIM108 warnings introduced by the new apex_trading_day_iso implementation were auto-simplified to ternaries during the same review loop.",
+      "pre_existing_lint_debt": "ANN401/ANN002/ANN003 in run_eta_live.py pre-date v0.1.57; F841/E741/ANN204/TC003 in test files pre-date v0.1.57. Nothing new added by this bump. Two SIM108 warnings introduced by the new eta_trading_day_iso implementation were auto-simplified to ternaries during the same review loop.",
       "post_bump_cleanup_note": "After the initial bump to 3704, the two flaky/order-dependent failures (test_avengers_daemon::test_persona_tick_dispatches_due_tasks and test_basis_stress_breaker::test_basis_zscore_above_threshold_flatten_both) passed on re-run. Additional tests were also discovered by collector (3709 -> 3738 collected). Final clean baseline: 3735 passed, 3 skipped, 0 failed."
     },
     "eta_engine_v0_1_59_residual_risk_closure": {
@@ -4112,10 +4112,10 @@
         "eta_engine/core/broker_equity_reconciler.py (R1: scaffold -- BrokerEquityReconciler compares logical vs broker equity with USD/pct tolerances; enforcement deferred to v0.2.x pending broker-adapter wiring)"
       ],
       "modules_modified": [
-        "eta_engine/core/consistency_guard.py (R4: apex_trading_day_iso now routes through events_calendar to roll Saturday/Sunday/holiday timestamps forward to the next regular trading day)",
+        "eta_engine/core/consistency_guard.py (R4: eta_trading_day_iso now routes through events_calendar to roll Saturday/Sunday/holiday timestamps forward to the next regular trading day)",
         "eta_engine/core/trailing_dd_tracker.py (R3: TrailingDDAuditLog append-only JSONL with fsync per append; init/load/freeze/breach/reset events; reset() now requires operator + acknowledge_destruction or raises ResetNotAcknowledgedError; audit log survives state file deletion)",
         "eta_engine/core/kill_switch_runtime.py (R2: validate_apex_tick_cadence pure-function validator enforcing tick * max_move * safety <= cushion; raises ApexTickCadenceError in live mode on violation)",
-        "eta_engine/scripts/run_eta_live.py (R2: tick_interval_s default 5.0 -> 1.0; CLI default updated; load_runtime_config calls validator with cushion from kill_switch.tier_a.apex_eval_preemptive)"
+        "eta_engine/scripts/run_eta_live.py (R2: tick_interval_s default 5.0 -> 1.0; CLI default updated; load_runtime_config calls validator with cushion from kill_switch.tier_a.eta_eval_preemptive)"
       ],
       "docs_updated": [
         "eta_engine/docs/red_team_d2_d3_review.md (Residual risks section rewritten with v0.1.59 closure state for R1..R4; coverage delta extended; header Outcome line updated)"
@@ -4154,8 +4154,8 @@
         "R4_session_day_weekends_holidays": {
           "severity": "HIGH",
           "status": "CLOSED",
-          "finding": "apex_trading_day_iso keyed Saturday-morning timestamps to 'Saturday' which Apex ignores, creating phantom zero-PnL buckets in the 30%-rule denominator.",
-          "closure": "core/events_calendar.py -- CME Globex session calendar with dateutil.easter-driven Good Friday + fixed-date closures. apex_trading_day_iso now routes through is_trading_day / next_trading_day to roll weekend/holiday timestamps forward to the next regular trading day.",
+          "finding": "eta_trading_day_iso keyed Saturday-morning timestamps to 'Saturday' which Apex ignores, creating phantom zero-PnL buckets in the 30%-rule denominator.",
+          "closure": "core/events_calendar.py -- CME Globex session calendar with dateutil.easter-driven Good Friday + fixed-date closures. eta_trading_day_iso now routes through is_trading_day / next_trading_day to roll weekend/holiday timestamps forward to the next regular trading day.",
           "tests": "test_core_events_calendar.py (full CME calendar) + test_consistency_guard.py extensions for each closure type."
         }
       },
@@ -4190,7 +4190,7 @@
           "runtime_enforcer": "core/kill_switch_runtime.py::validate_apex_tick_cadence (live=True raises ApexTickCadenceError)",
           "preflight_surface": "scripts/preflight.py::check_tick_cadence (reads configs/kill_switch.yaml cushion_usd, invokes validator with tick=1.0s and live=True)",
           "failure_mode_without_preflight": "run_eta_live.load_runtime_config raises on boot -- operator sees traceback with no remediation context.",
-          "failure_mode_with_preflight": "preflight row prints red with validator's exact remediation text: 'drop tick_interval_s, or raise cushion_usd in configs/kill_switch.yaml tier_a.apex_eval_preemptive'."
+          "failure_mode_with_preflight": "preflight row prints red with validator's exact remediation text: 'drop tick_interval_s, or raise cushion_usd in configs/kill_switch.yaml tier_a.eta_eval_preemptive'."
         },
         "R3_audit_log_fsync": {
           "runtime_enforcer": "core/trailing_dd_tracker.py::TrailingDDAuditLog.append (os.fsync per append; raises on OSError)",
@@ -4201,7 +4201,7 @@
       },
       "design_choices": {
         "live_mode_validator_at_preflight": "check_tick_cadence calls the validator with live=True unconditionally. Rationale: preflight IS the 'about to go live' gate. Running it in paper mode would mask the real question -- 'would this config pass the live-mode invariant'. Operators doing a pure paper session don't run preflight.",
-        "default_cushion_fallback_500": "If tier_a.apex_eval_preemptive.cushion_usd is missing/empty, fall back to 500.0 (the pre-v0.1.59 config value). This means an empty block fails the check with the same error the live runtime would produce -- no silent fallback to a passing value.",
+        "default_cushion_fallback_500": "If tier_a.eta_eval_preemptive.cushion_usd is missing/empty, fall back to 500.0 (the pre-v0.1.59 config value). This means an empty block fails the check with the same error the live runtime would produce -- no silent fallback to a passing value.",
         "audit_dir_uses_tracker_default": "check_audit_log_readiness probes <repo>/state, the tracker's default. Rationale: the tracker constructor picks the default; reproducing it here keeps the two in lockstep without introducing a shared-constants protocol. If a future release changes the default, the constant here (and its matching test monkeypatch) move in one diff.",
         "tempfile_cleanup_in_finally": "The happy path unlinks the tempfile before return; the finally block re-attempts with missing_ok=True so a partial fsync failure doesn't leave litter in state/. Belt and braces -- if the first unlink succeeded, the second is a no-op.",
         "run_async_test_helper_refactor": "_stub_all_checks_green centralises the green-stub setup that used to be duplicated across 4 test functions. Adding check #8 is now a one-line diff in the helper instead of an N-file sweep."
@@ -4383,12 +4383,12 @@
       "timestamp_utc": "2026-04-25T02:43:21.073287+00:00",
       "version": "v0.1.65",
       "bundle_name": "BROKER-EQUITY WIRING HARDENING -- close H5/H6/H7 from the v0.1.64 Red Team review",
-      "theme": "v0.1.64 closed B1+B2 from the Red Team review of v0.1.63 R1; this bundle closes three of the seven HIGH residuals that lived on the v0.1.63/v0.1.64 broker-equity surface. H5: ta_equity==0 produced float('inf') in the JSON tick log (RFC 8259 violation); now guarded via min_logical_usd floor + as_dict sanitisation. H6: live mode silently degraded to NullBrokerEquityAdapter when both broker creds were missing; now refuses to boot unless the operator opts in via APEX_ALLOW_LIVE_NO_DRIFT=1. H7: the Protocol's MUST-NOT-RAISE guarantee was by convention; now enforced at runtime via SafeBrokerEquityAdapter wrapper. Plus process-gap-3: tests/test_amain_wire_up.py smoke-tests the production CLI end-to-end so a future B1 regression cannot slip past unit suites.",
+      "theme": "v0.1.64 closed B1+B2 from the Red Team review of v0.1.63 R1; this bundle closes three of the seven HIGH residuals that lived on the v0.1.63/v0.1.64 broker-equity surface. H5: ta_equity==0 produced float('inf') in the JSON tick log (RFC 8259 violation); now guarded via min_logical_usd floor + as_dict sanitisation. H6: live mode silently degraded to NullBrokerEquityAdapter when both broker creds were missing; now refuses to boot unless the operator opts in via ETA_ALLOW_LIVE_NO_DRIFT=1. H7: the Protocol's MUST-NOT-RAISE guarantee was by convention; now enforced at runtime via SafeBrokerEquityAdapter wrapper. Plus process-gap-3: tests/test_amain_wire_up.py smoke-tests the production CLI end-to-end so a future B1 regression cannot slip past unit suites.",
       "operator_directive_quote": "continue and do all",
       "modules_edited": [
         "core/broker_equity_reconciler.py: add min_logical_usd floor (default 1.0) + math.isfinite guard in reconcile() + _sanitize_for_json helper for ReconcileResult.as_dict",
         "core/broker_equity_adapter.py: add BrokerEquityNotAvailableError + SafeBrokerEquityAdapter wrapper class + extend __all__",
-        "scripts/run_eta_live.py: thread allow_live_no_drift through _build_broker_equity_adapter; wrap returns in SafeBrokerEquityAdapter; raise BrokerEquityNotAvailableError when no creds in strict live mode; _amain reads APEX_ALLOW_LIVE_NO_DRIFT env var + catches the exception with rc=78",
+        "scripts/run_eta_live.py: thread allow_live_no_drift through _build_broker_equity_adapter; wrap returns in SafeBrokerEquityAdapter; raise BrokerEquityNotAvailableError when no creds in strict live mode; _amain reads ETA_ALLOW_LIVE_NO_DRIFT env var + catches the exception with rc=78",
         "tests/test_broker_equity_adapter.py: TestSafeBrokerEquityAdapter (10 tests) + TestBrokerEquityNotAvailableError (2 tests)",
         "tests/test_run_eta_live.py: TestBuildBrokerEquityAdapterLiveModeGate (6 tests) covering paper/dry-run/strict-refuse/opt-in/IBKR-creds/Tasty-fallback paths",
         "tests/test_amain_wire_up.py: end-to-end smoke test asserting broker_equity block lands in runtime_log.jsonl (process-gap-3 closure)",

@@ -480,7 +480,7 @@ def _write_report(
     lines.append(f"Brief:   {jarvis['explanation']}")
     lines.append("")
 
-    for bot, data in (("MNQ (apex_engine)", mnq), ("BTC (crypto_seed)", btc)):
+    for bot, data in (("MNQ (eta_engine)", mnq), ("BTC (crypto_seed)", btc)):
         lines.append(f"-- {bot} ".ljust(72, "-"))
         lines.append(
             f"candidates: {data['total_candidates']}  "

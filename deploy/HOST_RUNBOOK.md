@@ -20,7 +20,7 @@ sleep. That is the VPS's job.
 | **LIVE execution** | **never** | **only place** |
 | Mobile push + breakers | [BEST-EFFORT] | [ALWAYS-ON] |
 
-The VPS is the only host permitted to flip `APEX_MODE=LIVE`.
+The VPS is the only host permitted to flip `ETA_MODE=LIVE`.
 
 ---
 
@@ -169,7 +169,7 @@ $EDITOR .env     # ANTHROPIC_API_KEY, active broker keys, PUSHOVER_*, TELEGRAM_*
 ### 3.1 .env minimum
 
 ```ini
-APEX_MODE=PAPER                 # start PAPER; flip to LIVE only after smoke
+ETA_MODE=PAPER                 # start PAPER; flip to LIVE only after smoke
 ANTHROPIC_API_KEY=sk-ant-...
 IBKR_ACCOUNT_ID=DU...
 TASTY_ACCOUNT_NUMBER=...
@@ -277,7 +277,7 @@ and a phone buzz within a few seconds.
 ONLY after 4.1 – 4.4 all pass:
 
 ```bash
-sed -i 's/^APEX_MODE=.*/APEX_MODE=LIVE/' ~/eta_engine/.env
+sed -i 's/^ETA_MODE=.*/ETA_MODE=LIVE/' ~/eta_engine/.env
 systemctl --user restart jarvis-live avengers-fleet eta-dashboard
 journalctl --user -u jarvis-live -f | grep 'MODE='
 ```
@@ -321,7 +321,7 @@ cd ~/eta_engine
 ### 6.3 LIVE account suspended / eval blown
 
 1. `systemctl --user stop jarvis-live` immediately.
-2. Flip `.env` back to `APEX_MODE=PAPER`.
+2. Flip `.env` back to `ETA_MODE=PAPER`.
 3. Export the last 30 days of journals to `~/eta_engine/reports/postmortem/`.
 4. Open a new Apex eval. Do NOT restart LIVE until operator sign-off.
 

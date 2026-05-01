@@ -33,11 +33,11 @@ The gate reads its limits from environment variables, same pattern
 as :mod:`safety.position_cap`, so an operator can tighten the cap
 without redeploy:
 
-* ``APEX_FLEET_DAILY_LOSS_LIMIT_USD`` -- absolute USD budget. Once
+* ``ETA_FLEET_DAILY_LOSS_LIMIT_USD`` -- absolute USD budget. Once
   same-day net realized PnL goes below ``-limit``, the gate trips.
-* ``APEX_FLEET_DAILY_LOSS_LIMIT_PCT`` -- alternate spec as a
+* ``ETA_FLEET_DAILY_LOSS_LIMIT_PCT`` -- alternate spec as a
   fraction of starting equity. Used iff the USD limit is unset.
-* ``APEX_FLEET_RISK_DISABLED`` -- truthy-value disables the gate
+* ``ETA_FLEET_RISK_DISABLED`` -- truthy-value disables the gate
   entirely (paper / test runs that don't want fleet aggregation).
 
 Defaults: -3.5% of starting equity (matches risk-sage's
@@ -103,13 +103,13 @@ class FleetRiskGate:
 
     fleet_starting_equity_usd: float
     #: Override the default 3.5% limit. ``None`` reads
-    #: ``APEX_FLEET_DAILY_LOSS_LIMIT_USD`` and
-    #: ``APEX_FLEET_DAILY_LOSS_LIMIT_PCT`` from env, falling back to
+    #: ``ETA_FLEET_DAILY_LOSS_LIMIT_USD`` and
+    #: ``ETA_FLEET_DAILY_LOSS_LIMIT_PCT`` from env, falling back to
     #: ``DEFAULT_LIMIT_PCT`` of starting equity.
     limit_usd_override: float | None = None
     #: Read at construction time; subsequent env changes don't take
     #: effect. Set to True to bypass the gate entirely.
-    disabled: bool = field(default_factory=lambda: _is_truthy_env("APEX_FLEET_RISK_DISABLED"))
+    disabled: bool = field(default_factory=lambda: _is_truthy_env("ETA_FLEET_RISK_DISABLED"))
 
     # --- private state ---
     _today: date = field(default_factory=_today_utc, init=False)
@@ -135,13 +135,13 @@ class FleetRiskGate:
         """
         if self.limit_usd_override is not None:
             return abs(float(self.limit_usd_override))
-        env_usd = os.environ.get("APEX_FLEET_DAILY_LOSS_LIMIT_USD", "").strip()
+        env_usd = os.environ.get("ETA_FLEET_DAILY_LOSS_LIMIT_USD", "").strip()
         if env_usd:
             try:
                 return abs(float(env_usd))
             except ValueError:
                 pass  # fall through
-        env_pct = os.environ.get("APEX_FLEET_DAILY_LOSS_LIMIT_PCT", "").strip()
+        env_pct = os.environ.get("ETA_FLEET_DAILY_LOSS_LIMIT_PCT", "").strip()
         if env_pct:
             try:
                 return abs(float(env_pct)) * self.fleet_starting_equity_usd

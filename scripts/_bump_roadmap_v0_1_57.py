@@ -79,7 +79,7 @@ D3 ``consistency_guard`` module + wiring
 
 D4 EoD flatten wiring
   * ``MnqBot.on_bar`` checks ``adapter.should_flatten_eod`` at
-    every bar close; flatten reason ``apex_eod_flatten`` routes
+    every bar close; flatten reason ``eta_eod_flatten`` routes
     through the existing kill-switch dispatch path.
 
 D5 ``kill_switch_latch`` wiring
@@ -235,7 +235,7 @@ def main() -> None:
             ),
             "D4_eod_flatten": (
                 "MnqBot.on_bar queries adapter.should_flatten_eod "
-                "each bar close; routes reason=apex_eod_flatten "
+                "each bar close; routes reason=eta_eod_flatten "
                 "through kill-switch dispatch."
             ),
             "D5_kill_switch_latch": (

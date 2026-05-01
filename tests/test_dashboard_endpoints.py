@@ -59,7 +59,7 @@ def test_js_module_rejects_dot_prefix(tmp_path, monkeypatch) -> None:
 
 
 def test_governor_returns_warning_when_state_missing(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/governor")
     assert r.status_code == 200
     body = r.json()
@@ -67,7 +67,7 @@ def test_governor_returns_warning_when_state_missing(client, tmp_path, monkeypat
 
 
 def test_governor_returns_data_when_state_present(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     gov = tmp_path / "jarvis_governor.json"
     gov.write_text('{"grade":"A","score":0.92}', encoding="utf-8")
     r = client.get("/api/jarvis/governor")
@@ -76,7 +76,7 @@ def test_governor_returns_data_when_state_present(client, tmp_path, monkeypatch)
 
 
 def test_edge_leaderboard_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/edge_leaderboard")
     assert r.status_code == 200
     body = r.json()
@@ -86,7 +86,7 @@ def test_edge_leaderboard_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_edge_leaderboard_with_data(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     edge = tmp_path / "sage" / "edge_tracker.json"
     edge.parent.mkdir(parents=True)
     edge.write_text(json.dumps({
@@ -103,7 +103,7 @@ def test_edge_leaderboard_with_data(client, tmp_path, monkeypatch) -> None:
 
 
 def test_edge_leaderboard_rejects_bad_bot_id(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/edge_leaderboard?bot=..%2F..%2Fetc%2Fpasswd")
     assert r.status_code == 400
     # And a few other bad shapes
@@ -113,14 +113,14 @@ def test_edge_leaderboard_rejects_bad_bot_id(client, tmp_path, monkeypatch) -> N
 
 
 def test_model_tier_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/model_tier")
     assert r.status_code == 200
     assert r.json().get("_warning") == "no_data"
 
 
 def test_kaizen_latest_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/kaizen_latest")
     assert r.status_code == 200
     body = r.json()
@@ -128,7 +128,7 @@ def test_kaizen_latest_cold_start(client, tmp_path, monkeypatch) -> None:
 
 
 def test_kaizen_latest_returns_markdown(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     tickets = tmp_path / "kaizen" / "tickets"
     tickets.mkdir(parents=True)
     (tickets / "2026-04-26_TKT-001.md").write_text("# Ticket 001\nbody", encoding="utf-8")
@@ -140,7 +140,7 @@ def test_kaizen_latest_returns_markdown(client, tmp_path, monkeypatch) -> None:
 
 
 def test_bot_fleet_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/bot-fleet")
     assert r.status_code == 200
     body = r.json()
@@ -149,7 +149,7 @@ def test_bot_fleet_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_bot_fleet_assembles_roster(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     bots_dir = tmp_path / "bots"
     for name in ("mnq", "btc_hybrid"):
         (bots_dir / name).mkdir(parents=True)
@@ -171,7 +171,7 @@ def test_bot_fleet_assembles_roster(client, tmp_path, monkeypatch) -> None:
 
 def test_bot_fleet_drilldown(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     bot_dir = tmp_path / "bots" / "mnq"
     bot_dir.mkdir(parents=True)
     (bot_dir / "status.json").write_text(json.dumps({"name": "mnq"}), encoding="utf-8")
@@ -190,7 +190,7 @@ def test_bot_fleet_drilldown(client, tmp_path, monkeypatch) -> None:
 
 
 def test_bot_fleet_drilldown_unknown_bot(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/bot-fleet/no-such-bot")
     assert r.status_code == 200
     body = r.json()
@@ -200,7 +200,7 @@ def test_bot_fleet_drilldown_unknown_bot(client, tmp_path, monkeypatch) -> None:
 
 
 def test_risk_gates_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/risk_gates")
     assert r.status_code == 200
     body = r.json()
@@ -210,7 +210,7 @@ def test_risk_gates_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_risk_gates_assembles(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     safety = tmp_path / "safety"
     safety.mkdir()
     (safety / "kill_switch_latch.json").write_text(json.dumps({
@@ -230,7 +230,7 @@ def test_risk_gates_assembles(client, tmp_path, monkeypatch) -> None:
 
 
 def test_position_reconciler_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/positions/reconciler")
     assert r.status_code == 200
     body = r.json()
@@ -239,7 +239,7 @@ def test_position_reconciler_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_position_reconciler_returns_drift(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     safety = tmp_path / "safety"
     safety.mkdir()
     (safety / "position_reconciler_latest.json").write_text(json.dumps({
@@ -254,7 +254,7 @@ def test_position_reconciler_returns_drift(client, tmp_path, monkeypatch) -> Non
 
 
 def test_equity_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/equity")
     assert r.status_code == 200
     assert r.json().get("_warning") == "no_data"
@@ -262,7 +262,7 @@ def test_equity_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_equity_returns_curve(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     blot = tmp_path / "blotter"
     blot.mkdir()
     (blot / "equity_curve.json").write_text(json.dumps({
@@ -276,7 +276,7 @@ def test_equity_returns_curve(client, tmp_path, monkeypatch) -> None:
 
 def test_equity_default_returns_today(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     blot = tmp_path / "blotter"
     blot.mkdir()
     (blot / "equity_curve.json").write_text(json.dumps({
@@ -296,7 +296,7 @@ def test_equity_default_returns_today(client, tmp_path, monkeypatch) -> None:
 
 def test_equity_per_bot(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     bot_dir = tmp_path / "bots" / "mnq"
     bot_dir.mkdir(parents=True)
     (bot_dir / "equity_curve.json").write_text(json.dumps({
@@ -310,19 +310,19 @@ def test_equity_per_bot(client, tmp_path, monkeypatch) -> None:
 
 
 def test_equity_invalid_range_returns_400(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/equity?range=lifetime")
     assert r.status_code == 400
 
 
 def test_equity_invalid_bot_returns_400(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/equity?bot=../../etc/passwd")
     assert r.status_code == 400
 
 
 def test_equity_bot_with_no_data_returns_200_with_warning(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/equity?bot=mnq")
     assert r.status_code == 200
     body = r.json()
@@ -331,7 +331,7 @@ def test_equity_bot_with_no_data_returns_200_with_warning(client, tmp_path, monk
 
 
 def test_preflight_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/preflight")
     assert r.status_code == 200
     body = r.json()
@@ -341,7 +341,7 @@ def test_preflight_cold_start(client, tmp_path, monkeypatch) -> None:
 
 def test_preflight_with_throttles(client, tmp_path, monkeypatch) -> None:
     import json
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     safety = tmp_path / "safety"
     safety.mkdir()
     (safety / "preflight_correlation_latest.json").write_text(json.dumps({
@@ -355,7 +355,7 @@ def test_preflight_with_throttles(client, tmp_path, monkeypatch) -> None:
 
 
 def test_sage_modulation_stats_cold_start(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/sage_modulation_stats")
     assert r.status_code == 200
     body = r.json()
@@ -364,7 +364,7 @@ def test_sage_modulation_stats_cold_start(client, tmp_path, monkeypatch) -> None
 
 def test_sage_modulation_toggle_get_default_off(client, tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("ETA_FF_V22_SAGE_MODULATION", raising=False)
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/sage_modulation_toggle")
     assert r.status_code == 200
     assert r.json()["enabled"] is False
@@ -372,14 +372,14 @@ def test_sage_modulation_toggle_get_default_off(client, tmp_path, monkeypatch) -
 
 def test_sage_modulation_toggle_get_when_on(client, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ETA_FF_V22_SAGE_MODULATION", "true")
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.get("/api/jarvis/sage_modulation_toggle")
     assert r.json()["enabled"] is True
 
 
 def test_sage_modulation_toggle_post_requires_step_up(client, tmp_path, monkeypatch) -> None:
     """POST without step-up cookie returns 401 or 403."""
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     r = client.post("/api/jarvis/sage_modulation_toggle", json={"enabled": True})
     # Without session: 401; without step-up: 403; both are "blocked"
     assert r.status_code in (401, 403)

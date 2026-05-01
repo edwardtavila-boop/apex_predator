@@ -113,7 +113,7 @@ operational frequency:
    futures this is rare but non-zero overnight.
 
 **Action:**
-- **Pause new entries immediately.** Set `apex_go_state.tier_a_mnq_live`
+- **Pause new entries immediately.** Set `eta_go_state.tier_a_mnq_live`
   (and any other tier-A flag) to `false` in `roadmap_state.json` via
   `python -m eta_engine.scripts.go_trigger --pause-tier-a`. This
   blocks NEW entries; existing positions keep running.

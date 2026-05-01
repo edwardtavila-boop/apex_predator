@@ -463,7 +463,7 @@ def _broker_paper_env(env: Mapping[str, str] | None = None) -> Mapping[str, str]
 
 def _runtime_secret_root(env: Mapping[str, str]) -> Path:
     runtime_root = (
-        str(env.get("APEX_RUNTIME_ROOT") or "").strip()
+        str(env.get("ETA_RUNTIME_ROOT") or "").strip()
         or str(env.get("FIRM_RUNTIME_ROOT") or "").strip()
         or r"C:\EvolutionaryTradingAlgo\firm_command_center"
     )

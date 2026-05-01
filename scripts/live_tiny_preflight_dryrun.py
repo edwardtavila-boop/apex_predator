@@ -275,7 +275,7 @@ def _gate_env_template() -> Gate:
         return g
     txt = p.read_text()
     required_keys = [
-        "APEX_MODE",
+        "ETA_MODE",
         "ANTHROPIC_API_KEY",
         "JARVIS_HOURLY_USD_BUDGET",
         "JARVIS_DAILY_USD_BUDGET",
@@ -610,7 +610,7 @@ def _gate_crash_recovery_simulated() -> Gate:
     if not script.exists():
         g.status, g.detail = "FAIL", f"missing {script}"
         return g
-    tmp_dir = Path(tempfile.mkdtemp(prefix="apex_preflight_"))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="eta_preflight_"))
     tmp_alerts = tmp_dir / "alerts_log.jsonl"
     tmp_btc = tmp_dir / "btc_live_decisions.jsonl"
     try:
@@ -736,7 +736,7 @@ def _gate_alert_dispatcher_echo() -> Gate:
     try:
         from eta_engine.obs.alert_dispatcher import AlertDispatcher
 
-        tmp_dir = Path(tempfile.mkdtemp(prefix="apex_preflight_alerts_"))
+        tmp_dir = Path(tempfile.mkdtemp(prefix="eta_preflight_alerts_"))
         tmp_log = tmp_dir / "alerts_log.jsonl"
         cfg = {
             "rate_limit": {
@@ -899,7 +899,7 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report = {
-        "kind": "apex_live_tiny_preflight_dryrun",
+        "kind": "eta_live_tiny_preflight_dryrun",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "injected_failures": sorted(injections),
         "overall": overall,

@@ -335,7 +335,7 @@ def _task_meta_upgrade(state_dir: Path) -> dict:
     import shutil
     import subprocess
 
-    repo_dir = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
+    repo_dir = Path(os.environ.get("ETA_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     if not (repo_dir / ".git").exists():
         return {"skipped": True, "reason": f"{repo_dir} is not a git repo"}
 
@@ -679,7 +679,7 @@ def _task_disk_cleanup(state_dir: Path) -> dict:
                 continue
 
     # Also blow away pyc caches older than 14 days
-    repo = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
+    repo = Path(os.environ.get("ETA_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     if repo.exists():
         pyc_cutoff = datetime.now(UTC).timestamp() - 14 * 86400
         for pycache in repo.rglob("__pycache__"):
@@ -706,7 +706,7 @@ def _task_backup(state_dir: Path) -> dict:
     import tarfile
 
     report: dict = {"ts": datetime.now(UTC).isoformat()}
-    repo = Path(os.environ.get("APEX_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
+    repo = Path(os.environ.get("ETA_REPO_DIR", str(workspace_roots.ETA_ENGINE_ROOT)))
     backup_dir = state_dir / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
@@ -768,9 +768,9 @@ def _task_prometheus_export(state_dir: Path) -> dict:
     out_path = prom_dir / "avengers.prom"
 
     lines: list[str] = [
-        "# HELP apex_up Whether the Avengers daemon is alive (1=yes)",
-        "# TYPE apex_up gauge",
-        "apex_up 1",
+        "# HELP eta_up Whether the Avengers daemon is alive (1=yes)",
+        "# TYPE eta_up gauge",
+        "eta_up 1",
     ]
 
     if hb_path.exists():
@@ -778,24 +778,24 @@ def _task_prometheus_export(state_dir: Path) -> dict:
             hb = json.loads(hb_path.read_text(encoding="utf-8"))
             lines.extend(
                 [
-                    "# HELP apex_quota_hourly_pct Fraction of hourly USD budget consumed",
-                    "# TYPE apex_quota_hourly_pct gauge",
-                    f"apex_quota_hourly_pct {hb.get('hourly_pct', 0.0)}",
-                    "# HELP apex_quota_daily_pct Fraction of daily USD budget consumed",
-                    "# TYPE apex_quota_daily_pct gauge",
-                    f"apex_quota_daily_pct {hb.get('daily_pct', 0.0)}",
-                    "# HELP apex_cache_hit_rate Anthropic prompt-cache hit rate in last hour",
-                    "# TYPE apex_cache_hit_rate gauge",
-                    f"apex_cache_hit_rate {hb.get('cache_hit_rate', 0.0)}",
-                    "# HELP apex_distiller_version Current classifier version",
-                    "# TYPE apex_distiller_version gauge",
-                    f"apex_distiller_version {hb.get('distiller_version', 0)}",
-                    "# HELP apex_distiller_trained 1 if classifier has training data, 0 otherwise",
-                    "# TYPE apex_distiller_trained gauge",
-                    f"apex_distiller_trained {1 if hb.get('distiller_trained') else 0}",
-                    "# HELP apex_quota_state JARVIS quota state code (OK=0, WARN=1, DOWNSHIFT=2, FREEZE=3)",
-                    "# TYPE apex_quota_state gauge",
-                    f"apex_quota_state {_prom_quota_code(hb.get('quota_state', 'OK'))}",
+                    "# HELP eta_quota_hourly_pct Fraction of hourly USD budget consumed",
+                    "# TYPE eta_quota_hourly_pct gauge",
+                    f"eta_quota_hourly_pct {hb.get('hourly_pct', 0.0)}",
+                    "# HELP eta_quota_daily_pct Fraction of daily USD budget consumed",
+                    "# TYPE eta_quota_daily_pct gauge",
+                    f"eta_quota_daily_pct {hb.get('daily_pct', 0.0)}",
+                    "# HELP eta_cache_hit_rate Anthropic prompt-cache hit rate in last hour",
+                    "# TYPE eta_cache_hit_rate gauge",
+                    f"eta_cache_hit_rate {hb.get('cache_hit_rate', 0.0)}",
+                    "# HELP eta_distiller_version Current classifier version",
+                    "# TYPE eta_distiller_version gauge",
+                    f"eta_distiller_version {hb.get('distiller_version', 0)}",
+                    "# HELP eta_distiller_trained 1 if classifier has training data, 0 otherwise",
+                    "# TYPE eta_distiller_trained gauge",
+                    f"eta_distiller_trained {1 if hb.get('distiller_trained') else 0}",
+                    "# HELP eta_quota_state JARVIS quota state code (OK=0, WARN=1, DOWNSHIFT=2, FREEZE=3)",
+                    "# TYPE eta_quota_state gauge",
+                    f"eta_quota_state {_prom_quota_code(hb.get('quota_state', 'OK'))}",
                 ]
             )
         except Exception as exc:  # noqa: BLE001
@@ -807,9 +807,9 @@ def _task_prometheus_export(state_dir: Path) -> dict:
             stress = d.get("stress", {}) or {}
             lines.extend(
                 [
-                    "# HELP apex_stress_composite Weighted stress composite [0,1]",
-                    "# TYPE apex_stress_composite gauge",
-                    f"apex_stress_composite {stress.get('composite', 0.0)}",
+                    "# HELP eta_stress_composite Weighted stress composite [0,1]",
+                    "# TYPE eta_stress_composite gauge",
+                    f"eta_stress_composite {stress.get('composite', 0.0)}",
                 ]
             )
         except Exception:  # noqa: BLE001

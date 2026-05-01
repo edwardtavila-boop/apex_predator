@@ -120,14 +120,14 @@ class MultiTenantOrchestrator:
                     cpu_limit=cpu,
                     memory_limit=mem,
                     env={
-                        "APEX_TENANT_ID": tenant.tenant_id,
-                        "APEX_SKU": sku.value,
-                        "APEX_TIER": tenant.tier.value,
-                        "APEX_EXCHANGE": key.exchange,
-                        "APEX_KEY_ID": key.key_id,
+                        "ETA_TENANT_ID": tenant.tenant_id,
+                        "ETA_SKU": sku.value,
+                        "ETA_TIER": tenant.tier.value,
+                        "ETA_EXCHANGE": key.exchange,
+                        "ETA_KEY_ID": key.key_id,
                         # NOTE: secrets are NOT injected here -- the driver
                         # pulls them from KMS at mount time using key_id.
-                        "APEX_PAPER_FALLBACK": "1",
+                        "ETA_PAPER_FALLBACK": "1",
                     },
                     mounts_read_only=(
                         "/opt/apex/brain:ro",

@@ -137,7 +137,7 @@ def check_us_person_gate() -> CheckResult:
                 name="m2_us_person_gate",
                 ok=False,
                 severity="critical",
-                detail="IS_US_PERSON is False! Set APEX_IS_US_PERSON=true (default).",
+                detail="IS_US_PERSON is False! Set ETA_IS_US_PERSON=true (default).",
             )
         if "bybit" not in NON_FCM_VENUES or "okx" not in NON_FCM_VENUES:
             return CheckResult(

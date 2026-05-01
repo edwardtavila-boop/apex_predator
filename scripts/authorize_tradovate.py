@@ -69,7 +69,7 @@ _REQUIRED = [
 
 @dataclass
 class AuthReport:
-    kind: str = "apex_tradovate_auth_status"
+    kind: str = "eta_tradovate_auth_status"
     generated_at_utc: str = ""
     endpoint: str = ""
     demo: bool = True

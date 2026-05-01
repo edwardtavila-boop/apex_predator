@@ -57,7 +57,7 @@ def test_default_is_paper_without_live_flag(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=False,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -71,26 +71,26 @@ def test_live_blocked_without_env_flag(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={},  # missing APEX_BTC_LIVE
+        env={},  # missing ETA_BTC_LIVE
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
     )
     assert decision.mode == "PAPER"
-    assert any("APEX_BTC_LIVE" in r for r in decision.reasons)
+    assert any("ETA_BTC_LIVE" in r for r in decision.reasons)
 
 
 def test_live_blocked_when_env_flag_not_one(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "true"},
+        env={"ETA_BTC_LIVE": "true"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
     )
     assert decision.mode == "PAPER"
-    assert any("APEX_BTC_LIVE" in r for r in decision.reasons)
+    assert any("ETA_BTC_LIVE" in r for r in decision.reasons)
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ def test_live_blocked_when_env_flag_not_one(tmp_path: Path) -> None:
 def test_live_blocked_when_verify_missing(tmp_path: Path) -> None:
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=tmp_path / "no_such_file.json",
         now=NOW,
         adapter_probe=_probe_ok,
@@ -114,7 +114,7 @@ def test_live_blocked_when_verdict_fail(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path, verdict="FAIL")
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -132,7 +132,7 @@ def test_live_blocked_when_verify_too_old(tmp_path: Path) -> None:
     )
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -149,7 +149,7 @@ def test_live_blocked_when_ended_utc_missing(tmp_path: Path) -> None:
     verify.write_text(json.dumps({"verdict": "PASS"}), encoding="utf-8")
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -162,7 +162,7 @@ def test_verify_path_round_trips_through_decision(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -175,7 +175,7 @@ def test_verify_corrupt_json_is_treated_as_missing(tmp_path: Path) -> None:
     verify.write_text("not-json-at-all", encoding="utf-8")
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -193,7 +193,7 @@ def test_live_blocked_when_adapter_missing(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_missing,
@@ -211,7 +211,7 @@ def test_live_allowed_when_all_gates_pass(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,
@@ -232,7 +232,7 @@ def test_decision_as_dict_is_json_safe(tmp_path: Path) -> None:
     verify = _write_verify(tmp_path)
     decision = evaluate_live_gate(
         want_live=True,
-        env={"APEX_BTC_LIVE": "1"},
+        env={"ETA_BTC_LIVE": "1"},
         verify_path=verify,
         now=NOW,
         adapter_probe=_probe_ok,

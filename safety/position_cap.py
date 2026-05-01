@@ -8,15 +8,15 @@ Caps are read from environment variables on every call so an
 operator can tighten them at runtime without restarting the bot.
 The lookup order for a given (side, venue, symbol) is:
 
-1. ``APEX_POSITION_CAP_<SIDE>_<VENUE>_<SYMBOL>`` (most specific)
-2. ``APEX_POSITION_CAP_<SIDE>_<VENUE>``
-3. ``APEX_POSITION_CAP_<SIDE>``
-4. ``APEX_POSITION_CAP`` (global default)
+1. ``ETA_POSITION_CAP_<SIDE>_<VENUE>_<SYMBOL>`` (most specific)
+2. ``ETA_POSITION_CAP_<SIDE>_<VENUE>``
+3. ``ETA_POSITION_CAP_<SIDE>``
+4. ``ETA_POSITION_CAP`` (global default)
 5. :data:`DEFAULT_CAP` -- the conservative fallback
 
 The Apex eval mandates a cap of 1 contract. The default fallback
 here is intentionally generous (10) so paper / test paths route
-freely; the LIVE deployment sets ``APEX_POSITION_CAP=1`` (or per-
+freely; the LIVE deployment sets ``ETA_POSITION_CAP=1`` (or per-
 side overrides) explicitly via the operator manifest.
 
 This module tracks ONLY the requested-delta against a cap. Tracking
@@ -66,10 +66,10 @@ def _resolve_cap(side: str, venue: str, symbol: str) -> float:
     venue_u = venue.upper()
     symbol_u = symbol.upper()
     for key in (
-        f"APEX_POSITION_CAP_{side_u}_{venue_u}_{symbol_u}",
-        f"APEX_POSITION_CAP_{side_u}_{venue_u}",
-        f"APEX_POSITION_CAP_{side_u}",
-        "APEX_POSITION_CAP",
+        f"ETA_POSITION_CAP_{side_u}_{venue_u}_{symbol_u}",
+        f"ETA_POSITION_CAP_{side_u}_{venue_u}",
+        f"ETA_POSITION_CAP_{side_u}",
+        "ETA_POSITION_CAP",
     ):
         raw = os.environ.get(key)
         if raw is None or not raw.strip():

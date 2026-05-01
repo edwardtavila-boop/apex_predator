@@ -29,7 +29,7 @@ def _cfg() -> dict:
             "max_drawdown_kill_pct_of_portfolio": 20.0,
         },
         "tier_a": {
-            "apex_eval_preemptive": {"cushion_usd": 500},
+            "eta_eval_preemptive": {"cushion_usd": 500},
             "per_bucket": {
                 "mnq": {"max_loss_usd": 500, "consecutive_losses": 3},
                 "nq": {"max_loss_usd": 1200, "consecutive_losses": 3},
@@ -100,7 +100,7 @@ def test_apex_preempt_fires_when_cushion_below_threshold():
     ks = KillSwitch(_cfg())
     p = _portfolio()
     ae = ApexEvalSnapshot(trailing_dd_limit_usd=2500, distance_to_limit_usd=400)
-    v = ks.evaluate(bots=[], portfolio=p, apex_eval=ae)
+    v = ks.evaluate(bots=[], portfolio=p, eta_eval=ae)
     assert any(x.action is KillAction.FLATTEN_TIER_A_PREEMPTIVE for x in v)
 
 
@@ -108,7 +108,7 @@ def test_apex_preempt_silent_when_cushion_above_threshold():
     ks = KillSwitch(_cfg())
     p = _portfolio()
     ae = ApexEvalSnapshot(trailing_dd_limit_usd=2500, distance_to_limit_usd=2000)
-    v = ks.evaluate(bots=[], portfolio=p, apex_eval=ae)
+    v = ks.evaluate(bots=[], portfolio=p, eta_eval=ae)
     assert not any(x.action is KillAction.FLATTEN_TIER_A_PREEMPTIVE for x in v)
 
 

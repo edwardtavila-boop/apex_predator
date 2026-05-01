@@ -128,10 +128,10 @@ def test_obs_package() -> None:
     )
 
     reg = MetricsRegistry()
-    reg.inc("apex_trades_opened_total", labels={"bot": "mnq"})
-    reg.gauge("apex_equity_usd", 52_500.0)
-    assert reg.get_counter("apex_trades_opened_total", labels={"bot": "mnq"}) == 1.0
-    assert reg.get_gauge("apex_equity_usd") == 52_500.0
+    reg.inc("eta_trades_opened_total", labels={"bot": "mnq"})
+    reg.gauge("eta_equity_usd", 52_500.0)
+    assert reg.get_counter("eta_trades_opened_total", labels={"bot": "mnq"}) == 1.0
+    assert reg.get_gauge("eta_equity_usd") == 52_500.0
     assert REGISTRY is not None
     assert Alert is not None
     assert AlertLevel.KILL > AlertLevel.INFO
@@ -148,8 +148,8 @@ def test_secrets_manager() -> None:
     )
 
     sm = SecretsManager(env_file="no_such_file.env")
-    assert sm.get("APEX_DEFINITELY_MISSING_KEY", required=False) is None
-    assert any("APEX_DEFINITELY_MISSING_KEY" in line for line in sm.audit_log)
+    assert sm.get("ETA_DEFINITELY_MISSING_KEY", required=False) is None
+    assert any("ETA_DEFINITELY_MISSING_KEY" in line for line in sm.audit_log)
     assert SECRETS is not None
     assert len(REQUIRED_KEYS) == 14
 

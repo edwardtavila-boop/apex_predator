@@ -17,7 +17,7 @@ const fs = require("fs");
 const WebSocket = require("ws");
 
 const BUNDLE_PATH =
-  process.env.APEX_CLIENT_BUNDLE ||
+  process.env.ETA_CLIENT_BUNDLE ||
   path.join(app.getPath("userData"), "client_bundle.json");
 
 let ws = null;

@@ -30,8 +30,8 @@ from eta_engine.core.consistency_guard import (
     ConsistencyCorruptError,
     ConsistencyGuard,
     ConsistencyStatus,
-    apex_trading_day_iso,
-    apex_trading_day_iso_cme,
+    eta_trading_day_iso,
+    eta_trading_day_iso_cme,
     default_apex_50k_guard,
     utc_today_iso,
 )
@@ -497,7 +497,7 @@ class TestVerdictSerialization:
 
 
 class TestApexTradingDayIso:
-    """Verify ``apex_trading_day_iso`` uses the 17:00 US/Central rollover.
+    """Verify ``eta_trading_day_iso`` uses the 17:00 US/Central rollover.
 
     Apex defines a trading day as the 24-hour window ending at 17:00 CT.
     A UTC-midnight boundary splits a US equity-futures session across two
@@ -511,28 +511,28 @@ class TestApexTradingDayIso:
         from datetime import UTC, datetime
 
         t = datetime(2026, 7, 15, 21, 0, tzinfo=UTC)  # 16:00 CDT
-        assert apex_trading_day_iso(t) == "2026-07-15"
+        assert eta_trading_day_iso(t) == "2026-07-15"
 
     def test_after_rollover_summer_cdt(self) -> None:
         """22:30 UTC in July = 17:30 CDT → NEXT trading day."""
         from datetime import UTC, datetime
 
         t = datetime(2026, 7, 15, 22, 30, tzinfo=UTC)  # 17:30 CDT
-        assert apex_trading_day_iso(t) == "2026-07-16"
+        assert eta_trading_day_iso(t) == "2026-07-16"
 
     def test_before_rollover_winter_cst(self) -> None:
         """22:00 UTC in January = 16:00 CST → still today's date."""
         from datetime import UTC, datetime
 
         t = datetime(2026, 1, 15, 22, 0, tzinfo=UTC)  # 16:00 CST
-        assert apex_trading_day_iso(t) == "2026-01-15"
+        assert eta_trading_day_iso(t) == "2026-01-15"
 
     def test_after_rollover_winter_cst(self) -> None:
         """23:30 UTC in January = 17:30 CST → NEXT trading day."""
         from datetime import UTC, datetime
 
         t = datetime(2026, 1, 15, 23, 30, tzinfo=UTC)  # 17:30 CST
-        assert apex_trading_day_iso(t) == "2026-01-16"
+        assert eta_trading_day_iso(t) == "2026-01-16"
 
     def test_exactly_at_17_ct_is_next_day(self) -> None:
         """17:00:00 local IS the rollover -- belongs to NEXT day."""
@@ -540,14 +540,14 @@ class TestApexTradingDayIso:
 
         # 17:00 CDT = 22:00 UTC
         t = datetime(2026, 7, 15, 22, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-07-16"
+        assert eta_trading_day_iso(t) == "2026-07-16"
 
     def test_one_second_before_rollover_is_current_day(self) -> None:
         """16:59:59 CDT stays on the current trading day."""
         from datetime import UTC, datetime
 
         t = datetime(2026, 7, 15, 21, 59, 59, tzinfo=UTC)  # 16:59:59 CDT
-        assert apex_trading_day_iso(t) == "2026-07-15"
+        assert eta_trading_day_iso(t) == "2026-07-15"
 
     def test_overnight_session_charges_to_next_day(self) -> None:
         """A 02:00 UTC timestamp in July (21:00 CDT prior eve) must
@@ -561,8 +561,8 @@ class TestApexTradingDayIso:
         t_evening = datetime(2026, 7, 15, 22, 30, tzinfo=UTC)
         # July 16, 02:00 UTC = 21:00 CDT July 15 → Apex day = July 16
         t_overnight = datetime(2026, 7, 16, 2, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t_evening) == apex_trading_day_iso(t_overnight)
-        assert apex_trading_day_iso(t_evening) == "2026-07-16"
+        assert eta_trading_day_iso(t_evening) == eta_trading_day_iso(t_overnight)
+        assert eta_trading_day_iso(t_evening) == "2026-07-16"
 
     def test_naive_datetime_treated_as_utc(self) -> None:
         """Input without tzinfo is assumed UTC (not local machine tz)."""
@@ -570,12 +570,12 @@ class TestApexTradingDayIso:
 
         t_naive = datetime(2026, 7, 15, 21, 0)
         # Same as tz-aware UTC 21:00 → 16:00 CDT → 2026-07-15
-        assert apex_trading_day_iso(t_naive) == "2026-07-15"
+        assert eta_trading_day_iso(t_naive) == "2026-07-15"
 
     def test_returns_iso_string_today_when_no_arg(self) -> None:
         """With no argument defaults to `datetime.now(UTC)` and returns
         ISO-format string."""
-        s = apex_trading_day_iso()
+        s = eta_trading_day_iso()
         assert isinstance(s, str)
         assert len(s) == 10
         assert s[4] == "-"
@@ -595,14 +595,14 @@ class TestApexTradingDayIso:
 
         # 22:00 UTC → before 23:00 UTC → current date
         assert (
-            cg.apex_trading_day_iso(
+            cg.eta_trading_day_iso(
                 datetime(2026, 1, 15, 22, 0, tzinfo=UTC),
             )
             == "2026-01-15"
         )
         # 23:30 UTC → past fallback rollover → next date
         assert (
-            cg.apex_trading_day_iso(
+            cg.eta_trading_day_iso(
                 datetime(2026, 1, 15, 23, 30, tzinfo=UTC),
             )
             == "2026-01-16"
@@ -613,7 +613,7 @@ class TestApexTradingDayIso:
         This is the bug the session-day helper closes: UTC midnight
         splits the session, so an MNQ overnight tick at 22:30 UTC in
         summer reports different day keys under the two helpers. The
-        runtime MUST use apex_trading_day_iso for eval accounting.
+        runtime MUST use eta_trading_day_iso for eval accounting.
         """
         from datetime import UTC, datetime
 
@@ -624,7 +624,7 @@ class TestApexTradingDayIso:
         t = datetime(2026, 7, 15, 22, 30, tzinfo=UTC)
         # We can't monkeypatch datetime.now cleanly, so call the
         # pure function directly and compare to UTC-derived date.
-        assert cg.apex_trading_day_iso(t) == "2026-07-16"
+        assert cg.eta_trading_day_iso(t) == "2026-07-16"
         assert t.date().isoformat() == "2026-07-15"
 
 
@@ -632,7 +632,7 @@ class TestApexTradingDayIso:
 # R4 closure -- CME-calendar-aware session-day helper
 # ---------------------------------------------------------------------------
 class TestApexTradingDayIsoCme:
-    """R4 closure: apex_trading_day_iso_cme rolls forward over weekends +
+    """R4 closure: eta_trading_day_iso_cme rolls forward over weekends +
     US federal holidays so Apex's consistency-guard bucket never lands on
     a date that Apex itself doesn't count.
     """
@@ -643,8 +643,8 @@ class TestApexTradingDayIsoCme:
 
         # Tuesday 2026-04-14, 14:00 UTC (09:00 CDT) -- well inside RTH
         t = datetime(2026, 4, 14, 14, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-14"
-        assert apex_trading_day_iso_cme(t) == "2026-04-14"
+        assert eta_trading_day_iso(t) == "2026-04-14"
+        assert eta_trading_day_iso_cme(t) == "2026-04-14"
 
     def test_friday_evening_overnight_rolls_to_monday(self) -> None:
         """Fri 17:30 CDT -> base=Sat -> CME rolls to Monday.
@@ -657,8 +657,8 @@ class TestApexTradingDayIsoCme:
 
         # Fri 2026-04-17, 22:30 UTC (17:30 CDT, just past rollover)
         t = datetime(2026, 4, 17, 22, 30, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-18"  # Saturday
-        assert apex_trading_day_iso_cme(t) == "2026-04-20"  # Monday
+        assert eta_trading_day_iso(t) == "2026-04-18"  # Saturday
+        assert eta_trading_day_iso_cme(t) == "2026-04-20"  # Monday
 
     def test_saturday_midday_rolls_to_monday(self) -> None:
         """Saturday anytime -> CME rolls to Monday."""
@@ -666,8 +666,8 @@ class TestApexTradingDayIsoCme:
 
         # Sat 2026-04-18, 15:00 UTC (10:00 CDT) -- CME is dark
         t = datetime(2026, 4, 18, 15, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-18"
-        assert apex_trading_day_iso_cme(t) == "2026-04-20"
+        assert eta_trading_day_iso(t) == "2026-04-18"
+        assert eta_trading_day_iso_cme(t) == "2026-04-20"
 
     def test_sunday_morning_rolls_to_monday(self) -> None:
         """Sunday pre-17:00 CT -> base=Sunday -> CME rolls to Monday."""
@@ -675,8 +675,8 @@ class TestApexTradingDayIsoCme:
 
         # Sun 2026-04-19, 14:00 UTC (09:00 CDT)
         t = datetime(2026, 4, 19, 14, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-19"
-        assert apex_trading_day_iso_cme(t) == "2026-04-20"
+        assert eta_trading_day_iso(t) == "2026-04-19"
+        assert eta_trading_day_iso_cme(t) == "2026-04-20"
 
     def test_sunday_evening_already_monday(self) -> None:
         """Sun 17:30 CT -> base=Monday (already trading day) -> unchanged."""
@@ -684,8 +684,8 @@ class TestApexTradingDayIsoCme:
 
         # Sun 2026-04-19, 22:30 UTC (17:30 CDT, just past rollover)
         t = datetime(2026, 4, 19, 22, 30, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-20"
-        assert apex_trading_day_iso_cme(t) == "2026-04-20"
+        assert eta_trading_day_iso(t) == "2026-04-20"
+        assert eta_trading_day_iso_cme(t) == "2026-04-20"
 
     def test_christmas_day_rolls_to_next_weekday(self) -> None:
         """Dec 25 -> CME closed -> rolls forward to first trading day."""
@@ -693,8 +693,8 @@ class TestApexTradingDayIsoCme:
 
         # Christmas 2026 falls on a Friday. Rolls to Monday (skips Sat/Sun).
         t = datetime(2026, 12, 25, 14, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-12-25"
-        assert apex_trading_day_iso_cme(t) == "2026-12-28"
+        assert eta_trading_day_iso(t) == "2026-12-25"
+        assert eta_trading_day_iso_cme(t) == "2026-12-28"
 
     def test_christmas_eve_evening_rolls_over_christmas(self) -> None:
         """Dec 24 23:30 CST -> base=Dec 25 -> rolls past Christmas."""
@@ -703,9 +703,9 @@ class TestApexTradingDayIsoCme:
         # Dec 24 2026, 23:30 CST = Dec 25 05:30 UTC (winter, CST = UTC-6)
         t = datetime(2026, 12, 25, 5, 30, tzinfo=UTC)
         # Local time: Dec 24 23:30 CST -- already past 17:00 rollover
-        assert apex_trading_day_iso(t) == "2026-12-25"
+        assert eta_trading_day_iso(t) == "2026-12-25"
         # Rolls: Dec 25 (holiday), Dec 26 (Sat), Dec 27 (Sun) -> Dec 28
-        assert apex_trading_day_iso_cme(t) == "2026-12-28"
+        assert eta_trading_day_iso_cme(t) == "2026-12-28"
 
     def test_new_years_day_rolls_forward(self) -> None:
         """Jan 1 -> CME closed."""
@@ -713,8 +713,8 @@ class TestApexTradingDayIsoCme:
 
         # Jan 1 2027 falls on a Friday. CME closed; rolls to Monday Jan 4.
         t = datetime(2027, 1, 1, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2027-01-01"
-        assert apex_trading_day_iso_cme(t) == "2027-01-04"
+        assert eta_trading_day_iso(t) == "2027-01-01"
+        assert eta_trading_day_iso_cme(t) == "2027-01-04"
 
     def test_mlk_day_rolls_to_tuesday(self) -> None:
         """MLK Day = 3rd Monday of January. CME closed; rolls to Tuesday."""
@@ -722,8 +722,8 @@ class TestApexTradingDayIsoCme:
 
         # MLK 2026 = Jan 19 (3rd Monday)
         t = datetime(2026, 1, 19, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-01-19"
-        assert apex_trading_day_iso_cme(t) == "2026-01-20"
+        assert eta_trading_day_iso(t) == "2026-01-19"
+        assert eta_trading_day_iso_cme(t) == "2026-01-20"
 
     def test_good_friday_rolls_to_monday(self) -> None:
         """Good Friday 2026 = April 3. CME closed; rolls through weekend."""
@@ -731,9 +731,9 @@ class TestApexTradingDayIsoCme:
 
         # Good Friday 2026 = Apr 3 (2 days before Easter Apr 5)
         t = datetime(2026, 4, 3, 15, 0, tzinfo=UTC)
-        assert apex_trading_day_iso(t) == "2026-04-03"
+        assert eta_trading_day_iso(t) == "2026-04-03"
         # Rolls: Apr 3 (Fri holiday), Apr 4 (Sat), Apr 5 (Sun, Easter) -> Apr 6 (Mon, trading)
-        assert apex_trading_day_iso_cme(t) == "2026-04-06"
+        assert eta_trading_day_iso_cme(t) == "2026-04-06"
 
     def test_easter_monday_is_trading_day(self) -> None:
         """CME does NOT close Easter Monday -- unlike some European bourses."""
@@ -741,7 +741,7 @@ class TestApexTradingDayIsoCme:
 
         # Easter Monday 2026 = Apr 6
         t = datetime(2026, 4, 6, 14, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-04-06"
+        assert eta_trading_day_iso_cme(t) == "2026-04-06"
 
     def test_memorial_day_rolls(self) -> None:
         """Memorial Day = last Monday of May."""
@@ -749,7 +749,7 @@ class TestApexTradingDayIsoCme:
 
         # Memorial Day 2026 = May 25 (last Monday)
         t = datetime(2026, 5, 25, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-05-26"
+        assert eta_trading_day_iso_cme(t) == "2026-05-26"
 
     def test_juneteenth_rolls(self) -> None:
         """Juneteenth (Jun 19) -- CME closure since 2022."""
@@ -758,7 +758,7 @@ class TestApexTradingDayIsoCme:
         # Juneteenth 2026 = Jun 19 (Friday)
         t = datetime(2026, 6, 19, 18, 0, tzinfo=UTC)
         # Rolls: Jun 19 (Fri holiday), 20 (Sat), 21 (Sun) -> Jun 22 (Mon)
-        assert apex_trading_day_iso_cme(t) == "2026-06-22"
+        assert eta_trading_day_iso_cme(t) == "2026-06-22"
 
     def test_independence_day_rolls(self) -> None:
         """July 4 -> CME closed."""
@@ -766,7 +766,7 @@ class TestApexTradingDayIsoCme:
 
         # July 4 2026 = Saturday. Rolls: Jul 4 (Sat), Jul 5 (Sun) -> Jul 6 (Mon)
         t = datetime(2026, 7, 4, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-07-06"
+        assert eta_trading_day_iso_cme(t) == "2026-07-06"
 
     def test_labor_day_rolls(self) -> None:
         """Labor Day = 1st Monday of September."""
@@ -774,7 +774,7 @@ class TestApexTradingDayIsoCme:
 
         # Labor Day 2026 = Sep 7
         t = datetime(2026, 9, 7, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-09-08"
+        assert eta_trading_day_iso_cme(t) == "2026-09-08"
 
     def test_thanksgiving_rolls_to_friday(self) -> None:
         """Thanksgiving = 4th Thursday of November. CME closed; rolls to Fri."""
@@ -782,7 +782,7 @@ class TestApexTradingDayIsoCme:
 
         # Thanksgiving 2026 = Nov 26 (4th Thursday)
         t = datetime(2026, 11, 26, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-11-27"
+        assert eta_trading_day_iso_cme(t) == "2026-11-27"
 
     def test_presidents_day_rolls(self) -> None:
         """Presidents' Day = 3rd Monday of February."""
@@ -790,7 +790,7 @@ class TestApexTradingDayIsoCme:
 
         # Presidents' Day 2026 = Feb 16
         t = datetime(2026, 2, 16, 18, 0, tzinfo=UTC)
-        assert apex_trading_day_iso_cme(t) == "2026-02-17"
+        assert eta_trading_day_iso_cme(t) == "2026-02-17"
 
     def test_is_cme_holiday_rejects_ordinary_weekday(self) -> None:
         """The holiday predicate should not flag a normal weekday."""

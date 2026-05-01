@@ -179,7 +179,7 @@ def test_harness_produces_report_and_tearsheet(tmp_path: Path) -> None:
     assert report_path.exists()
     assert tearsheet_path.exists()
     data = json.loads(report_path.read_text())
-    assert data["kind"] == "apex_paper_run_report"
+    assert data["kind"] == "eta_paper_run_report"
     assert data["weeks"] == 4
     assert len(data["per_bot"]) == 2
     assert "promotion_verdict" in data["aggregate"]

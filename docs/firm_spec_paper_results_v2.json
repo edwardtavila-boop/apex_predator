@@ -1,12 +1,12 @@
 {
-  "spec_id": "APEX_PAPER_RESULTS_v2",
+  "spec_id": "ETA_PAPER_RESULTS_v2",
   "strategy_name": "Evolutionary Trading Algo — 4-Week Paper Run Results v2 (Jump-Diffusion Tier-B Re-Test)",
-  "parent_spec": "APEX_PAPER_RESULTS_v1",
+  "parent_spec": "ETA_PAPER_RESULTS_v1",
   "description": "Post-v1 iteration. v1 established that GBM synthetic bars produce clean Tier-A (MNQ, NQ) passes but starve the crypto feature pipeline of the jump/regime structure needed to expose edge (all 4 Tier-B bots failed expectancy_R >= 0.30). For v2 we added (a) a jump-diffusion + 2-state regime-switching synthetic bar generator (eta_engine.backtest.replay.BarReplay.synthetic_bars_jump) and (b) parameter overrides per bot. On seed 11, the Tier-B v2c config produced 2/4 passers (eth_perp +0.40R, sol_perp +0.34R) plus 2 marginal (crypto_seed +0.14R, xrp_perp +0.22R). However, a 4-seed robustness sweep (seeds 7/19/31/43) shows eth_perp passes 3/4 and sol_perp passes only 1/4 — evidence that jump-diffusion expectancy is seed-fragile and must be validated on real Bybit bars, not blessed from one seed. No new kills on seeds 7/19/31. Seed 43 tripped eth_perp's 20% DD kill envelope, a useful negative data point for the Firm.",
   "hypothesis": "Tier-A (MNQ, NQ) promotion to live-tiny stands. Tier-B is NOT ready for live-tiny: synthetic v2c produced passes on seed 11 but multi-seed tells us the edge is fragile. The correct path is to keep Tier-B at the paper gate, ship Tier-A live-tiny, and re-evaluate Tier-B once real Bybit paper bars are streaming (no longer synthetic). The harness, overrides, jump-diffusion mode, and robustness harness are all production-grade and re-usable when real bars arrive.",
 
   "harness_run_v2c": {
-    "spec_triggering_harness": "APEX_PAPER_RESULTS_v1",
+    "spec_triggering_harness": "ETA_PAPER_RESULTS_v1",
     "bar_mode": "jump",
     "overrides_file": "eta_engine/docs/tier_b_jump_overrides_v2c.json",
     "weeks": 4,
@@ -52,7 +52,7 @@
       "1. Obtain Bybit paper API creds",
       "2. Replace BarReplay.synthetic_bars_jump with BarReplay.from_bybit_paper",
       "3. Re-run harness with --bar-mode paper (new mode) over 4 calendar weeks",
-      "4. Re-engage Firm board with APEX_PAPER_RESULTS_v3 using real-venue numbers"
+      "4. Re-engage Firm board with ETA_PAPER_RESULTS_v3 using real-venue numbers"
     ],
     "rationale": "v2 confirms v1's conclusion: the split-promotion path is the honest answer. v2c on seed 11 shows the pipeline CAN produce Tier-B passes when the bar distribution supports edge, but multi-seed proves it's fragile. Real Bybit paper bars are now the only remaining input that can turn Tier-B's MODIFY into GO."
   },

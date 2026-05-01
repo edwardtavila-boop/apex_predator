@@ -3,15 +3,15 @@
 Emits a Grafana 10.x compatible dashboard JSON that renders the canonical
 Evolutionary Trading Algo metric names defined in :mod:`eta_engine.obs.metrics`:
 
-* ``apex_equity_usd`` — portfolio equity gauge
-* ``apex_drawdown_pct`` — drawdown line
-* ``apex_trades_opened_total`` / ``apex_trades_closed_total`` — counters
-* ``apex_pnl_realized_usd`` — realized PnL bar
-* ``apex_order_latency_ms`` — order-latency histogram (p50/p95/p99)
-* ``apex_confluence_score`` — live confluence gauge
-* ``apex_kill_switch_triggered_total`` — incident counter
-* ``apex_firm_verdict`` — latest Firm decision (numeric encoding)
-* ``apex_venue_failover_total`` — venue-failover counter
+* ``eta_equity_usd`` — portfolio equity gauge
+* ``eta_drawdown_pct`` — drawdown line
+* ``eta_trades_opened_total`` / ``eta_trades_closed_total`` — counters
+* ``eta_pnl_realized_usd`` — realized PnL bar
+* ``eta_order_latency_ms`` — order-latency histogram (p50/p95/p99)
+* ``eta_confluence_score`` — live confluence gauge
+* ``eta_kill_switch_triggered_total`` — incident counter
+* ``eta_firm_verdict`` — latest Firm decision (numeric encoding)
+* ``eta_venue_failover_total`` — venue-failover counter
 
 The generated JSON is importable via Grafana's "Import Dashboard" UI.
 Datasource is parameterised as a template variable (``$datasource``) so the

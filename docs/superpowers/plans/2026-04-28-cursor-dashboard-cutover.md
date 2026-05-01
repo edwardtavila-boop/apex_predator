@@ -71,21 +71,21 @@ else:
     _DEFAULT_STATE = Path.home() / ".local" / "state" / "eta_engine"
     _DEFAULT_LOG = Path.home() / ".local" / "log" / "eta_engine"
 
-STATE_DIR = Path(os.environ.get("APEX_STATE_DIR", _DEFAULT_STATE))
-LOG_DIR = Path(os.environ.get("APEX_LOG_DIR", _DEFAULT_LOG))
+STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", _DEFAULT_STATE))
+LOG_DIR = Path(os.environ.get("ETA_LOG_DIR", _DEFAULT_LOG))
 ```
 
 with:
 
 ```python
 # State/log dirs: repo-relative so every deployment reads the right directory.
-# APEX_STATE_DIR / APEX_LOG_DIR env vars still override (used by tests).
+# ETA_STATE_DIR / ETA_LOG_DIR env vars still override (used by tests).
 _REPO_ROOT     = Path(__file__).resolve().parents[2]   # .../eta_engine/
 _DEFAULT_STATE = _REPO_ROOT / "state"
 _DEFAULT_LOG   = _REPO_ROOT / "logs"
 
-STATE_DIR = Path(os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE)))
-LOG_DIR   = Path(os.environ.get("APEX_LOG_DIR",   str(_DEFAULT_LOG)))
+STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", str(_DEFAULT_STATE)))
+LOG_DIR   = Path(os.environ.get("ETA_LOG_DIR",   str(_DEFAULT_LOG)))
 ```
 
 - [ ] **Step 4 — Run the test to verify it passes**
@@ -102,7 +102,7 @@ Expected: **PASSED**
 python -m pytest tests/test_dashboard_api.py -x -q
 ```
 
-Expected: all existing tests still pass (they set `APEX_STATE_DIR` via the `app_client` fixture so the new default doesn't interfere).
+Expected: all existing tests still pass (they set `ETA_STATE_DIR` via the `app_client` fixture so the new default doesn't interfere).
 
 - [ ] **Step 6 — Commit**
 
@@ -131,7 +131,7 @@ def test_bot_fleet_includes_supervisor_bots(self, app_client, tmp_path):
     import os, json
     from pathlib import Path
 
-    state = Path(os.environ["APEX_STATE_DIR"])
+    state = Path(os.environ["ETA_STATE_DIR"])
     # Ensure state/bots/ exists but is empty (no legacy bots)
     (state / "bots").mkdir(parents=True, exist_ok=True)
 

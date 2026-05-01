@@ -33,7 +33,7 @@ def dashboard_server(tmp_path_factory):
     repo_root = Path(__file__).resolve().parents[2]
 
     env = {
-        "APEX_STATE_DIR": str(state_dir),
+        "ETA_STATE_DIR": str(state_dir),
         "ETA_DASHBOARD_USERS_PATH": str(users_path),
         "ETA_DASHBOARD_SESSIONS_PATH": str(sessions_path),
         "ETA_DASHBOARD_STEP_UP_PIN": "1234",

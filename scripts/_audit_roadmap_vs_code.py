@@ -282,15 +282,15 @@ def _build_registry() -> list[RItem]:
             requirements=[
                 RequirementProbe(
                     "SCAFFOLDED",
-                    "apex_trading_day_iso_cme exists",
-                    lambda: _grep_codebase("def apex_trading_day_iso_cme"),
+                    "eta_trading_day_iso_cme exists",
+                    lambda: _grep_codebase("def eta_trading_day_iso_cme"),
                 ),
                 RequirementProbe(
                     "WIRED",
-                    "_tick uses apex_trading_day_iso_cme",
+                    "_tick uses eta_trading_day_iso_cme",
                     lambda: _file_contains(
                         ROOT / "scripts" / "run_eta_live.py",
-                        "apex_trading_day_iso_cme",
+                        "eta_trading_day_iso_cme",
                     ),
                 ),
                 RequirementProbe(
@@ -298,11 +298,11 @@ def _build_registry() -> list[RItem]:
                     "calendar test asserts CME holiday roll-forward",
                     lambda: (
                         _grep_codebase(
-                            "apex_trading_day_iso_cme",
+                            "eta_trading_day_iso_cme",
                             exclude_tests=False,
                         )
                         and any(
-                            _file_contains(p, "apex_trading_day_iso_cme") for p in (ROOT / "tests").glob("test_*.py")
+                            _file_contains(p, "eta_trading_day_iso_cme") for p in (ROOT / "tests").glob("test_*.py")
                         )
                     ),
                 ),

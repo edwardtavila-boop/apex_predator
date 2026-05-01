@@ -165,7 +165,7 @@
     <span><span class="pill done" style="font-size:9px;">M4</span> <b>positive replay × 4</b> — happy-path parses both venues + populates all balance fields</span>
     <span><span class="pill done" style="font-size:9px;">M4</span> <b>negative cases × 13</b> — missing key, dropped wrapper, type flip, malformed HTTP, no creds</span>
     <span><span class="pill done" style="font-size:9px;">M4</span> <b>protocol fit pinned × 2</b> — IBKR + Tasty still satisfy BrokerEquityAdapter Protocol</span>
-    <span><span class="pill done" style="font-size:9px;">M4</span> <b>apex_nightly_audit registered</b> — alert-event registry CI gate kept green</span>
+    <span><span class="pill done" style="font-size:9px;">M4</span> <b>eta_nightly_audit registered</b> — alert-event registry CI gate kept green</span>
   </div>
   <div class="mono" style="margin-top:6px; font-size:10px; color:var(--dim);">
     Broker-side schema drift now surfaces as a CI failure rather than a silent live-runtime regression. The "MUST NOT raise" Protocol guarantee is pinned across every malformed-input path. Carried to v0.1.69+ / v0.2.x: B3 BLOCKER, H4, M1, M2, L1.
@@ -232,7 +232,7 @@
     <span><span class="pill done" style="font-size:9px;">H5</span> <b>min_logical_usd</b> floor (default 1.0) + math.isfinite guard — no more <code>inf</code> drift_pct</span>
     <span><span class="pill done" style="font-size:9px;">H5</span> <b>as_dict sanitizer</b> — inf/NaN → None defensively even on stale state</span>
     <span><span class="pill done" style="font-size:9px;">H6</span> <b>BrokerEquityNotAvailableError</b> — live + no creds → boot refused (rc=78)</span>
-    <span><span class="pill done" style="font-size:9px;">H6</span> <b>APEX_ALLOW_LIVE_NO_DRIFT=1</b> opt-in — explicit acknowledgement of OFF state</span>
+    <span><span class="pill done" style="font-size:9px;">H6</span> <b>ETA_ALLOW_LIVE_NO_DRIFT=1</b> opt-in — explicit acknowledgement of OFF state</span>
     <span><span class="pill done" style="font-size:9px;">H7</span> <b>SafeBrokerEquityAdapter</b> — wraps every adapter; "MUST NOT raise" enforced at runtime</span>
     <span><span class="pill done" style="font-size:9px;">PG3</span> <b>test_amain_wire_up.py</b> — 2 tests pin B1 wire-up + boot-banner regression</span>
   </div>
@@ -373,7 +373,7 @@
 
 <!-- DECISIONS LOCKED BANNER -->
 <div class="panel" style="margin-bottom:10px; border-left:3px solid var(--accent); background: linear-gradient(90deg, rgba(0,255,163,0.10), transparent);">
-  <h3>Operator Decisions Locked — APEX_DECISIONS_v1 (11 sections · 25 items)</h3>
+  <h3>Operator Decisions Locked — ETA_DECISIONS_v1 (11 sections · 25 items)</h3>
   <div class="mono" style="display:flex; gap:14px; align-items:center; font-size:12px; flex-wrap:wrap;">
     <span class="pill done" style="font-size:12px; padding: 3px 10px;">DECISIONS v1 LOCKED</span>
     <span><span style="color:var(--dim)">Acct:</span> <b>Apex Eval</b></span>
@@ -544,7 +544,7 @@
 
 <!-- FIRM BOARD v2 VERDICT BANNER -->
 <div class="panel" style="margin-bottom:10px; border-left:3px solid var(--accent); background: linear-gradient(90deg, rgba(0,255,163,0.14), transparent);">
-  <h3>Firm Board Verdict — APEX_PAPER_RESULTS_v2 (JUMP-DIFFUSION · HONEST SPLIT)</h3>
+  <h3>Firm Board Verdict — ETA_PAPER_RESULTS_v2 (JUMP-DIFFUSION · HONEST SPLIT)</h3>
   <div class="mono" style="display:flex; gap:14px; align-items:center; font-size:12px; flex-wrap:wrap;">
     <span class="pill done" style="font-size:12px; padding: 3px 10px;">FINAL: GO (v2 · SPLIT HELD)</span>
     <span style="color:var(--dim)">|</span>
@@ -949,7 +949,7 @@
       </tbody>
     </table>
     <div style="font-size:10px; color:var(--dim); margin-top:6px; line-height:1.5;">
-      6-agent round-robin: Quant → Red Team → Risk → Macro → Micro → PM. <span style="color:var(--accent)">CRYPTO_PERP v1 GO'd 17:17. APEX_PAPER_PROMOTION v1 GO'd 18:28. APEX_PAPER_RESULTS v1 GO'd 18:38 (SPLIT). APEX_PAPER_RESULTS_v2 GO'd 21:15 (JUMP · SPLIT HELD).</span>
+      6-agent round-robin: Quant → Red Team → Risk → Macro → Micro → PM. <span style="color:var(--accent)">CRYPTO_PERP v1 GO'd 17:17. ETA_PAPER_PROMOTION v1 GO'd 18:28. ETA_PAPER_RESULTS v1 GO'd 18:38 (SPLIT). ETA_PAPER_RESULTS_v2 GO'd 21:15 (JUMP · SPLIT HELD).</span>
     </div>
   </div>
 </div>

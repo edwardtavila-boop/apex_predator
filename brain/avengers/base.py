@@ -1,26 +1,24 @@
 """
 EVOLUTIONARY TRADING ALGO  //  brain.avengers.base
 ======================================
-Shared contract for the Avengers fleet (Batman, Alfred, Robin) and the
-JARVIS coordinator.
+Shared contract for the DeepSeek fleet and the JARVIS coordinator.
 
 Why this exists
 ---------------
-Edward's directive (2026-04-23): "fully link up all 4 AI systems to compliment
-and work together and to operate as one unit ... admin jarvis who is
-responsible for upkeeping of the vps and running the operation then you have
-batman and robin and alfred who control the development of the operation
-supercharge them to be maximum and efficient and calculative pooling
-resources to help jarvis spare no limitations from alfred robin and claude
-and reduce the strain on jarvis."
+Edward's directive (2026-04-30): "implement DeepSeek, remove Cursor entirely,
+replace Batman/Robin/Alfred with DeepSeek person clones."
 
 JARVIS is the deterministic admin (policy engine, hot path, zero LLM). The
-three Avengers are *development* personas, each locked to a single model
+three DeepSeek personas are *development* personas, each locked to a single model
 tier so cost is predictable:
 
-* BATMAN  -> Opus 4.7  (architectural / adversarial / tactical)
-* ALFRED  -> Sonnet 4.6 (knowledge steward / default reasoner)
-* ROBIN   -> Haiku 4.5 (mechanical grunt work)
+* DEEPSEEK_REASONER  -> architectural / adversarial / tactical (was BATMAN)
+* DEEPSEEK_STEWARD   -> knowledge steward / default reasoner    (was ALFRED)
+* DEEPSEEK_EXECUTOR  -> mechanical grunt work                  (was ROBIN)
+
+Note: Internal PersonaId enum values (BATMAN/ALFRED/ROBIN) are preserved for
+backward compatibility with deployed VPS task schedules and JSONL audit trails.
+Display labels are updated to DeepSeek equivalents.
 
 This module defines the *contract*: the typed envelope a caller sends, the
 typed result a persona returns, the abstract Persona base class, and the
@@ -44,12 +42,12 @@ Design principles (mirrors ``brain.jarvis_admin``)
 
 Public API
 ----------
-  * ``PersonaId``       -- enum of the personas (JARVIS + 3 Avengers)
+  * ``PersonaId``       -- enum of the personas (JARVIS + 3 DeepSeek)
   * ``TaskEnvelope``    -- pydantic: what a caller sends to a persona
   * ``TaskResult``      -- pydantic: what a persona returns
   * ``Executor``        -- Protocol for injectable LLM runners
   * ``DryRunExecutor``  -- deterministic default (no network)
-  * ``Persona``         -- abstract base; subclasses = Batman/Alfred/Robin
+  * ``Persona``         -- abstract base; subclasses = DeepSeek personas
   * ``AVENGERS_JOURNAL``-- default JSONL path
                             (``var/eta_engine/state/avengers.jsonl``)
   * ``avengers_journal_read_path`` -- canonical path with legacy readback

@@ -45,7 +45,7 @@ Opus 4.7) and returned **BLOCKED** with 3 BLOCKERs, 7 HIGH, 4 MEDIUM,
   so the operator received zero notifications when drift fired. A
   re-audit (`scripts/_audit_alert_events.py`) found six other events
   with the same gap: `boot_refused`, `kill_switch_latched`,
-  `apex_preempt`, `consistency_status`, `runtime_start`,
+  `eta_preempt`, `consistency_status`, `runtime_start`,
   `runtime_stop`, `bot_error`. All seven plus `broker_equity_drift`
   now have routing entries with appropriate levels. New CI gate
   `tests/test_alert_event_registry.py` walks every `dispatcher.send(
@@ -62,7 +62,7 @@ Residuals from the v0.1.64 review (carry to v0.1.65 / v0.2.x):
 | H3 | HIGH     | Transition-only alerting drops sustained-drift signal + threshold-jitter latch reset can spam | **CLOSED v0.1.66** — hysteresis clear-band (default 70% of trigger) + sustained-drift re-alert (default 1800s interval) + recovered alert kind |
 | H4 | HIGH     | TTL is on our poll cycle, not broker server-side timestamp | v0.1.65 — parse server timestamps where available; identical-bytes detection where not |
 | H5 | HIGH     | `ta_equity == 0` produces inf in JSON tick log (RFC 8259 violation) | **CLOSED v0.1.65** — `min_logical_usd` floor + `as_dict` sanitizer |
-| H6 | HIGH     | NullBrokerEquityAdapter in live mode is invisible to operator | **CLOSED v0.1.65** — refuse-to-boot in live mode unless `APEX_ALLOW_LIVE_NO_DRIFT=1` |
+| H6 | HIGH     | NullBrokerEquityAdapter in live mode is invisible to operator | **CLOSED v0.1.65** — refuse-to-boot in live mode unless `ETA_ALLOW_LIVE_NO_DRIFT=1` |
 | H7 | HIGH     | Protocol "MUST NOT raise" guarantee is by convention, not enforced | **CLOSED v0.1.65** — `SafeBrokerEquityAdapter` wrapper class |
 | M1 | MEDIUM   | No per-bot drift detection (aggregate-only) | v0.2.x with multi-account venue introspection |
 | M2 | MEDIUM   | TrailingDDTracker/ConsistencyGuard run on logical equity, ignore reconciler output | v0.2.x — KillVerdict synthesis design |
@@ -143,7 +143,7 @@ profit* denominator includes extra zero-PnL buckets. Both errors bias the
 runtime reports "OK" or "WARNING" when the true state is "VIOLATION",
 and the operator flies blind until Apex itself closes the eval.
 
-**Fix.** Added `apex_trading_day_iso()` in
+**Fix.** Added `eta_trading_day_iso()` in
 `eta_engine/core/consistency_guard.py`. Uses
 `zoneinfo.ZoneInfo("America/Chicago")` to compute the 17:00 local
 rollover in DST-aware fashion, with a fixed 23:00-UTC fallback when
@@ -343,7 +343,7 @@ worst-case single-tick retrace. Default `RuntimeConfig.tick_interval_s`
 reduced **5.0 → 1.0**. In live mode (`live=True`) the validator raises
 `ApexTickCadenceError` if the inequality fails; paper/dry-run no-ops.
 `load_runtime_config()` calls the validator with the cushion read from
-`kill_switch.tier_a.apex_eval_preemptive.cushion_usd`, so a mis-sized
+`kill_switch.tier_a.eta_eval_preemptive.cushion_usd`, so a mis-sized
 config fails loudly at startup before a single tick runs.
 
 **Tests.** `TestValidateApexTickCadence` (12 tests,
@@ -381,14 +381,14 @@ re-init.
 
 **Original finding.** The 30% rule buckets by Apex trading day.
 Weekends and US holidays don't exist in the calendar; the
-`apex_trading_day_iso` helper keys a Saturday-morning timestamp to
+`eta_trading_day_iso` helper keys a Saturday-morning timestamp to
 "Saturday" which Apex probably ignores.
 
 **v0.1.59 closure.** Added `eta_engine/core/events_calendar.py` —
 CME Globex session calendar with `dateutil.easter`-driven Good Friday +
 fixed-date closures (New Year, MLK, Presidents', Memorial, Juneteenth,
 Independence, Labor, Thanksgiving, Christmas). `consistency_guard.py`
-now routes `apex_trading_day_iso()` through the calendar so
+now routes `eta_trading_day_iso()` through the calendar so
 Saturday/Sunday/holiday timestamps roll forward to the next regular
 trading day instead of creating phantom buckets.
 

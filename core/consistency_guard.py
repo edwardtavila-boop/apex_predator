@@ -466,7 +466,7 @@ def utc_today_iso() -> str:
     """Return today's date in ISO form (UTC). Tests can freeze this.
 
     .. deprecated::
-        Prefer :func:`apex_trading_day_iso` for Apex eval accounting.
+        Prefer :func:`eta_trading_day_iso` for Apex eval accounting.
         UTC midnight splits a US equity-futures session day in half --
         overnight sessions cross the UTC boundary and get charged to
         two different Apex day buckets, which understates the real
@@ -486,11 +486,11 @@ def utc_today_iso() -> str:
 #
 # We use zoneinfo to let the stdlib handle the offset. No hard-coded
 # hour constant — that would silently drift twice a year at DST.
-_APEX_TZ_NAME = "America/Chicago"
-_APEX_ROLLOVER_HOUR_LOCAL = 17  # 5pm CT
+_ETA_TZ_NAME = "America/Chicago"
+_ETA_ROLLOVER_HOUR_LOCAL = 17  # 5pm CT
 
 
-def apex_trading_day_iso(now_utc: datetime | None = None) -> str:
+def eta_trading_day_iso(now_utc: datetime | None = None) -> str:
     """Return the Apex trading-day key for ``now_utc`` (defaults to now).
 
     Apex defines a trading day as the 24-hour window that ends at
@@ -509,10 +509,10 @@ def apex_trading_day_iso(now_utc: datetime | None = None) -> str:
         now_utc = now_utc.replace(tzinfo=UTC)
 
     if ZoneInfo is not None:
-        local = now_utc.astimezone(ZoneInfo(_APEX_TZ_NAME))
+        local = now_utc.astimezone(ZoneInfo(_ETA_TZ_NAME))
         # If we've crossed the 17:00 local rollover, we're already
         # in the NEXT trading day.
-        trading_day = local.date() + timedelta(days=1) if local.hour >= _APEX_ROLLOVER_HOUR_LOCAL else local.date()
+        trading_day = local.date() + timedelta(days=1) if local.hour >= _ETA_ROLLOVER_HOUR_LOCAL else local.date()
         return trading_day.isoformat()
 
     # zoneinfo missing -- degraded fallback. Pick 23:00 UTC (CST
@@ -529,7 +529,7 @@ def apex_trading_day_iso(now_utc: datetime | None = None) -> str:
 # ---------------------------------------------------------------------------
 # R4 closure -- CME-calendar-aware session-day rollover
 # ---------------------------------------------------------------------------
-# Background: ``apex_trading_day_iso`` correctly handles the 17:00 CT rollover
+# Background: ``eta_trading_day_iso`` correctly handles the 17:00 CT rollover
 # but can still return a Saturday, Sunday, or US federal-holiday key when the
 # input timestamp falls in one of those windows. Apex has no activity on
 # those dates (CME Globex closed) so the bucket is effectively orphaned --
@@ -605,8 +605,8 @@ def _next_trading_day(d: date) -> date:
     return d
 
 
-def apex_trading_day_iso_cme(now_utc: datetime | None = None) -> str:
-    """CME-calendar-aware variant of ``apex_trading_day_iso``.
+def eta_trading_day_iso_cme(now_utc: datetime | None = None) -> str:
+    """CME-calendar-aware variant of ``eta_trading_day_iso``.
 
     Computes the base 17:00-CT session-day key, then rolls forward to
     the next actual trading day if that key lands on a weekend or
@@ -627,7 +627,7 @@ def apex_trading_day_iso_cme(now_utc: datetime | None = None) -> str:
     Weekday timestamps outside holidays return identical output to the
     base helper -- this is a strict superset.
     """
-    base_iso = apex_trading_day_iso(now_utc=now_utc)
+    base_iso = eta_trading_day_iso(now_utc=now_utc)
     base = date.fromisoformat(base_iso)
     if _is_trading_day(base):
         return base_iso
@@ -640,8 +640,8 @@ __all__ = [
     "ConsistencyRuleState",
     "ConsistencyStatus",
     "ConsistencyVerdict",
-    "apex_trading_day_iso",
-    "apex_trading_day_iso_cme",
+    "eta_trading_day_iso",
+    "eta_trading_day_iso_cme",
     "default_apex_50k_guard",
     "utc_today_iso",
 ]

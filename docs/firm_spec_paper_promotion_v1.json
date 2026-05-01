@@ -1,5 +1,5 @@
 {
-  "spec_id": "APEX_PAPER_PROMOTION_v1",
+  "spec_id": "ETA_PAPER_PROMOTION_v1",
   "strategy_name": "Evolutionary Trading Algo — Full-Stack Paper Promotion Gate",
   "description": "Promotion request to advance the EVOLUTIONARY TRADING ALGO 4-piece funnel (MNQ engine, NQ hybrid, Crypto seed grid, ETH/SOL/XRP casino perps) from scaffolded-and-verified to paper-trading phase. All blockers from the initial CRYPTO_PERP_ETH_SOL_XRP_v1 GO verdict have been addressed: real Bybit v5 HMAC signing, Tradovate OAuth2 with 3-leg OSO brackets, circuit-breaker router, full obs stack (metrics/alerts/logger/heartbeat), MAD-cleaned data pipeline, walk-forward gate wired to DSR+PSR, Koinly/§1256 tax automation, preflight abort-on-red. 220/220 tests passing, 17/17 verify_all.",
 

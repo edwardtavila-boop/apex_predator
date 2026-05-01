@@ -1,12 +1,12 @@
 {
-  "spec_id": "APEX_DECISIONS_v1",
+  "spec_id": "ETA_DECISIONS_v1",
   "kind": "live_rollout_decisions",
   "generated_at_utc": "2026-04-16T21:15:00+00:00",
   "decided_by": "edward.t.avila@gmail.com",
   "authority_note": "Defaults recommended by Claude, locked by operator with 'lets do as you recommend'",
   "tier_1_live_tiny_blockers": {
     "1_account_type": {
-      "decision": "APEX_TRADER_FUNDING_EVAL",
+      "decision": "ETA_TRADER_FUNDING_EVAL",
       "rationale": "Smallest blast radius — trades on Apex capital, max $2.5k loss vs personal account",
       "constraints": {
         "trailing_drawdown_usd": 2500,
@@ -34,7 +34,7 @@
     "4_live_tiny_dd_trip_wire": {
       "max_loss_usd": 500,
       "as_pct_of_mnq_bucket": 10.0,
-      "apex_cushion_usd": 2000,
+      "eta_cushion_usd": 2000,
       "note": "10% bucket DD trips BEFORE Apex $2.5k trailing, protecting eval"
     },
     "5_live_tiny_duration": {

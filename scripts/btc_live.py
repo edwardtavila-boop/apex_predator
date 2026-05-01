@@ -10,7 +10,7 @@ PAPER (default)
 LIVE (explicit, double-gated)
     Requires ALL of:
       1. ``--live`` flag
-      2. ``APEX_BTC_LIVE=1`` environment variable
+      2. ``ETA_BTC_LIVE=1`` environment variable
       3. A PASS verdict in ``docs/btc_paper/btc_paper_run_latest.json``
          produced by ``scripts/btc_paper_trade.py`` that is ``--max-age-h``
          (default 48) hours old or younger.
@@ -158,10 +158,10 @@ def evaluate_live_gate(
     if not want_live:
         reasons.append("paper requested (no --live flag)")
 
-    env_flag = env.get("APEX_BTC_LIVE", "").strip()
+    env_flag = env.get("ETA_BTC_LIVE", "").strip()
     if env_flag != "1":
         reasons.append(
-            f"APEX_BTC_LIVE env flag not '1' (got {env_flag!r})",
+            f"ETA_BTC_LIVE env flag not '1' (got {env_flag!r})",
         )
 
     payload = _load_verification(verify_path)
@@ -287,7 +287,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
             "Launch the BTC bot. Defaults to PAPER; LIVE requires --live, "
-            "APEX_BTC_LIVE=1, and a recent PASS paper-verification artifact."
+            "ETA_BTC_LIVE=1, and a recent PASS paper-verification artifact."
         ),
     )
     p.add_argument(

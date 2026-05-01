@@ -55,15 +55,15 @@ class FakeMcp:
 
 class TestFeatureFlag:
     def test_default_disabled(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("APEX_USE_MCP_TAPS", raising=False)
+        monkeypatch.delenv("ETA_USE_MCP_TAPS", raising=False)
         assert use_mcp_taps_enabled() is False
 
     def test_env_flag_enables(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("APEX_USE_MCP_TAPS", "1")
+        monkeypatch.setenv("ETA_USE_MCP_TAPS", "1")
         assert use_mcp_taps_enabled() is True
 
     def test_env_flag_case_insensitive(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("APEX_USE_MCP_TAPS", "TRUE")
+        monkeypatch.setenv("ETA_USE_MCP_TAPS", "TRUE")
         assert use_mcp_taps_enabled() is True
 
 

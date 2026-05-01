@@ -269,7 +269,7 @@ def _run_one_bot(
         pipe,
         cfg,
         ctx_builder=_ctx_builder,
-        strategy_id=f"apex_paper_{bot_name}",
+        strategy_id=f"eta_paper_{bot_name}",
     )
     res = engine.run(bars)
 
@@ -417,7 +417,7 @@ def _write_report(
     out_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"_{label}" if label else ""
     report = {
-        "kind": "apex_paper_run_report",
+        "kind": "eta_paper_run_report",
         "generated_at": datetime.now(UTC).isoformat(),
         "label": label,
         "bar_mode": bar_mode,

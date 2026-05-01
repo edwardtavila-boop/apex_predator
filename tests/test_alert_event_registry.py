@@ -16,7 +16,7 @@ channels=[], delivered=[], blocked=["unknown event '...'"])`` -- no
 Pushover, no email, no SMS. So in production the operator received
 zero notifications for that event. A re-audit also surfaced six other
 events with the same gap (``boot_refused``, ``kill_switch_latched``,
-``apex_preempt``, ``consistency_status``, ``runtime_start``,
+``eta_preempt``, ``consistency_status``, ``runtime_start``,
 ``runtime_stop``, ``bot_error``).
 
 Without a CI gate, this class of bug recurs every time an engineer

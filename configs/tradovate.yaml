@@ -1,12 +1,12 @@
 # EVOLUTIONARY TRADING ALGO  //  configs/tradovate.yaml
 # Tradovate venue configuration — Tier-A bots (MNQ, NQ)
-# Decisions source: docs/decisions_v1.json (APEX_DECISIONS_v1)
+# Decisions source: docs/decisions_v1.json (ETA_DECISIONS_v1)
 
 venue: tradovate
 environment: demo   # demo | live  — flipped by scripts/go_trigger.py
 
 # Apex Trader Funding eval constraints (decision #1)
-apex_eval:
+eta_eval:
   enabled: true
   trailing_drawdown_usd: 2500
   daily_loss_limit_usd: 1500

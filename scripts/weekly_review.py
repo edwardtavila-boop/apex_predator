@@ -108,7 +108,7 @@ def _load_spec_chain(spec: dict) -> list[dict]:
             break
         # Look under docs/ for a file matching the ID
         docs = ROOT / "docs"
-        # e.g. APEX_PAPER_RESULTS_v1 → firm_spec_paper_results_v1.json
+        # e.g. ETA_PAPER_RESULTS_v1 → firm_spec_paper_results_v1.json
         guess = docs / (parent_id.lower().replace("apex_", "firm_spec_") + ".json")
         if not guess.exists():
             # fallback: search

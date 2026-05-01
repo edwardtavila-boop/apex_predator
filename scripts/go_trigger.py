@@ -24,7 +24,7 @@ Usage
 Outputs
 -------
 - docs/go_trigger_log.jsonl   append-only event log (one JSON per line)
-- roadmap_state.json patched: shared_artifacts.apex_go_state
+- roadmap_state.json patched: shared_artifacts.eta_go_state
 - exit 0 on accepted phrase, 2 on rejected, 3 on preflight block
 
 This script does NOT send orders. It sets flags that the running trader reads
@@ -96,7 +96,7 @@ def _patch_roadmap_state(event: TriggerEvent) -> Path:
         return rs_p
     sa = raw.setdefault("shared_artifacts", {})
     state = sa.setdefault(
-        "apex_go_state",
+        "eta_go_state",
         {
             "tier_a_mnq_live": False,
             "tier_a_nq_live": False,

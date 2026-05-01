@@ -9,10 +9,10 @@ The gate reads three environment signals:
 * ``FIRM_HALTED`` -- master halt. When ``true`` (or ``1``), every
   call raises. Set this from the kill-switch latch / firm-gate
   daemon.
-* ``APEX_LIVE_TRADING_DISABLED`` -- operator opt-out. Same semantics
+* ``ETA_LIVE_TRADING_DISABLED`` -- operator opt-out. Same semantics
   as ``FIRM_HALTED`` but scoped to live-trading specifically (e.g.
   during a maintenance window).
-* ``APEX_LIVE_KILL_REASON`` -- optional human-readable reason
+* ``ETA_LIVE_KILL_REASON`` -- optional human-readable reason
   surfaced in the raised exception when either flag is set. If
   unset, the exception falls back to a generic message.
 
@@ -48,23 +48,23 @@ def _is_truthy_env(name: str) -> bool:
 def assert_live_allowed() -> None:
     """Pass through when no kill signal is set; raise otherwise.
 
-    Reads :data:`FIRM_HALTED` and :data:`APEX_LIVE_TRADING_DISABLED`
+    Reads :data:`FIRM_HALTED` and :data:`ETA_LIVE_TRADING_DISABLED`
     from the environment on every call so an operator can flip the
     halt bit at runtime without restarting the bot.
     """
     if _is_truthy_env("FIRM_HALTED"):
-        reason = os.environ.get("APEX_LIVE_KILL_REASON") or "firm halted"
+        reason = os.environ.get("ETA_LIVE_KILL_REASON") or "firm halted"
         raise LiveTradingDisabledError(
             f"live order blocked: FIRM_HALTED=true ({reason})",
             reason="firm_halted",
         )
-    if _is_truthy_env("APEX_LIVE_TRADING_DISABLED"):
+    if _is_truthy_env("ETA_LIVE_TRADING_DISABLED"):
         reason = (
-            os.environ.get("APEX_LIVE_KILL_REASON")
+            os.environ.get("ETA_LIVE_KILL_REASON")
             or "live trading explicitly disabled"
         )
         raise LiveTradingDisabledError(
-            f"live order blocked: APEX_LIVE_TRADING_DISABLED=true ({reason})",
+            f"live order blocked: ETA_LIVE_TRADING_DISABLED=true ({reason})",
             reason="live_disabled",
         )
 

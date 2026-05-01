@@ -1,12 +1,12 @@
 {
-  "spec_id": "APEX_PAPER_RESULTS_v1",
+  "spec_id": "ETA_PAPER_RESULTS_v1",
   "strategy_name": "Evolutionary Trading Algo — 4-Week Synthetic Paper Run Results (Split Verdict)",
   "description": "Post-harness review. The synthetic 4-week paper-run harness drove all 6 bots against a GBM-stylized bar stream sized per firm_spec_paper_promotion_v1.json capital allocations. Result: MNQ + NQ clear the paper_phase_requirements gate cleanly (expectancy +0.47R / +0.61R, DD 6.8% / 3.9%, 168 / 140 trades). Crypto_seed + the three casino perps (ETH/SOL/XRP) fail the expectancy_R >= 0.30 gate on synthetic data — crypto_seed 0.15R, eth 0.16R, sol 0.15R, xrp 0.18R. XRP also breaches the 15% DD limit by 0.55pp. Aggregate blended expectancy 0.277R on 973 trades, portfolio grew $27k → $46.97k (+73.96%), no kill-switch events fired.",
 
   "hypothesis": "Futures engine (MNQ) and its NQ scale-out are production-paper-ready on synthetic conditions. Crypto perps need real-venue paper data before a meaningful expectancy verdict — synthetic GBM lacks the funding-rate mean-reversion, sweep liquidity asymmetry, and micro-structure exploits the confluence stack is designed to capture. Recommend promoting MNQ+NQ to live-tiny paper now, holding crypto perps at paper gate until a) real Bybit paper bars replace GBM or b) confluence thresholds are re-fit on real data.",
 
   "harness_run": {
-    "spec_triggering_harness": "APEX_PAPER_PROMOTION_v1",
+    "spec_triggering_harness": "ETA_PAPER_PROMOTION_v1",
     "weeks": 4,
     "seed": 11,
     "bars_per_bot": "~8000 (5m crypto/futures, 15m seed grid)",

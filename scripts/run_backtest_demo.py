@@ -70,7 +70,7 @@ def main() -> int:
         max_trades_per_day=20,
     )
     pipe = FeaturePipeline.default()
-    engine = BacktestEngine(pipe, cfg, ctx_builder=_ctx_builder, strategy_id="apex_demo_syn")
+    engine = BacktestEngine(pipe, cfg, ctx_builder=_ctx_builder, strategy_id="eta_demo_syn")
     result = engine.run(bars)
     print(TearsheetBuilder.from_result(result))
     return 0

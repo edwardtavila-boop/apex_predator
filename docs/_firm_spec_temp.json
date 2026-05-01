@@ -1,5 +1,5 @@
 {
-  "spec_id": "APEX_PAPER_RESULTS_v2",
+  "spec_id": "ETA_PAPER_RESULTS_v2",
   "n": 687,
   "oos_degradation": 0.18,
   "expectancy_R": 0.271,

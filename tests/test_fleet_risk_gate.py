@@ -37,28 +37,28 @@ def test_default_limit_is_3_5_pct_of_equity() -> None:
 
 
 def test_explicit_override_wins_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_USD", "10000")
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_USD", "10000")
     g = _gate(equity=100_000.0, limit_usd_override=2_500.0)
     assert g.limit_usd() == pytest.approx(2_500.0)
 
 
 def test_env_usd_takes_precedence_over_pct(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_USD", "5000")
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_PCT", "0.10")  # 10k of equity
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_USD", "5000")
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_PCT", "0.10")  # 10k of equity
     g = _gate(equity=100_000.0)
     assert g.limit_usd() == pytest.approx(5_000.0)
 
 
 def test_env_pct_used_when_usd_absent(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("APEX_FLEET_DAILY_LOSS_LIMIT_USD", raising=False)
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_PCT", "0.05")
+    monkeypatch.delenv("ETA_FLEET_DAILY_LOSS_LIMIT_USD", raising=False)
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_PCT", "0.05")
     g = _gate(equity=100_000.0)
     assert g.limit_usd() == pytest.approx(5_000.0)
 
 
 def test_garbage_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_USD", "not_a_number")
-    monkeypatch.setenv("APEX_FLEET_DAILY_LOSS_LIMIT_PCT", "also_garbage")
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_USD", "not_a_number")
+    monkeypatch.setenv("ETA_FLEET_DAILY_LOSS_LIMIT_PCT", "also_garbage")
     g = _gate(equity=100_000.0)
     assert g.limit_usd() == pytest.approx(3_500.0)
 
@@ -122,7 +122,7 @@ def test_disabled_gate_never_trips_or_raises() -> None:
 
 
 def test_disabled_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APEX_FLEET_RISK_DISABLED", "1")
+    monkeypatch.setenv("ETA_FLEET_RISK_DISABLED", "1")
     g = FleetRiskGate(fleet_starting_equity_usd=100_000.0)
     assert g.disabled is True
     g.record_pnl("btc_hybrid", -100_000.0)

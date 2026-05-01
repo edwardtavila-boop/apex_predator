@@ -9,7 +9,7 @@ Futures (MNQ/NQ/ES/MES/RTY) -> IBKR primary, Tastytrade fallback.
 
 US-person policy (operator mandate 2026-04-26, M2)
 --------------------------------------------------
-When :data:`IS_US_PERSON` is True (default — set via the ``APEX_IS_US_PERSON``
+When :data:`IS_US_PERSON` is True (default — set via the ``ETA_IS_US_PERSON``
 env var), :func:`SmartRouter.place_with_failover` HARD-REFUSES to send a live
 order to a venue in :data:`NON_FCM_VENUES` (Bybit, OKX, Deribit, Hyperliquid,
 etc.). Those adapters remain importable for unit tests + offline backtests,
@@ -19,7 +19,7 @@ US-legal crypto exposure comes from CME futures (BTC, MBT, ETH, MET, SOL, XRP)
 routed through IBKR. See :mod:`eta_engine.venues.cme_mapping` for the
 crypto-perp -> CME-futures translation table.
 
-Override (`APEX_IS_US_PERSON=false`) is only allowed with documented
+Override (`ETA_IS_US_PERSON=false`) is only allowed with documented
 compliance counsel approval — it is not a developer convenience flag.
 
 Broker dormancy policy (operator mandate 2026-04-24)
@@ -66,7 +66,7 @@ _CME_CRYPTO_FUTURES = ("MBT", "MET", "BTC", "ETH", "SOL", "XRP")
 #: True when the operator is a US person and live routes to non-FCM venues
 #: must be refused. Default True. Override only via env var with documented
 #: compliance approval. NOT a developer-convenience flag.
-IS_US_PERSON: bool = os.environ.get("APEX_IS_US_PERSON", "true").lower() in (
+IS_US_PERSON: bool = os.environ.get("ETA_IS_US_PERSON", "true").lower() in (
     "1", "true", "yes", "y",
 )
 
@@ -75,7 +75,7 @@ IS_US_PERSON: bool = os.environ.get("APEX_IS_US_PERSON", "true").lower() in (
 #: LIVE orders to any of these when :data:`IS_US_PERSON` is True. The adapters
 #: stay importable for unit tests + offline backtests. To trade these from
 #: the USA, the operator must produce documented compliance-counsel guidance
-#: AND set ``APEX_IS_US_PERSON=false`` explicitly in the live process env.
+#: AND set ``ETA_IS_US_PERSON=false`` explicitly in the live process env.
 NON_FCM_VENUES: frozenset[str] = frozenset({
     "bybit", "okx", "deribit", "hyperliquid", "bitget", "binance",
 })
@@ -340,7 +340,7 @@ class SmartRouter:
                 f"IS_US_PERSON=true (operator mandate M2, 2026-04-26). "
                 f"Symbol={req.symbol!r}. Use the CME futures equivalent via "
                 f"IBKR -- see eta_engine.venues.cme_mapping.to_cme(). "
-                f"To override, set APEX_IS_US_PERSON=false in the live "
+                f"To override, set ETA_IS_US_PERSON=false in the live "
                 f"process env with documented compliance approval."
             )
             logger.error("M2_BLOCK %s", msg)

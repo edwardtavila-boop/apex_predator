@@ -133,7 +133,7 @@ class BrokerEquityNotAvailableError(RuntimeError):
     would then run with drift detection silently disabled. v0.1.65
     flips that: live mode refuses to boot when no real broker source
     resolves, unless the operator opts in via the environment variable
-    ``APEX_ALLOW_LIVE_NO_DRIFT=1``. The exit path is loud (this
+    ``ETA_ALLOW_LIVE_NO_DRIFT=1``. The exit path is loud (this
     exception) rather than quiet (a placeholder adapter).
     """
 

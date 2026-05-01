@@ -169,7 +169,7 @@ def test_ibkr_preflight_fails_closed_without_account_id(
         if name.startswith("IBKR_"):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("FIRM_RUNTIME_ROOT", str(tmp_path))
-    monkeypatch.setenv("APEX_RUNTIME_ROOT", str(tmp_path))
+    monkeypatch.setenv("ETA_RUNTIME_ROOT", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))  # blocks Path.home() fallback
     ok, msg, _extras = _ibkr_preflight()
     assert not ok

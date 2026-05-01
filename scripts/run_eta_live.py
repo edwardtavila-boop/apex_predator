@@ -10,11 +10,11 @@ Reads
   tastytrade.yaml; tradovate.yaml is DORMANT and not required),
   configs/bybit.yaml, configs/kill_switch.yaml, configs/alerts.yaml
 * .env (via os.environ; we do not ship python-dotenv — it's optional)
-* roadmap_state.json -> shared_artifacts.apex_go_state  (set by go_trigger.py)
+* roadmap_state.json -> shared_artifacts.eta_go_state  (set by go_trigger.py)
 
 Runs
 ----
-For each configured bot whose apex_go_state flag is True:
+For each configured bot whose eta_go_state flag is True:
     1. Build a BotSnapshot from bot.state.
     2. Aggregate PortfolioSnapshot / FundingSnapshot / CorrelationSnapshot /
        ApexEvalSnapshot from the running fleet.
@@ -81,7 +81,7 @@ from eta_engine.core.broker_equity_reconciler import BrokerEquityReconciler
 from eta_engine.core.consistency_guard import (
     ConsistencyGuard,
     ConsistencyStatus,
-    apex_trading_day_iso_cme,
+    eta_trading_day_iso_cme,
 )
 from eta_engine.core.kill_switch_latch import KillSwitchLatch
 from eta_engine.core.kill_switch_runtime import (
@@ -168,7 +168,7 @@ class MockRouter:
 @dataclass
 class RuntimeConfig:
     # tradovate config slot is preserved through the broker dormancy
-    # mandate -- the adapter still ships and the apex_eval block (read
+    # mandate -- the adapter still ships and the eta_eval block (read
     # by build_apex_eval_snapshot) lives here. When Tradovate is in
     # DORMANT_BROKERS, configs/tradovate.yaml may be absent;
     # _load_yaml returns {} and downstream cfg.tradovate.get(...)
@@ -254,7 +254,7 @@ def load_runtime_config(
     if state_path.exists():
         try:
             rs = json.loads(state_path.read_text(encoding="utf-8"))
-            cfg.go_state = (rs.get("shared_artifacts", {}) or {}).get("apex_go_state", {}) or {}
+            cfg.go_state = (rs.get("shared_artifacts", {}) or {}).get("eta_go_state", {}) or {}
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("failed to parse %s: %s", state_path, exc)
     # R2 closure: in live mode, require tick cadence to be fast enough that
@@ -262,7 +262,7 @@ def load_runtime_config(
     # We read the cushion out of the just-loaded kill_switch.yaml. Non-live
     # runs are exempt (paper / backtest can tolerate arbitrary cadence).
     cushion_usd = float(
-        ((cfg.kill_switch.get("tier_a", {}) or {}).get("apex_eval_preemptive", {}) or {}).get("cushion_usd", 500.0),
+        ((cfg.kill_switch.get("tier_a", {}) or {}).get("eta_eval_preemptive", {}) or {}).get("cushion_usd", 500.0),
     )
     validate_apex_tick_cadence(
         tick_interval_s=max(tick_interval_s, 1e-9),
@@ -281,7 +281,7 @@ class BotBinding:
 
     name: str
     tier: str  # "A" | "B"
-    flag: str  # key in apex_go_state
+    flag: str  # key in eta_go_state
     factory: Callable[[], Any]  # lazy import inside factory
     symbol: str  # for logging + funding lookup
 
@@ -399,7 +399,7 @@ def build_apex_eval_snapshot(cfg: RuntimeConfig, snapshots: list[BotSnapshot]) -
     Originally written when Tradovate was the assumed Apex venue and
     its API was the canonical live read. Under the broker dormancy
     mandate (Tradovate DORMANT) the trailing-DD value is read from
-    cfg.tradovate.apex_eval.trailing_drawdown_usd if that yaml is
+    cfg.tradovate.eta_eval.trailing_drawdown_usd if that yaml is
     present, else from the v0.1.59 R3 trailing_dd_tracker (which is
     the authoritative source today). When Tradovate un-dormants, the
     venues.tradovate adapter's live API will replace this proxy --
@@ -412,7 +412,7 @@ def build_apex_eval_snapshot(cfg: RuntimeConfig, snapshots: list[BotSnapshot]) -
     peak = sum(s.peak_equity_usd for s in ta)
     # cfg.tradovate is {} when tradovate.yaml is absent (DORMANT path);
     # the .get(..., 2500.0) fallback then yields the Apex-eval default.
-    trailing_dd = float((cfg.tradovate.get("apex_eval", {}) or {}).get("trailing_drawdown_usd", 2500.0))
+    trailing_dd = float((cfg.tradovate.get("eta_eval", {}) or {}).get("trailing_drawdown_usd", 2500.0))
     dd = max(0.0, peak - current)
     distance = max(0.0, trailing_dd - dd)
     return ApexEvalSnapshot(trailing_dd_limit_usd=trailing_dd, distance_to_limit_usd=distance)
@@ -504,7 +504,7 @@ async def apply_verdict(
             bot.state.is_paused = True
             await _flatten_bot(b, router, verdict.reason)
             report.executed.append(f"flattened {b.name} (tier_a preempt)")
-        dispatcher.send("apex_preempt", {"verdict": verdict.__dict__})
+        dispatcher.send("eta_preempt", {"verdict": verdict.__dict__})
         return report
 
     if act is KillAction.FLATTEN_ALL:
@@ -869,7 +869,7 @@ class ApexRuntime:
         snapshots = [build_bot_snapshot(b, bot) for b, bot in bots]
         portfolio = build_portfolio_snapshot(snapshots)
         # Compute tier-A aggregate equity ONCE -- it is consumed by
-        # both the trailing-DD tracker (to synthesize the apex_eval
+        # both the trailing-DD tracker (to synthesize the eta_eval
         # snapshot) and the broker-equity reconciler (as the "logical"
         # side of the drift comparison). Keeping a single source of
         # truth avoids a rounding divergence between the two paths.
@@ -909,17 +909,17 @@ class ApexRuntime:
             )
         # Tick-granular trailing-DD path: if a tracker is attached,
         # feed the current tier-A aggregate equity into it and use its
-        # snapshot as the authoritative apex_eval for this tick. The
+        # snapshot as the authoritative eta_eval for this tick. The
         # tracker persists peak + frozen flag to disk and applies the
         # Apex freeze rule (peak >= start + cap => floor locks). The
         # fall-through branch preserves the legacy bar-level proxy so
         # a runtime without a tracker still emits a plausible snapshot.
         if self.trailing_dd_tracker is not None:
-            apex_eval = self.trailing_dd_tracker.update(
+            eta_eval = self.trailing_dd_tracker.update(
                 current_equity_usd=ta_equity,
             )
         else:
-            apex_eval = build_apex_eval_snapshot(self.cfg, snapshots)
+            eta_eval = build_apex_eval_snapshot(self.cfg, snapshots)
 
         # R1 closure: observation-only broker MTM drift check. The
         # reconciler reads the latest broker-side net-liq from the
@@ -995,7 +995,7 @@ class ApexRuntime:
             portfolio=portfolio,
             correlations=correlations,
             funding=funding,
-            apex_eval=apex_eval,
+            eta_eval=eta_eval,
         )
 
         # 4. act on each verdict
@@ -1047,7 +1047,7 @@ class ApexRuntime:
         # Apex's own accounting. The earlier v0.1.58 fix handled the
         # 17:00-CT rollover only; R4 closure in v0.1.59 adds the calendar.
         if self.consistency_guard is not None:
-            today = apex_trading_day_iso_cme()
+            today = eta_trading_day_iso_cme()
             today_ta_pnl = float(sum(s.session_realized_pnl_usd for s in snapshots if s.tier == "A"))
             try:
                 verdict = self.consistency_guard.record_intraday(
@@ -1190,7 +1190,7 @@ class ApexRuntime:
             return
         try:
             rs = json.loads(self.cfg.state_path.read_text(encoding="utf-8"))
-            self.cfg.go_state = (rs.get("shared_artifacts", {}) or {}).get("apex_go_state", {}) or {}
+            self.cfg.go_state = (rs.get("shared_artifacts", {}) or {}).get("eta_go_state", {}) or {}
         except Exception:  # pragma: no cover — defensive
             pass
 
@@ -1318,7 +1318,7 @@ def _build_broker_equity_adapter(
 
     H6 closure (v0.1.65): live mode with no real broker source now
     refuses to boot unless the operator explicitly opts in via
-    ``APEX_ALLOW_LIVE_NO_DRIFT=1`` (caught in ``_amain`` and threaded
+    ``ETA_ALLOW_LIVE_NO_DRIFT=1`` (caught in ``_amain`` and threaded
     through as ``allow_live_no_drift``). The previous v0.1.64
     behaviour silently fell through to ``NullBrokerEquityAdapter`` --
     a busy operator scanning startup output could miss the WARN line
@@ -1382,12 +1382,12 @@ def _build_broker_equity_adapter(
             "to boot -- drift detection would be silently disabled. "
             "Fix: populate IBKR_CP_BASE_URL / IBKR_ACCOUNT_ID and "
             "TASTY_API_BASE_URL / TASTY_ACCOUNT_NUMBER / TASTY_SESSION_TOKEN, OR opt in "
-            "explicitly via APEX_ALLOW_LIVE_NO_DRIFT=1 to acknowledge "
+            "explicitly via ETA_ALLOW_LIVE_NO_DRIFT=1 to acknowledge "
             "that the eval will run with drift detection OFF."
         )
         raise BrokerEquityNotAvailableError(msg)
     logger.warning(
-        "broker_equity: APEX_ALLOW_LIVE_NO_DRIFT=1 -- live eval will "
+        "broker_equity: ETA_ALLOW_LIVE_NO_DRIFT=1 -- live eval will "
         "run with drift detection OFF (no_broker_data each tick)",
     )
     return SafeBrokerEquityAdapter(
@@ -1446,8 +1446,8 @@ async def _amain(argv: list[str] | None = None) -> int:
     # venue in live, NullBrokerEquityAdapter in dry-run / paper).
     # See ``_build_broker_equity_adapter`` for the resolution chain.
     # H6 closure (v0.1.65): live + no creds = refuse-to-boot unless
-    # the operator explicitly opts in via APEX_ALLOW_LIVE_NO_DRIFT=1.
-    allow_live_no_drift = os.environ.get("APEX_ALLOW_LIVE_NO_DRIFT") == "1"
+    # the operator explicitly opts in via ETA_ALLOW_LIVE_NO_DRIFT=1.
+    allow_live_no_drift = os.environ.get("ETA_ALLOW_LIVE_NO_DRIFT") == "1"
     try:
         broker_adapter = _build_broker_equity_adapter(
             live=cfg.live,
@@ -1511,7 +1511,7 @@ async def _amain(argv: list[str] | None = None) -> int:
         state_dir / "consistency_guard.json",
     )
     # Apex 50K eval defaults: $50,000 starting balance, $2,500 trailing
-    # DD cap. These match configs/kill_switch.yaml::tier_a.apex_eval_preemptive
+    # DD cap. These match configs/kill_switch.yaml::tier_a.eta_eval_preemptive
     # ($500 cushion before the $2,500 floor). For dry-run / paper the
     # values are nominal -- the tracker still observes the cushion
     # regardless of whether the equity numbers feed real PnL.

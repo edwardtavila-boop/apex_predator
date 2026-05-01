@@ -217,7 +217,7 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report = {
-        "kind": "apex_sweep_simulation",
+        "kind": "eta_sweep_simulation",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "inputs": {
             "start_equity": args.start,

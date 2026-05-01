@@ -168,9 +168,9 @@ def main() -> None:
             "monthly_review_<YYYY>_<MM>.txt",
         ],
         "new_prometheus_metrics": [
-            "apex_gate_blocks_total",
-            "apex_gate_overrides_total",
-            "apex_gate_override_rate",
+            "eta_gate_blocks_total",
+            "eta_gate_overrides_total",
+            "eta_gate_override_rate",
         ],
         "command_center_integration": {
             "skill": "firm-tracker",

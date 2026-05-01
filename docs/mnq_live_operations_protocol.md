@@ -420,7 +420,7 @@ Details: `docs/v2_2_dow_filter_validation.md`.
 - `docs/overrides_p9_real_mnq_only_v2_1.json` — v2.1 intermediate (floor=1.0, no DOW)
 - `docs/overrides_p9_real_mnq_only_v2_2_dow_thu.json` — **v2.2 paper config** (floor=1.0 + Thu blacklist, not live)
 - `docs/live_launch_runbook.md` — step-by-step phase 1-6 runbook
-- `docs/kill_log.json` → entries `APEX_PORTFOLIO_COMBINED_v1` + `MNQ_V2_FAMILY_CACHE_CONTAGION`
+- `docs/kill_log.json` → entries `ETA_PORTFOLIO_COMBINED_v1` + `MNQ_V2_FAMILY_CACHE_CONTAGION`
 - `eta_engine/scripts/live_vs_paper_drift.py` — daily drift check
 - `eta_engine/scripts/slippage_stress_mnq.py` — cost-robustness check
 - `eta_engine/scripts/overlay_ablation_mnq.py` — overlay walk-forward validator

@@ -9,7 +9,7 @@ Why this exists
 ---------------
 The user asked to "find" the real data and make it "fully accessible by
 the framework." In practice the best futures bars were hiding in legacy
-``apex_predator`` worktrees under ``.codex`` while the canonical ETA
+``evolutionary_trading_algo`` worktrees under ``.codex`` while the canonical ETA
 roots only held a thin subset. Some longer-horizon NQ data also lived in
 the current workspace root but in the older "main" schema instead of the
 history schema the strategy runners prefer.
@@ -182,13 +182,13 @@ def _probe_rows(path: Path, source_kind: str) -> int:
 def _iter_legacy_databento_dirs() -> list[Path]:
     home = Path.home()
     patterns = (
-        str(home / ".codex" / "worktrees" / "*" / "apex_predator" / "data" / "bars" / "databento"),
+        str(home / ".codex" / "worktrees" / "*" / "evolutionary_trading_algo" / "data" / "bars" / "databento"),
         str(
             home
             / ".config"
             / "superpowers"
             / "worktrees"
-            / "apex_predator"
+            / "evolutionary_trading_algo"
             / "*"
             / "data"
             / "bars"

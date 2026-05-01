@@ -1,6 +1,6 @@
 # EVOLUTIONARY TRADING ALGO  //  configs/ibkr.yaml
 # IBKR Client Portal venue configuration — Tier-A bots (MNQ, NQ)
-# Decisions source: docs/decisions_v1.json (APEX_DECISIONS_v1)
+# Decisions source: docs/decisions_v1.json (ETA_DECISIONS_v1)
 # Status: PRIMARY active futures broker per broker_dormancy_mandate
 # (2026-04-24).
 #
@@ -13,7 +13,7 @@ venue: ibkr
 environment: paper   # paper | live  — flipped after Phase 4 soak
 
 # Apex Trader Funding eval constraints (decision #1)
-apex_eval:
+eta_eval:
   enabled: true
   trailing_drawdown_usd: 2500
   daily_loss_limit_usd: 1500

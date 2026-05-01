@@ -41,7 +41,7 @@ What v0.1.30 adds
 
   * ``scripts/btc_live.py``
       Pure-function live-gate sequencer. Four gates:
-        (1) ``APEX_BTC_LIVE=1`` env flag;
+        (1) ``ETA_BTC_LIVE=1`` env flag;
         (2) paper verdict = PASS in the verification artifact;
         (3) artifact age <= max_age_h (default 48h);
         (4) adapter_probe() returns True.
@@ -321,11 +321,11 @@ def main() -> None:
             },
             "isolation_guarantees": {
                 "env_injected": [
-                    "APEX_TENANT_ID",
-                    "APEX_SKU",
-                    "APEX_TIER",
-                    "APEX_EXCHANGE",
-                    "APEX_KEY_ID",
+                    "ETA_TENANT_ID",
+                    "ETA_SKU",
+                    "ETA_TIER",
+                    "ETA_EXCHANGE",
+                    "ETA_KEY_ID",
                 ],
                 "env_never_contains_raw_secret": True,
                 "strategy_mounts_read_only": [
@@ -371,7 +371,7 @@ def main() -> None:
             },
         },
         "btc_live_gate_four_gates": [
-            "APEX_BTC_LIVE == '1' (explicit env flag)",
+            "ETA_BTC_LIVE == '1' (explicit env flag)",
             "verify_verdict == 'PASS' in paper-run artifact",
             "verify_age_h <= max_age_h (default 48h)",
             "adapter_probe() returns True",

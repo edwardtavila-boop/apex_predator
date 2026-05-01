@@ -110,7 +110,7 @@ _ENV_COPY_COMMANDS = [
     "$EDITOR .env",
 ]
 _ENV_READINESS_REQUIRED_GROUPS: dict[str, list[str]] = {
-    "runtime_mode": ["APEX_MODE=PAPER"],
+    "runtime_mode": ["ETA_MODE=PAPER"],
     "jarvis_budget": [
         "ANTHROPIC_API_KEY",
         "JARVIS_HOURLY_USD_BUDGET",
@@ -132,7 +132,7 @@ _ENV_READINESS_RECOMMENDED_GROUPS: dict[str, list[str]] = {
     ],
 }
 _ENV_REQUIRED_KEY_OPTIONS: dict[str, tuple[tuple[str, ...], ...]] = {
-    "runtime_mode": (("APEX_MODE",),),
+    "runtime_mode": (("ETA_MODE",),),
     "jarvis_budget": (
         ("ANTHROPIC_API_KEY",),
         ("JARVIS_HOURLY_USD_BUDGET",),
@@ -154,7 +154,7 @@ _ENV_RECOMMENDED_KEY_OPTIONS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
 }
 _ENV_TEMPLATE_REQUIRED_TOKENS = [
-    "APEX_MODE",
+    "ETA_MODE",
     "ANTHROPIC_API_KEY",
     "JARVIS_HOURLY_USD_BUDGET",
     "JARVIS_DAILY_USD_BUDGET",
@@ -789,7 +789,7 @@ _DRILL_DAY_CHECKLIST: list[tuple[str, str]] = [
     ),
     ("T+40", "Submit one PAPER round-trip order via IBKR; verify fill recorded."),
     ("T+45", "Compare round-trip to last known-good record on old host (sanity)."),
-    ("T+50", "Decision: proceed to live? If yes, flip APEX_MODE=LIVE in .env."),
+    ("T+50", "Decision: proceed to live? If yes, flip ETA_MODE=LIVE in .env."),
     ("T+55", "Watch first 15 minutes of live; abort on any RED severity."),
     ("T+60", "DR drill complete. Record actual durations in docs/research_log/."),
 ]

@@ -262,7 +262,7 @@ def test_check_tick_cadence_passes_when_cushion_is_sufficient(
     # and safety=2.0, required cushion = $600. Use $700 to clear comfortably.
     y = tmp_path / "kill_switch.yaml"
     y.write_text(
-        "tier_a:\n  apex_eval_preemptive:\n    cushion_usd: 700.0\n",
+        "tier_a:\n  eta_eval_preemptive:\n    cushion_usd: 700.0\n",
     )
     monkeypatch.setattr(preflight, "KILL_SWITCH_YAML_PATH", y)
     name, ok, msg = preflight.check_tick_cadence()
@@ -277,7 +277,7 @@ def test_check_tick_cadence_fails_when_cushion_too_tight(
 ) -> None:
     y = tmp_path / "kill_switch.yaml"
     y.write_text(
-        "tier_a:\n  apex_eval_preemptive:\n    cushion_usd: 400.0\n",
+        "tier_a:\n  eta_eval_preemptive:\n    cushion_usd: 400.0\n",
     )
     monkeypatch.setattr(preflight, "KILL_SWITCH_YAML_PATH", y)
     name, ok, msg = preflight.check_tick_cadence()
@@ -307,7 +307,7 @@ def test_check_tick_cadence_fails_on_negative_cushion(
 ) -> None:
     y = tmp_path / "kill_switch.yaml"
     y.write_text(
-        "tier_a:\n  apex_eval_preemptive:\n    cushion_usd: -1.0\n",
+        "tier_a:\n  eta_eval_preemptive:\n    cushion_usd: -1.0\n",
     )
     monkeypatch.setattr(preflight, "KILL_SWITCH_YAML_PATH", y)
     name, ok, msg = preflight.check_tick_cadence()

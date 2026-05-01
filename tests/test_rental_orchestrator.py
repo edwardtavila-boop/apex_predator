@@ -117,10 +117,10 @@ def test_spec_env_injects_tenant_and_sku() -> None:
     tenant = _portfolio_tenant()
     specs = orch.plan(tenant)
     spec = next(s for s in specs if s.sku is BotSku.BTC_SEED)
-    assert spec.env["APEX_TENANT_ID"] == tenant.tenant_id
-    assert spec.env["APEX_SKU"] == BotSku.BTC_SEED.value
-    assert spec.env["APEX_TIER"] == RentalTier.PORTFOLIO.value
-    assert spec.env["APEX_EXCHANGE"] == "bybit"
+    assert spec.env["ETA_TENANT_ID"] == tenant.tenant_id
+    assert spec.env["ETA_SKU"] == BotSku.BTC_SEED.value
+    assert spec.env["ETA_TIER"] == RentalTier.PORTFOLIO.value
+    assert spec.env["ETA_EXCHANGE"] == "bybit"
 
 
 def test_spec_never_injects_raw_secret() -> None:
@@ -131,7 +131,7 @@ def test_spec_never_injects_raw_secret() -> None:
         for k, v in spec.env.items():
             # Secret byte "x" could appear in innocent places, but never as
             # a standalone secret env var.
-            assert k != "APEX_SECRET"
+            assert k != "ETA_SECRET"
             assert "SECRET" not in k
             assert not v.startswith("WITHDRAW")
 

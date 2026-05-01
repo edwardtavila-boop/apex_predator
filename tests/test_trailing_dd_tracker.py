@@ -46,7 +46,7 @@ APEX_50K_FREEZE = 52_500.0  # starting + cap
 
 @pytest.fixture
 def tracker_path(tmp_path: Path) -> Path:
-    return tmp_path / "apex_trailing_dd.json"
+    return tmp_path / "eta_trailing_dd.json"
 
 
 @pytest.fixture
@@ -534,7 +534,7 @@ class TestAuditLogInitAndLoad:
         tmp_path: Path,
         tracker_path: Path,
     ) -> None:
-        custom = tmp_path / "custom_dir" / "apex_audit.jsonl"
+        custom = tmp_path / "custom_dir" / "eta_audit.jsonl"
         TrailingDDTracker.load_or_init(
             path=tracker_path,
             starting_balance_usd=APEX_50K_START,

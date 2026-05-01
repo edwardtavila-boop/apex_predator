@@ -284,7 +284,7 @@ def test_write_emits_valid_json(
     path = azt._write(report)
     assert path == status
     raw = json.loads(status.read_text())
-    assert raw["kind"] == "apex_tradovate_auth_status"
+    assert raw["kind"] == "eta_tradovate_auth_status"
     assert raw["result"] == "STUBBED"
 
 

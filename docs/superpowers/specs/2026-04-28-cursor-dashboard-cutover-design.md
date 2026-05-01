@@ -35,7 +35,7 @@ _DEFAULT_STATE = _REPO_ROOT / "state"
 _DEFAULT_LOG   = _REPO_ROOT / "logs"
 ```
 
-`APEX_STATE_DIR` / `APEX_LOG_DIR` env-var overrides are preserved so tests stay clean.
+`ETA_STATE_DIR` / `ETA_LOG_DIR` env-var overrides are preserved so tests stay clean.
 
 ### 1b. Supervisor merge in `/api/bot-fleet`
 
@@ -79,7 +79,7 @@ The response gains one top-level key:
 File: `tests/test_dashboard_api.py`
 
 - `test_bot_fleet_includes_supervisor_bots` — write a mock heartbeat under `tmp_path`,
-  set `APEX_STATE_DIR=tmp_path`, call the endpoint, assert supervisor bots appear in
+  set `ETA_STATE_DIR=tmp_path`, call the endpoint, assert supervisor bots appear in
   `response["bots"]` with correct `todays_pnl` and `status`.
 - `test_bot_fleet_default_state_dir_is_repo_relative` — import `_DEFAULT_STATE` from
   `dashboard_api`, assert it is a child of the `eta_engine/` directory and does NOT
@@ -148,6 +148,6 @@ All new tests are unit tests (no live server, no Playwright):
 
 ## Open questions (none — resolved in brainstorm)
 
-- State dir default: repo-relative wins over LOCALAPPDATA. `APEX_STATE_DIR` override kept.
+- State dir default: repo-relative wins over LOCALAPPDATA. `ETA_STATE_DIR` override kept.
 - Port: stays 8420. Cloudflared tunnel is already wired to 8420. No DNS change needed.
 - Decommission timing: gitignore immediately; delete manually after 48 h.

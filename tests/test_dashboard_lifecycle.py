@@ -17,7 +17,7 @@ def auth_paths(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ETA_DASHBOARD_USERS_PATH", str(users))
     monkeypatch.setenv("ETA_DASHBOARD_SESSIONS_PATH", str(sessions))
     monkeypatch.setenv("ETA_DASHBOARD_STEP_UP_PIN", "1234")
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     from eta_engine.deploy.scripts.dashboard_auth import create_user
     create_user(users, "edward", "pw")
     return tmp_path
@@ -48,7 +48,7 @@ def stepped_up_client(authed_client):
 
 
 def test_pause_requires_session(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("APEX_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETA_STATE_DIR", str(tmp_path))
     from eta_engine.deploy.scripts.dashboard_api import app
     c = TestClient(app)
     r = c.post("/api/bot/mnq/pause")

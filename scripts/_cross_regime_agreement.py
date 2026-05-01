@@ -106,22 +106,22 @@ def _mnq_negative_regimes(path: Path) -> list[tuple[str, float]]:
     return out
 
 
-def _verdict(apex_neg: list, mnq_neg: list) -> tuple[str, int, str]:
+def _verdict(eta_neg: list, mnq_neg: list) -> tuple[str, int, str]:
     """Return (verdict_label, exit_code, message)."""
-    if apex_neg and mnq_neg:
+    if eta_neg and mnq_neg:
         return (
             "AGREE",
             0,
-            f"both negative: apex={[r for r, _ in apex_neg]} mnq={[r for r, _ in mnq_neg]}",
+            f"both negative: apex={[r for r, _ in eta_neg]} mnq={[r for r, _ in mnq_neg]}",
         )
-    if apex_neg and not mnq_neg:
+    if eta_neg and not mnq_neg:
         return (
             "YELLOW",
             1,
-            f"apex shows negative regimes {[r for r, _ in apex_neg]} "
+            f"apex shows negative regimes {[r for r, _ in eta_neg]} "
             f"but mnq_bot's by_regime.csv shows all positive expectancies",
         )
-    if mnq_neg and not apex_neg:
+    if mnq_neg and not eta_neg:
         return (
             "YELLOW",
             1,
@@ -141,16 +141,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mnq-by-regime", type=Path, default=DEFAULT_MNQ)
     args = p.parse_args(argv)
 
-    if not args.apex_cross_regime.exists():
-        print(f"agreement: data-missing -- {args.apex_cross_regime} not found")
+    if not args.eta_cross_regime.exists():
+        print(f"agreement: data-missing -- {args.eta_cross_regime} not found")
         return 9
     if not args.mnq_by_regime.exists():
         print(f"agreement: data-missing -- {args.mnq_by_regime} not found")
         return 9
 
-    apex_neg = _apex_negative_regimes(args.apex_cross_regime)
+    eta_neg = _apex_negative_regimes(args.eta_cross_regime)
     mnq_neg = _mnq_negative_regimes(args.mnq_by_regime)
-    verdict, code, msg = _verdict(apex_neg, mnq_neg)
+    verdict, code, msg = _verdict(eta_neg, mnq_neg)
 
     print(f"agreement: {verdict} -- {msg}")
     return code

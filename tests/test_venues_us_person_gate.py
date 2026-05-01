@@ -32,16 +32,16 @@ def test_default_is_us_person_true() -> None:
     assert IS_US_PERSON is True or IS_US_PERSON is False  # exists
     # Loud explicit assertion: when env not set, default True.
     import os
-    saved = os.environ.pop("APEX_IS_US_PERSON", None)
+    saved = os.environ.pop("ETA_IS_US_PERSON", None)
     try:
         # Re-evaluate the same expression the module uses:
-        evaluated = os.environ.get("APEX_IS_US_PERSON", "true").lower() in (
+        evaluated = os.environ.get("ETA_IS_US_PERSON", "true").lower() in (
             "1", "true", "yes", "y",
         )
         assert evaluated is True
     finally:
         if saved is not None:
-            os.environ["APEX_IS_US_PERSON"] = saved
+            os.environ["ETA_IS_US_PERSON"] = saved
 
 
 def test_non_fcm_venues_includes_offshore_perps() -> None:

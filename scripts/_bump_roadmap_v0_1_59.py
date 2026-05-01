@@ -31,7 +31,7 @@ R4 fix -- CME-calendar-aware Apex session-day
     plus fixed-date closures (New Year, MLK, Presidents', Memorial,
     Juneteenth, Independence, Labor, Thanksgiving, Christmas).
     ``is_trading_day(date)`` / ``next_trading_day(date)`` API.
-  * ``eta_engine/core/consistency_guard.py`` -- ``apex_trading_day_iso()``
+  * ``eta_engine/core/consistency_guard.py`` -- ``eta_trading_day_iso()``
     now rolls Saturday / Sunday / holiday timestamps forward to the
     next regular trading day instead of creating phantom buckets that
     Apex ignores.
@@ -63,7 +63,7 @@ R2 fix -- Tick-cadence validator + 1s default
     ``RuntimeConfig.tick_interval_s`` default **5.0 -> 1.0**; CLI
     ``--tick-interval`` default updated; ``load_runtime_config()``
     calls the validator at end with cushion read from
-    ``kill_switch.tier_a.apex_eval_preemptive.cushion_usd`` so a
+    ``kill_switch.tier_a.eta_eval_preemptive.cushion_usd`` so a
     mis-sized config fails loudly at startup.
 
 R1 scaffold -- Broker-MTM equity reconciler (enforcement deferred)
@@ -163,7 +163,7 @@ def main() -> None:
         ],
         "modules_modified": [
             "eta_engine/core/consistency_guard.py "
-            "(R4: apex_trading_day_iso now routes through "
+            "(R4: eta_trading_day_iso now routes through "
             "events_calendar to roll Saturday/Sunday/holiday "
             "timestamps forward to the next regular trading day)",
             "eta_engine/core/trailing_dd_tracker.py "
@@ -179,7 +179,7 @@ def main() -> None:
             "eta_engine/scripts/run_eta_live.py "
             "(R2: tick_interval_s default 5.0 -> 1.0; CLI default "
             "updated; load_runtime_config calls validator with "
-            "cushion from kill_switch.tier_a.apex_eval_preemptive)",
+            "cushion from kill_switch.tier_a.eta_eval_preemptive)",
         ],
         "docs_updated": [
             "eta_engine/docs/red_team_d2_d3_review.md "
@@ -291,7 +291,7 @@ def main() -> None:
                 "severity": "HIGH",
                 "status": "CLOSED",
                 "finding": (
-                    "apex_trading_day_iso keyed Saturday-morning "
+                    "eta_trading_day_iso keyed Saturday-morning "
                     "timestamps to 'Saturday' which Apex ignores, "
                     "creating phantom zero-PnL buckets in the 30%-"
                     "rule denominator."
@@ -299,7 +299,7 @@ def main() -> None:
                 "closure": (
                     "core/events_calendar.py -- CME Globex session "
                     "calendar with dateutil.easter-driven Good Friday "
-                    "+ fixed-date closures. apex_trading_day_iso now "
+                    "+ fixed-date closures. eta_trading_day_iso now "
                     "routes through is_trading_day / "
                     "next_trading_day to roll weekend/holiday "
                     "timestamps forward to the next regular trading "

@@ -23,7 +23,7 @@ What ships
 ----------
 preflight.check_tick_cadence  (R2 surface)
   * Reads ``configs/kill_switch.yaml``, extracts
-    ``tier_a.apex_eval_preemptive.cushion_usd`` (default 500.0 when
+    ``tier_a.eta_eval_preemptive.cushion_usd`` (default 500.0 when
     unset), and calls ``core.kill_switch_runtime.validate_apex_tick_cadence``
     with ``tick_interval_s=1.0`` (canonical live default) and
     ``live=True``. Failures propagate the exception text -- operator
@@ -68,7 +68,7 @@ Design notes
     the operator is explicitly running a paper session they don't
     need to run preflight at all.
   * Default cushion fallback is 500.0 (the pre-v0.1.59 config value).
-    This means an empty/missing ``tier_a.apex_eval_preemptive`` block
+    This means an empty/missing ``tier_a.eta_eval_preemptive`` block
     fails the check with the same error message the live runtime
     would produce, instead of silently falling back to a value that
     happens to pass.
@@ -169,7 +169,7 @@ def main() -> None:
                     "preflight row prints red with validator's "
                     "exact remediation text: 'drop tick_interval_s, "
                     "or raise cushion_usd in configs/kill_switch.yaml "
-                    "tier_a.apex_eval_preemptive'."
+                    "tier_a.eta_eval_preemptive'."
                 ),
             },
             "R3_audit_log_fsync": {
@@ -203,7 +203,7 @@ def main() -> None:
                 "doing a pure paper session don't run preflight."
             ),
             "default_cushion_fallback_500": (
-                "If tier_a.apex_eval_preemptive.cushion_usd is "
+                "If tier_a.eta_eval_preemptive.cushion_usd is "
                 "missing/empty, fall back to 500.0 (the pre-v0.1.59 "
                 "config value). This means an empty block fails the "
                 "check with the same error the live runtime would "

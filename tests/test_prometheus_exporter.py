@@ -19,8 +19,8 @@ from eta_engine.obs.prometheus_exporter import (
 @pytest.fixture
 def registry() -> MetricsRegistry:
     reg = MetricsRegistry()
-    reg.inc("apex_test_counter", value=3.0)
-    reg.gauge("apex_test_gauge", 42.5)
+    reg.inc("eta_test_counter", value=3.0)
+    reg.gauge("eta_test_gauge", 42.5)
     return reg
 
 
@@ -32,8 +32,8 @@ async def test_metrics_endpoint_emits_prometheus_exposition(registry: MetricsReg
         assert resp.status == 200
         assert resp.content_type == "text/plain"
         body = await resp.text()
-        assert "apex_test_counter" in body
-        assert "apex_test_gauge" in body
+        assert "eta_test_counter" in body
+        assert "eta_test_gauge" in body
         assert "42.5" in body
 
 

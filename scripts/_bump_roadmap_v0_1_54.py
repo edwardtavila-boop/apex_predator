@@ -26,7 +26,7 @@ alpha surface along the axes the scorecard called out as "underused":
 What ships
 ----------
   * ``features/mcp_taps.py`` -- McpTap Protocol + Blockscout tap +
-    LunarCrush tap. Feature-flag gated (``APEX_USE_MCP_TAPS`` env
+    LunarCrush tap. Feature-flag gated (``ETA_USE_MCP_TAPS`` env
     var). Existing REST clients unchanged; MCP is optional-parallel.
   * ``venues/deribit.py`` -- read-first Deribit client. Order paths
     explicitly REJECT with NotImplementedError until
@@ -133,7 +133,7 @@ def main() -> None:
             "mcp_taps_additive": (
                 "MCP taps are optional-parallel, not replacements. "
                 "Existing BlockscoutClient and LunarCrushClient stay "
-                "canonical. Operator opts in via APEX_USE_MCP_TAPS "
+                "canonical. Operator opts in via ETA_USE_MCP_TAPS "
                 "env var."
             ),
             "deribit_read_first": (

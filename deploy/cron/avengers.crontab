@@ -5,58 +5,58 @@
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-APEX_ROOT=__INSTALL_DIR__
+ETA_ROOT=__INSTALL_DIR__
 
 # --------- ROBIN (Haiku tier, grunt work) ------------------------------------
 # every minute -- dashboard payload assembly
-* * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DASHBOARD_ASSEMBLE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+* * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DASHBOARD_ASSEMBLE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # every hour at :00 -- log compact
-0 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task LOG_COMPACT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task LOG_COMPACT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # pre-market + pre-close Mon-Fri -- prompt cache warmup
-25,55 13 * * 1-5 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMPT_WARMUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+25,55 13 * * 1-5 cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMPT_WARMUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # daily 06:00 -- audit summarize
-0 6 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task AUDIT_SUMMARIZE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 6 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task AUDIT_SUMMARIZE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 
 # --------- ALFRED (Sonnet tier, operational maintenance) ---------------------
 # every 5 min -- shadow trade tick (resolve open shadow positions)
-*/5 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task SHADOW_TICK >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+*/5 * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task SHADOW_TICK >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # every 15 min -- drift summary (anomaly rollup)
-*/15 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DRIFT_SUMMARY >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+*/15 * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DRIFT_SUMMARY >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # daily 23:00 ET -- Kaizen retrospective + +1 ticket
-0 23 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task KAIZEN_RETRO >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 23 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task KAIZEN_RETRO >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Sundays 02:00 -- weekly distillation classifier retrain
-0 2 * * 0 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISTILL_TRAIN >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 2 * * 0 cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISTILL_TRAIN >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 
 # --------- BATMAN (Opus tier, strategic heavy-brain) -------------------------
 # daily 22:00 -- digital twin verdict rollup
-0 22 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task TWIN_VERDICT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 22 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task TWIN_VERDICT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Mondays 03:00 -- strategy synthesis mining pass
-0 3 * * 1 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task STRATEGY_MINE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 3 * * 1 cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task STRATEGY_MINE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # 1st of month 04:00 -- causal inference ATE review
-0 4 1 * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task CAUSAL_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 4 1 * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task CAUSAL_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Quarterly (1st of Jan/Apr/Jul/Oct @ 05:00) -- doctrine review
-0 5 1 1,4,7,10 * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DOCTRINE_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 5 1 1,4,7,10 * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DOCTRINE_REVIEW >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Daily 04:30 -- META upgrade (git pull + tests + service restart)
-30 4 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task META_UPGRADE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+30 4 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task META_UPGRADE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Monthly 1st @ 03:00 -- chaos drills (breaker / deadman / daemon / shared-breaker / drift)
-0 3 1 * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task CHAOS_DRILL >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 3 1 * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task CHAOS_DRILL >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Every 5 min -- health watchdog (PID-file liveness probe)
-*/5 * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task HEALTH_WATCHDOG >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+*/5 * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task HEALTH_WATCHDOG >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Daily 03:00 -- end-to-end self test
-0 3 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task SELF_TEST >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 3 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task SELF_TEST >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Daily 05:00 -- state + config backup
-0 5 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task BACKUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 5 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task BACKUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 
 # --------- ROBIN (Haiku tier) -- ops primitives ------------------------------
 # Daily 01:00 -- log archive + prune
-0 1 * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task LOG_ROTATE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 1 * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task LOG_ROTATE >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Sundays 02:00 -- disk cleanup (tempdirs, sandbox debris)
-0 2 * * 0 cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISK_CLEANUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+0 2 * * 0 cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task DISK_CLEANUP >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Every minute -- Prometheus metrics flush
-* * * * * cd $APEX_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMETHEUS_EXPORT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+* * * * * cd $ETA_ROOT && ./.venv/bin/python -m deploy.scripts.run_task PROMETHEUS_EXPORT >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 
 # --------- SAGE support --------------------------------------------------------
 # Every 5 min -- warm on-chain data cache (BTC/ETH) so crypto bots never wait
-*/5 * * * * cd $APEX_ROOT && ./.venv/bin/python -m eta_engine.scripts.sage_onchain_warm >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+*/5 * * * * cd $ETA_ROOT && ./.venv/bin/python -m eta_engine.scripts.sage_onchain_warm >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
 # Daily 23:15 -- sage school health check + alert dispatch
-15 23 * * * cd $APEX_ROOT && ./.venv/bin/python -m eta_engine.scripts.sage_health_check --json-out state/sage/last_health_report.json >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers
+15 23 * * * cd $ETA_ROOT && ./.venv/bin/python -m eta_engine.scripts.sage_health_check --json-out state/sage/last_health_report.json >> $HOME/.local/log/eta_engine/cron.log 2>&1 # eta-engine:avengers

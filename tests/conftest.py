@@ -70,7 +70,7 @@ def bypass_m2_us_person(monkeypatch: pytest.MonkeyPatch) -> None:
     router/venue failover paths against offshore perps.
 
     The M2 mandate (2026-04-26) blocks LIVE orders to non-FCM venues
-    when ``APEX_IS_US_PERSON=true`` (the default). Tests that exist
+    when ``ETA_IS_US_PERSON=true`` (the default). Tests that exist
     to verify routing semantics — not the US-person gate itself —
     flip the module-level constant to ``False`` so the gate is
     transparent for the duration of the test.

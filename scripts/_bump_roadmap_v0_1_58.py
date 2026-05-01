@@ -47,7 +47,7 @@ What ships
 ----------
 B1 fix -- Apex session-day helper
   * ``eta_engine/core/consistency_guard.py`` -- new
-    ``apex_trading_day_iso(now_utc=None)`` function. Uses
+    ``eta_trading_day_iso(now_utc=None)`` function. Uses
     ``zoneinfo.ZoneInfo("America/Chicago")`` to compute the 17:00
     local rollover (DST-aware) so the bucket key matches the Apex
     trading-day convention. Fixed 23:00-UTC fallback when
@@ -55,7 +55,7 @@ B1 fix -- Apex session-day helper
     splits RTH). ``utc_today_iso()`` kept with a deprecation note
     for backward compatibility.
   * ``scripts/run_eta_live.py`` -- replaced the ``utc_today_iso``
-    callsite with ``apex_trading_day_iso()``. Import updated.
+    callsite with ``eta_trading_day_iso()``. Import updated.
 
 B2 fix -- live-mode gate on tracker presence
   * ``scripts/run_eta_live.py`` -- ``ApexRuntime.__init__`` now
@@ -98,7 +98,7 @@ Coverage delta
 
 Lint side-quest
 ---------------
-Two new SIM108 ruff errors introduced by the ``apex_trading_day_iso``
+Two new SIM108 ruff errors introduced by the ``eta_trading_day_iso``
 implementation were auto-simplified to ternaries (the idiomatic form
 ruff was asking for). One I001 in the new test block was auto-fixed.
 Pre-existing ANN401 debt in ``run_eta_live.py`` remains as
@@ -168,7 +168,7 @@ def main() -> None:
         "operator_directive_quote": ("continue all."),
         "modules_modified": [
             "eta_engine/core/consistency_guard.py "
-            "(new apex_trading_day_iso helper + deprecation "
+            "(new eta_trading_day_iso helper + deprecation "
             "note on utc_today_iso)",
             "eta_engine/scripts/run_eta_live.py "
             "(B1 switch to session-day key; B2 live-mode tracker "
@@ -195,7 +195,7 @@ def main() -> None:
                     "and hiding real concentration risk."
                 ),
                 "fix": (
-                    "Added apex_trading_day_iso() using "
+                    "Added eta_trading_day_iso() using "
                     "zoneinfo.ZoneInfo('America/Chicago') with 17:00 "
                     "local rollover (DST-aware). Fallback to fixed "
                     "23:00-UTC rollover if zoneinfo unavailable. "
@@ -292,7 +292,7 @@ def main() -> None:
             "ANN401/ANN002/ANN003 in run_eta_live.py pre-date "
             "v0.1.57; F841/E741/ANN204/TC003 in test files pre-date "
             "v0.1.57. Nothing new added by this bump. Two SIM108 "
-            "warnings introduced by the new apex_trading_day_iso "
+            "warnings introduced by the new eta_trading_day_iso "
             "implementation were auto-simplified to ternaries "
             "during the same review loop."
         ),

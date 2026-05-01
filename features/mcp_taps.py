@@ -52,7 +52,7 @@ __all__ = [
 
 def use_mcp_taps_enabled() -> bool:
     """True when the runtime should prefer MCP taps over REST clients."""
-    return os.getenv("APEX_USE_MCP_TAPS", "0").strip().lower() in {"1", "true", "yes"}
+    return os.getenv("ETA_USE_MCP_TAPS", "0").strip().lower() in {"1", "true", "yes"}
 
 
 @dataclass(frozen=True)

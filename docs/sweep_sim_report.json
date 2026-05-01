@@ -1,5 +1,5 @@
 {
-  "kind": "apex_sweep_simulation",
+  "kind": "eta_sweep_simulation",
   "generated_at_utc": "2026-04-16T22:56:37.127069+00:00",
   "inputs": {
     "start_equity": 27000.0,

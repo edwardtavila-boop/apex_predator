@@ -27,7 +27,7 @@ This module closes that gap. It:
     a JSON file (atomic write), so a process crash does not silently
     reset the HWM on restart,
   * emits a fresh ``ApexEvalSnapshot`` on every update, ready to be
-    handed to ``KillSwitch.evaluate(apex_eval=...)``.
+    handed to ``KillSwitch.evaluate(eta_eval=...)``.
 
 The tracker is *pure policy*. It does not read from any venue or
 submit any order. It is a deterministic function of the equity stream
@@ -50,13 +50,13 @@ Durability contract
 Usage
 -----
     tracker = TrailingDDTracker.load_or_init(
-        path=Path("state/apex_trailing_dd.json"),
+        path=Path("state/eta_trailing_dd.json"),
         starting_balance_usd=50_000.0,
         trailing_dd_cap_usd=2_500.0,
     )
     snapshot = tracker.update(current_equity_usd=51_234.50)
     # -> ApexEvalSnapshot(trailing_dd_limit_usd=2500.0, distance_to_limit_usd=...)
-    verdicts = kill_switch.evaluate(apex_eval=snapshot, ...)
+    verdicts = kill_switch.evaluate(eta_eval=snapshot, ...)
 """
 
 from __future__ import annotations

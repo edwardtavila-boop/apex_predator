@@ -19,7 +19,7 @@ tier_a:
       max_loss_usd: 1200              # 10% of $12k bucket (post-activation)
       consecutive_losses: 3
       action: "flatten_bot_and_pause_until_next_session"
-  apex_eval_preemptive:
+  eta_eval_preemptive:
     trigger: "trailing_balance_within_usd_of_apex_dd_limit"
     cushion_usd: 500
     action: "flatten_all_tier_a_and_alert_critical"

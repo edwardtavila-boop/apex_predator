@@ -14,7 +14,7 @@ high-severity rule, and confirms:
 * ``OWNS_ACCOUNT`` fires when the operator does not own the account.
 * ``NO_EXTERNAL_CAPITAL`` fires when outside capital is detected.
 * ``NO_POOL_MANAGEMENT`` fires on a non-operator deposit whitelist.
-* ``APEX_NEWS_BLACKOUT`` fires during a news blackout window.
+* ``ETA_NEWS_BLACKOUT`` fires during a news blackout window.
 * A clean context passes all checks.
 
 A silent regression in any of these would let an NFA-registration-
@@ -74,7 +74,7 @@ def drill_cftc_nfa_compliance(sandbox: Path) -> dict[str, Any]:  # noqa: ARG001
         ),
         "news_blackout": (
             _ctx(eta_account_id="apex-eval-01", news_blackout_active=True),
-            ComplianceRuleId.APEX_NEWS_BLACKOUT,
+            ComplianceRuleId.ETA_NEWS_BLACKOUT,
         ),
     }
     observed: dict[str, Any] = {}

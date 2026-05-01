@@ -64,10 +64,10 @@ def test_prometheus_rendering_includes_types() -> None:
     reg.gauge(CONFLUENCE_SCORE, 8.0, labels={"bot": "mnq"})
     reg.histogram(LATENCY_ORDER_MS, 15.0)
     out = reg.to_prometheus()
-    assert "# TYPE apex_trades_opened_total counter" in out
-    assert "# TYPE apex_confluence_score gauge" in out
-    assert "# TYPE apex_order_latency_ms summary" in out
-    assert 'apex_trades_opened_total{bot="mnq"} 1.0' in out
+    assert "# TYPE eta_trades_opened_total counter" in out
+    assert "# TYPE eta_confluence_score gauge" in out
+    assert "# TYPE eta_order_latency_ms summary" in out
+    assert 'eta_trades_opened_total{bot="mnq"} 1.0' in out
 
 
 def test_metric_type_enum_values() -> None:

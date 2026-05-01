@@ -14,9 +14,9 @@ Closes out P8_COMPLY (72% -> 100%). Two in-progress tasks land:
                              checklist) with 19 tests. BLOCKING rules:
                              OWNS_ACCOUNT, NO_EXTERNAL_CAPITAL,
                              NO_POOL_MANAGEMENT, NO_SELF_MATCH,
-                             APEX_NO_CROSS_HEDGE, APEX_NEWS_BLACKOUT,
+                             ETA_NO_CROSS_HEDGE, ETA_NEWS_BLACKOUT,
                              NFA_2_29_PROMOTIONAL. ADVISORY rules:
-                             NO_LAYER_CANCEL, APEX_ONE_ACCOUNT.
+                             NO_LAYER_CANCEL, ETA_ONE_ACCOUNT.
 
 Adds 44 tests (821 -> 865).
 """

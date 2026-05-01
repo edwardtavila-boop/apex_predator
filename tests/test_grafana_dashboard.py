@@ -30,16 +30,16 @@ def test_all_core_metric_names_referenced() -> None:
     db = build_dashboard()
     serialized = json.dumps(db)
     for canonical in (
-        "apex_equity_usd",
-        "apex_drawdown_pct",
-        "apex_confluence_score",
-        "apex_trades_opened_total",
-        "apex_trades_closed_total",
-        "apex_pnl_realized_usd",
-        "apex_order_latency_ms",
-        "apex_kill_switch_triggered_total",
-        "apex_firm_verdict",
-        "apex_venue_failover_total",
+        "eta_equity_usd",
+        "eta_drawdown_pct",
+        "eta_confluence_score",
+        "eta_trades_opened_total",
+        "eta_trades_closed_total",
+        "eta_pnl_realized_usd",
+        "eta_order_latency_ms",
+        "eta_kill_switch_triggered_total",
+        "eta_firm_verdict",
+        "eta_venue_failover_total",
     ):
         assert canonical in serialized, f"{canonical} missing from dashboard JSON"
 

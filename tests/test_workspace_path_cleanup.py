@@ -318,8 +318,8 @@ def test_tradingview_runtime_defaults_use_workspace_paths() -> None:
         assert "~/.local/state/eta_engine" not in text
         assert "${HOME}/.local/state/eta_engine" not in text
         assert "%h/.local/state/eta_engine" not in text
-        assert "~/apex_data/tradingview" not in text
-        assert "%h/apex_data/tradingview" not in text
+        assert "~/eta_data/tradingview" not in text
+        assert "%h/eta_data/tradingview" not in text
 
     assert "workspace_roots.ETA_TRADINGVIEW_AUTH_STATE_PATH" in _read(
         "eta_engine/data/tradingview/auth.py"

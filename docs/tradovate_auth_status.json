@@ -1,5 +1,5 @@
 {
-  "kind": "apex_tradovate_auth_status",
+  "kind": "eta_tradovate_auth_status",
   "generated_at_utc": "2026-04-17T11:59:17.190303+00:00",
   "endpoint": "https://demo.tradovateapi.com/v1",
   "demo": true,

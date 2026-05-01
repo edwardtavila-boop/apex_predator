@@ -49,7 +49,7 @@ def _sum_active_starting_equity() -> float:
     The per-bot registry doesn't carry starting equity (that lives on
     each ``BotConfig``), so this fallback assumes 10_000 USD per
     active bot. Operators relying on this fallback should override
-    via ``APEX_FLEET_DAILY_LOSS_LIMIT_USD`` or pass an explicit
+    via ``ETA_FLEET_DAILY_LOSS_LIMIT_USD`` or pass an explicit
     ``equity_override``.
     """
     active = [a for a in all_assignments() if is_active(a)]

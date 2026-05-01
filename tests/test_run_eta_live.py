@@ -104,7 +104,7 @@ def _fake_bindings() -> list[mod.BotBinding]:
 
 def _cfg_factory(tmp_path: Path, **overrides) -> mod.RuntimeConfig:
     cfg = mod.RuntimeConfig(
-        tradovate={"apex_eval": {"trailing_drawdown_usd": 2500.0}},
+        tradovate={"eta_eval": {"trailing_drawdown_usd": 2500.0}},
         bybit={},
         alerts={
             "rate_limit": {"info_per_minute": 1000, "warn_per_minute": 1000, "critical_per_minute": 0},
@@ -115,7 +115,7 @@ def _cfg_factory(tmp_path: Path, **overrides) -> mod.RuntimeConfig:
                     "runtime_stop": {"level": "info", "channels": []},
                     "kill_switch": {"level": "critical", "channels": []},
                     "circuit_trip": {"level": "warn", "channels": []},
-                    "apex_preempt": {"level": "critical", "channels": []},
+                    "eta_preempt": {"level": "critical", "channels": []},
                     "bot_error": {"level": "warn", "channels": []},
                     "bot_entry": {"level": "info", "channels": []},
                 }
@@ -123,7 +123,7 @@ def _cfg_factory(tmp_path: Path, **overrides) -> mod.RuntimeConfig:
         },
         kill_switch={
             "global": {"max_drawdown_kill_pct_of_portfolio": 100.0, "daily_loss_cap_pct_of_portfolio": 100.0},
-            "tier_a": {"per_bucket": {}, "apex_eval_preemptive": {"cushion_usd": 0}},
+            "tier_a": {"per_bucket": {}, "eta_eval_preemptive": {"cushion_usd": 0}},
             "tier_b": {
                 "per_bucket": {},
                 "correlation_kill": {"enabled": False},
@@ -338,7 +338,7 @@ async def test_apply_verdict_flatten_tier_a_preempt():
     assert mnq[1].state.is_paused is True
     assert nq[1].state.is_paused is True
     assert eth[1].state.is_paused is False
-    assert any(e[0] == "apex_preempt" for e in disp.sent)
+    assert any(e[0] == "eta_preempt" for e in disp.sent)
 
 
 @pytest.mark.asyncio
@@ -410,7 +410,7 @@ async def test_runtime_honors_operator_kill_between_ticks(tmp_path):
         json.dumps(
             {
                 "shared_artifacts": {
-                    "apex_go_state": {
+                    "eta_go_state": {
                         "tier_a_mnq_live": True,
                         "kill_switch_active": True,
                     }
@@ -437,7 +437,7 @@ async def test_runtime_flatten_all_stops_loop(tmp_path):
             "max_drawdown_kill_pct_of_portfolio": 0.01,  # any loss trips
             "daily_loss_cap_pct_of_portfolio": 100.0,
         },
-        "tier_a": {"per_bucket": {}, "apex_eval_preemptive": {"cushion_usd": 0}},
+        "tier_a": {"per_bucket": {}, "eta_eval_preemptive": {"cushion_usd": 0}},
         "tier_b": {
             "per_bucket": {},
             "correlation_kill": {"enabled": False},
@@ -508,7 +508,7 @@ def test_load_runtime_config_reads_all_yamls(tmp_path: Path):
     (cfg_dir / "alerts.yaml").write_text("channels: {}\n", encoding="utf-8")
     (cfg_dir / "kill_switch.yaml").write_text("global: {}\n", encoding="utf-8")
     state = tmp_path / "roadmap_state.json"
-    state.write_text(json.dumps({"shared_artifacts": {"apex_go_state": {"tier_a_mnq_live": True}}}))
+    state.write_text(json.dumps({"shared_artifacts": {"eta_go_state": {"tier_a_mnq_live": True}}}))
     cfg = mod.load_runtime_config(
         config_dir=cfg_dir,
         state_path=state,
@@ -533,13 +533,13 @@ class TestLoadRuntimeConfigTickCadence:
     def _write_yamls(self, cfg_dir: Path, cushion_usd: float = 500.0) -> None:
         cfg_dir.mkdir(exist_ok=True)
         (cfg_dir / "tradovate.yaml").write_text(
-            "apex_eval:\n  trailing_drawdown_usd: 2500.0\n",
+            "eta_eval:\n  trailing_drawdown_usd: 2500.0\n",
             encoding="utf-8",
         )
         (cfg_dir / "bybit.yaml").write_text("{}\n", encoding="utf-8")
         (cfg_dir / "alerts.yaml").write_text("channels: {}\n", encoding="utf-8")
         (cfg_dir / "kill_switch.yaml").write_text(
-            f"global: {{}}\ntier_a:\n  apex_eval_preemptive:\n    cushion_usd: {cushion_usd}\n",
+            f"global: {{}}\ntier_a:\n  eta_eval_preemptive:\n    cushion_usd: {cushion_usd}\n",
             encoding="utf-8",
         )
 
@@ -768,7 +768,7 @@ class TestLatchIntegration:
             },
             "tier_a": {
                 "per_bucket": {},
-                "apex_eval_preemptive": {"cushion_usd": 0},
+                "eta_eval_preemptive": {"cushion_usd": 0},
             },
             "tier_b": {
                 "per_bucket": {},
@@ -863,7 +863,7 @@ class TestLatchIntegration:
 
 
 # --------------------------------------------------------------------------- #
-# D2 -- TrailingDDTracker integration (tick-granular apex_eval path)
+# D2 -- TrailingDDTracker integration (tick-granular eta_eval path)
 #
 # When a tracker is attached, build_apex_eval_snapshot() is bypassed and the
 # tracker becomes the source of truth for ApexEvalSnapshot. These tests cover:
@@ -944,7 +944,7 @@ class TestTrailingDDTrackerIntegration:
             },
             "tier_a": {
                 "per_bucket": {},
-                "apex_eval_preemptive": {"cushion_usd": 400},
+                "eta_eval_preemptive": {"cushion_usd": 400},
             },
             "tier_b": {
                 "per_bucket": {},
@@ -1221,7 +1221,7 @@ class TestConsistencyViolationPauses:
         )
         # Pre-seed history that is already in violation so the tick
         # immediately flips the verdict. Use 2023 dates to avoid any
-        # collision with apex_trading_day_iso() for "today".
+        # collision with eta_trading_day_iso() for "today".
         guard.record_eod("2023-01-01", 1_000.0)
         guard.record_eod("2023-01-02", 100.0)
         v0 = guard.evaluate()
@@ -1285,7 +1285,7 @@ class TestConsistencyViolationPauses:
         """WARNING is advisory only. No bot paused, no synthetic verdict.
 
         Pre-seed dates are in 2023 so they cannot collide with today's
-        apex_trading_day_iso() value (which is what the runtime writes
+        eta_trading_day_iso() value (which is what the runtime writes
         on each tick -- if a pre-seed date matched today's key, the
         runtime would overwrite it and shift the ratio).
         """
@@ -1744,7 +1744,7 @@ class TestBuildBrokerEquityAdapterLiveModeGate:
         # Confirm the loud WARN fired (operator-visible signal that
         # drift detection is OFF).
         warns = [r.message for r in caplog.records if r.levelno >= _logging.WARNING]
-        assert any("APEX_ALLOW_LIVE_NO_DRIFT" in m for m in warns)
+        assert any("ETA_ALLOW_LIVE_NO_DRIFT" in m for m in warns)
 
     def test_live_with_ibkr_creds_returns_ibkr_adapter(
         self,

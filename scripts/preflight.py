@@ -128,7 +128,7 @@ def check_firm_verdict() -> CheckResult:
 def check_tick_cadence() -> CheckResult:
     """R2 closure preflight: confirm tick/cushion invariant holds in live mode.
 
-    Reads ``tier_a.apex_eval_preemptive.cushion_usd`` from
+    Reads ``tier_a.eta_eval_preemptive.cushion_usd`` from
     ``configs/kill_switch.yaml`` and runs the canonical validator. Fails
     loudly if the cushion is too tight for the assumed tick cadence --
     same code path that ``load_runtime_config`` uses at live-boot, just
@@ -150,7 +150,7 @@ def check_tick_cadence() -> CheckResult:
     except Exception as e:  # noqa: BLE001
         return ("tick_cadence", False, f"kill_switch.yaml unreadable: {type(e).__name__}")
     ks = ks or {}
-    preempt = (ks.get("tier_a", {}) or {}).get("apex_eval_preemptive", {}) or {}
+    preempt = (ks.get("tier_a", {}) or {}).get("eta_eval_preemptive", {}) or {}
     cushion_usd = float(preempt.get("cushion_usd", 500.0))
     try:
         validate_apex_tick_cadence(

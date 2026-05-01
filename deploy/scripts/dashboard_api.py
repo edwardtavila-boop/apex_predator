@@ -295,8 +295,8 @@ _DEFAULT_RUNTIME_STATE = _WORKSPACE_ROOT / "firm_command_center" / "var" / "data
 _DEFAULT_BOT_STRATEGY_READINESS_SNAPSHOT = (
     _WORKSPACE_ROOT / "var" / "eta_engine" / "state" / "bot_strategy_readiness_latest.json"
 )
-STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE))))
-LOG_DIR   = Path(os.environ.get("ETA_LOG_DIR", os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG))))
+STATE_DIR = Path(os.environ.get("ETA_STATE_DIR", os.environ.get("ETA_STATE_DIR", str(_DEFAULT_STATE))))
+LOG_DIR   = Path(os.environ.get("ETA_LOG_DIR", os.environ.get("ETA_LOG_DIR", str(_DEFAULT_LOG))))
 _START_TS = time.time()
 
 
@@ -454,12 +454,12 @@ def _dashboard_diagnostics_payload() -> dict:
 
 def _state_dir() -> Path:
     """Lazy state-dir resolver so tests can monkeypatch state paths."""
-    return Path(os.environ.get("ETA_STATE_DIR", os.environ.get("APEX_STATE_DIR", str(_DEFAULT_STATE))))
+    return Path(os.environ.get("ETA_STATE_DIR", os.environ.get("ETA_STATE_DIR", str(_DEFAULT_STATE))))
 
 
 def _log_dir() -> Path:
     """Lazy log-dir resolver so tests can monkeypatch log paths."""
-    return Path(os.environ.get("ETA_LOG_DIR", os.environ.get("APEX_LOG_DIR", str(_DEFAULT_LOG))))
+    return Path(os.environ.get("ETA_LOG_DIR", os.environ.get("ETA_LOG_DIR", str(_DEFAULT_LOG))))
 
 
 def _runtime_state_path() -> Path:
@@ -3100,7 +3100,7 @@ def _resolve_fleet_dir() -> Path | None:
 
     Resolution order (first match wins):
 
-    1. ``APEX_BTC_FLEET_DIR`` env override -- operator-scoped hard pin.
+    1. ``ETA_BTC_FLEET_DIR`` env override -- operator-scoped hard pin.
        Tests use this to point at a tmp_path; production can pin a
        custom writable location off the default.
     2. ``STATE_DIR/broker_fleet`` -- the natural operator-scoped path.
@@ -3111,7 +3111,7 @@ def _resolve_fleet_dir() -> Path | None:
        package). Last because it would otherwise shadow the operator
        override when the dev tree happens to contain real fleet data.
     """
-    env_pin = os.environ.get("APEX_BTC_FLEET_DIR")
+    env_pin = os.environ.get("ETA_BTC_FLEET_DIR")
     if env_pin:
         pinned = Path(env_pin)
         return pinned if pinned.exists() else None
@@ -3259,9 +3259,9 @@ def _resolve_mnq_supervisor_dir() -> Path | None:
     """Find the MNQ live-supervisor output directory.
 
     Mirrors :func:`_resolve_fleet_dir` but for the MNQ side. Honors
-    ``APEX_MNQ_SUPERVISOR_DIR`` as an operator pin + test isolation.
+    ``ETA_MNQ_SUPERVISOR_DIR`` as an operator pin + test isolation.
     """
-    env_pin = os.environ.get("APEX_MNQ_SUPERVISOR_DIR")
+    env_pin = os.environ.get("ETA_MNQ_SUPERVISOR_DIR")
     if env_pin:
         pinned = Path(env_pin)
         return pinned if pinned.exists() else None

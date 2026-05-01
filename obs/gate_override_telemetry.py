@@ -9,7 +9,7 @@ Why this exists
 it is to count every override. If you overrode the kill-switch 14 times
 last week to make that $400 trade happen, that's the signal. This module:
 
-  * Bumps a Prometheus counter (``apex_gate_overrides_total``).
+  * Bumps a Prometheus counter (``eta_gate_overrides_total``).
   * Appends a JournalEvent to DecisionJournal with outcome=OVERRIDDEN.
   * Also tracks BLOCKED events so an override rate can be computed.
 

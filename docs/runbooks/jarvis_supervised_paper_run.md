@@ -115,7 +115,7 @@ python -m pytest -q
 
 | Layer | Guarantee |
 |---|---|
-| Live mode refused | `forward_to_broker` requires THREE concurrent flags: `APEX_DRY_RUN!=true` AND `APEX_LIVE_READY=1` AND broker not in `DORMANT_BROKERS`. Default config = paper-only. |
+| Live mode refused | `forward_to_broker` requires THREE concurrent flags: `ETA_DRY_RUN!=true` AND `ETA_LIVE_READY=1` AND broker not in `DORMANT_BROKERS`. Default config = paper-only. |
 | Broker dormancy | `mnq.venues.dormancy.DORMANT_BROKERS = frozenset({"tradovate"})`. Tradovate refused at the doctor + webhook layer. |
 | Production-mode warning | `OrderBook` logs a structured `ORDERBOOK_UNSAFE_PRODUCTION` warning when constructed without `gate_chain` AND `MNQ_ENV` is `production`/`live`/`prod`. |
 | Adaptive-learner journal | `record_trade_outcome` stub appends to `data/learner_journal.jsonl` (was silently failing). |
@@ -179,9 +179,9 @@ drift detector.
 | `kill_switch_latched` | Catastrophic verdict (FLATTEN_ALL, FLATTEN_TIER_A_PREEMPTIVE) latched to disk | Investigate before clearing. `python -m eta_engine.scripts.clear_kill_switch --confirm --operator <name>` only after triage. |
 | `boot_refused` | Runtime refused to boot due to latched kill switch | Same as above; clear after triage. |
 | `consistency_status` | 30%-rule WARNING or VIOLATION transition | Apex eval concentration risk. Pause new entries until cleared. |
-| `apex_preempt` | Trailing DD cushion crossed preempt threshold ($500 by default) | Tier-A bots auto-flattened. Investigate drift source. |
-| `apex_sla_breach` | A monitored probe has been outside SLO for the cooldown window | Check probe-specific runbook. |
-| `apex_sla_recovered` | A previously-breaching probe is back inside SLO | Confirmatory. |
+| `eta_preempt` | Trailing DD cushion crossed preempt threshold ($500 by default) | Tier-A bots auto-flattened. Investigate drift source. |
+| `eta_sla_breach` | A monitored probe has been outside SLO for the cooldown window | Check probe-specific runbook. |
+| `eta_sla_recovered` | A previously-breaching probe is back inside SLO | Confirmatory. |
 | `tier_a_invariant_violation` | `sum(bot.state.equity for tier_a) != broker_net_liq` | Likely config bug (bot allocations not slicing the shared account). |
 
 ---

@@ -39,6 +39,9 @@ class PolicyVerdict:
     reason: str
     size_cap_mult: float | None
     error: str | None = None
+    sage_conviction: float | None = None
+    sage_alignment: float | None = None
+    sage_modulation: str | None = None  # "loosened" | "tightened" | "deferred" | None
 
 
 @dataclass
@@ -51,6 +54,7 @@ class DispatchResult:
     consensus_verdict: str            # most pessimistic across arms
     consensus_size_cap_mult: float    # min cap across arms
     disagreement_count: int           # non-champion arms whose verdict != champion's
+    sage_disagreement: bool = False   # True when v22 sage disagrees with champion
 
 
 def _verdict_pessimism_rank(verdict: str) -> int:

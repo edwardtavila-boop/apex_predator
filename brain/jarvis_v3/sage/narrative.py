@@ -97,7 +97,7 @@ def _llm_narrative(report: SageReport, *, symbol: str = "") -> str:
     Lazily imports anthropic so we don't require it as a hard dependency.
     """
     from anthropic import Anthropic
-    client = Anthropic()
+    client = Anthropic(timeout=10.0)
     school_lines = "\n".join(
         f"  - {name}: bias={v.bias.value}, conviction={v.conviction:.2f}, rationale={v.rationale}"
         for name, v in report.per_school.items()

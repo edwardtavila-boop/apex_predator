@@ -13,6 +13,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.consultation import calibrated_conviction_for
 
 
 class DowTheorySchool(SchoolBase):
@@ -52,19 +53,19 @@ class DowTheorySchool(SchoolBase):
         if higher_high and higher_low:
             bias = Bias.LONG
             rationale = "higher highs + higher lows -> primary uptrend"
-            conviction = 0.75
+            conviction = calibrated_conviction_for(self.NAME, 0.75)
         elif lower_high and lower_low:
             bias = Bias.SHORT
             rationale = "lower highs + lower lows -> primary downtrend"
-            conviction = 0.75
+            conviction = calibrated_conviction_for(self.NAME, 0.75)
         elif higher_high or higher_low:
             bias = Bias.LONG
             rationale = "partial uptrend confirmation (only one of HH/HL)"
-            conviction = 0.40
+            conviction = calibrated_conviction_for(self.NAME, 0.40)
         elif lower_high or lower_low:
             bias = Bias.SHORT
             rationale = "partial downtrend confirmation (only one of LH/LL)"
-            conviction = 0.40
+            conviction = calibrated_conviction_for(self.NAME, 0.40)
         else:
             bias = Bias.NEUTRAL
             rationale = "no clear trend (mixed highs/lows)"

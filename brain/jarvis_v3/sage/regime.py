@@ -62,6 +62,23 @@ def _directional_strength(bars: list[dict[str, Any]], period: int = 20) -> float
     return net / path if path > 0 else 0.0
 
 
+def _atr_thresholds(instrument_class: str | None) -> dict[str, float]:
+    """Return instrument-adaptive ATR% thresholds for regime detection.
+
+    Crypto is routinely 5-10x more volatile than equity index futures.
+    Without instrument-class awareness, crypto is perpetually classified
+    as VOLATILE (ATR% frequently > 30bps) and never reaches QUIET/TRENDING.
+    """
+    defaults = {"quiet": 0.001, "normal": 0.003}  # 10bps / 30bps (futures/equity)
+    thresholds: dict[str, dict[str, float]] = {
+        "crypto":  {"quiet": 0.005, "normal": 0.015},  # 50bps / 150bps
+        "futures": {"quiet": 0.0005, "normal": 0.002},  # 5bps / 20bps
+        "fx":      {"quiet": 0.0002, "normal": 0.001},  # 2bps / 10bps
+    }
+    cls = instrument_class or ""
+    return thresholds.get(cls, defaults)
+
+
 def detect_regime(ctx: MarketContext) -> tuple[Regime, dict[str, float]]:
     """Classify the market regime + return signals for audit.
 
@@ -80,9 +97,12 @@ def detect_regime(ctx: MarketContext) -> tuple[Regime, dict[str, float]]:
     atr_pct = _atr_pct(ctx.bars, period=14)
     dir_str = _directional_strength(ctx.bars, period=20)
 
-    # Heuristic median ATR thresholds (instrument-agnostic; tune later)
-    atr_quiet = 0.001    # 10 bps
-    atr_normal = 0.003   # 30 bps
+    # Instrument-adaptive ATR thresholds. Crypto is 5-10x more volatile
+    # than equity futures, so uniform 10bps/30bps thresholds classify
+    # everything as VOLATILE. Per-class lookup with fallback to defaults.
+    thresh = _atr_thresholds(ctx.instrument_class)
+    atr_quiet = thresh["quiet"]
+    atr_normal = thresh["normal"]
 
     if atr_pct < atr_quiet:
         regime = Regime.QUIET

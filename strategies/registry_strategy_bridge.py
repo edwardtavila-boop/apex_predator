@@ -55,67 +55,109 @@ def _build_callable_for_assignment(
     kind = assignment.strategy_kind
     extras = dict(assignment.extras)
 
-    if kind == "orb":
-        from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy
+    # Use the canonical strategy factory from run_research_grid — it
+    # already handles every strategy_kind with the correct config
+    # construction. Avoid duplicating per-kind logic here.
+    try:
+        from eta_engine.scripts.run_research_grid import _build_strategy_factory
 
-        cfg = extras.get("orb_config", {})
-        orb_cfg = ORBConfig(
-            range_minutes=cfg.get("range_minutes", 15),
-            rr_target=cfg.get("rr_target", 3.0),
-            atr_stop_mult=cfg.get("atr_stop_mult", 1.5),
-            ema_bias_period=cfg.get("ema_bias_period", 50),
-        )
-        return _wrap_strategy(ORBStrategy(orb_cfg))
+        factory = _build_strategy_factory(kind, extras)
+        strategy = factory()
+        return _wrap_strategy(strategy)
+    except (ValueError, ImportError):
+        pass
 
-    if kind == "drb":
-        from eta_engine.strategies.drb_strategy import DRBConfig, DRBStrategy
-
-        cfg = extras.get("drb_config", {})
-        drb_cfg = DRBConfig(
-            atr_stop_mult=cfg.get("atr_stop_mult", 2.0),
-            rr_target=cfg.get("rr_target", 2.0),
-            ema_bias_period=cfg.get("ema_bias_period", 50),
-        )
-        return _wrap_strategy(DRBStrategy(drb_cfg))
-
-    if kind == "orb_sage_gated":
-        from eta_engine.strategies.orb_strategy import ORBConfig
-        from eta_engine.strategies.sage_consensus_strategy import SageConsensusConfig
-        from eta_engine.strategies.sage_gated_orb_strategy import (
-            SageGatedORBConfig,
-            SageGatedORBStrategy,
+    # Fallback: some kinds need providers (sage daily verdicts,
+    # ensemble voter wiring, macro ETF data). Build them per-kind
+    # with best-effort defaults. These will degrade gracefully when
+    # providers are absent.
+    if kind == "sage_daily_gated":
+        from eta_engine.strategies.sage_daily_gated_strategy import (
+            SageDailyGatedConfig,
+            SageDailyGatedStrategy,
         )
 
-        orb_cfg_raw = extras.get("orb_config", {})
-        orb_cfg = ORBConfig(
-            range_minutes=orb_cfg_raw.get("range_minutes", 15),
-            rr_target=orb_cfg_raw.get("rr_target", 3.0),
-            atr_stop_mult=orb_cfg_raw.get("atr_stop_mult", 1.5),
+        min_conv = float(extras.get("min_daily_conviction", 0.30))
+        strict = bool(extras.get("strict_mode", False))
+        cfg = SageDailyGatedConfig(min_daily_conviction=min_conv, strict_mode=strict)
+        return _wrap_strategy(SageDailyGatedStrategy(cfg))
+
+    if kind == "crypto_regime_trend":
+        from eta_engine.strategies.crypto_regime_trend_strategy import (
+            CryptoRegimeTrendConfig,
+            CryptoRegimeTrendStrategy,
         )
-        sage_raw = {
-            "min_conviction": float(extras.get("sage_min_conviction", 0.65)),
-            "sage_lookback_bars": int(extras.get("sage_lookback_bars", 200)),
-        }
-        sage_cfg = SageConsensusConfig(**sage_raw)  # type: ignore[arg-type]
-        gated_cfg = SageGatedORBConfig(orb=orb_cfg, sage=sage_cfg)
-        return _wrap_strategy(SageGatedORBStrategy(gated_cfg))
 
-    if kind == "crypto_orb":
-        from eta_engine.strategies.crypto_orb_strategy import CryptoORBConfig
-        from eta_engine.strategies.orb_strategy import ORBConfig, ORBStrategy
+        cfg_raw = extras.get("crypto_regime_trend_config", {})
+        cfg = CryptoRegimeTrendConfig(
+            regime_ema=cfg_raw.get("regime_ema", 100),
+            pullback_ema=cfg_raw.get("pullback_ema", 21),
+            pullback_tolerance_pct=cfg_raw.get("pullback_tolerance_pct", 3.0),
+            atr_stop_mult=cfg_raw.get("atr_stop_mult", 2.0),
+            rr_target=cfg_raw.get("rr_target", 3.0),
+        )
+        return _wrap_strategy(CryptoRegimeTrendStrategy(cfg))
 
-        cfg = extras.get("crypto_orb_config", {})
-        crypto_cfg = CryptoORBConfig(**{  # type: ignore[arg-type]
-            k: v for k, v in cfg.items()
-            if k in CryptoORBConfig.__dataclass_fields__  # type: ignore[attr-defined]
-        })
-        return _wrap_strategy(ORBStrategy(crypto_cfg))
+    if kind == "crypto_macro_confluence":
+        from eta_engine.strategies.crypto_macro_confluence_strategy import (
+            CryptoMacroConfluenceConfig,
+            CryptoMacroConfluenceStrategy,
+        )
 
-    if kind in ("sage_daily_gated", "sage_consensus", "ensemble_voting",
-                 "crypto_regime_trend", "crypto_macro_confluence",
-                 "compression_breakout", "crypto_trend", "crypto_meanrev",
-                 "confluence"):
-        return _passthrough
+        cfg_raw = extras.get("macro_confluence_config", {})
+        cfg = CryptoMacroConfluenceConfig(
+            require_etf_flow_alignment=cfg_raw.get("require_etf_flow_alignment", False),
+        )
+        return _wrap_strategy(CryptoMacroConfluenceStrategy(cfg))
+
+    if kind == "compression_breakout":
+        from eta_engine.strategies.compression_breakout_strategy import (
+            CompressionBreakoutConfig,
+            CompressionBreakoutStrategy,
+        )
+
+        cfg = CompressionBreakoutConfig()
+        return _wrap_strategy(CompressionBreakoutStrategy(cfg))
+
+    if kind == "crypto_trend":
+        from eta_engine.strategies.crypto_trend_strategy import (
+            CryptoTrendConfig,
+            CryptoTrendStrategy,
+        )
+
+        cfg = CryptoTrendConfig()
+        return _wrap_strategy(CryptoTrendStrategy(cfg))
+
+    if kind == "crypto_meanrev":
+        from eta_engine.strategies.crypto_meanrev_strategy import (
+            CryptoMeanRevConfig,
+            CryptoMeanRevStrategy,
+        )
+
+        cfg = CryptoMeanRevConfig()
+        return _wrap_strategy(CryptoMeanRevStrategy(cfg))
+
+    if kind == "ensemble_voting":
+        from eta_engine.strategies.ensemble_voting_strategy import (
+            EnsembleVotingConfig,
+            EnsembleVotingStrategy,
+        )
+
+        cfg = EnsembleVotingConfig(
+            min_agreement_count=int(extras.get("min_agreement_count", 2)),
+        )
+        return _wrap_strategy(EnsembleVotingStrategy([], cfg))
+
+    if kind == "sage_consensus":
+        from eta_engine.strategies.sage_consensus_strategy import (
+            SageConsensusConfig,
+            SageConsensusStrategy,
+        )
+
+        cfg = SageConsensusConfig(
+            min_conviction=float(extras.get("sage_min_conviction", 0.75)),
+        )
+        return _wrap_strategy(SageConsensusStrategy(cfg))
 
     return None
 

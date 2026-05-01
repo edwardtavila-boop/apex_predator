@@ -16,6 +16,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.consultation import calibrated_conviction_for
 from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
@@ -107,6 +108,9 @@ class WyckoffSchool(SchoolBase):
             bias, rationale, conv = Bias.SHORT, "distribution phase -- watching for upthrust", 0.30
         else:
             bias, rationale, conv = Bias.NEUTRAL, f"phase={phase} -- no clear setup", 0.15
+
+        if conv >= 0.30:
+            conv = calibrated_conviction_for(self.NAME, conv)
 
         entry_bias = Bias.LONG if ctx.side.lower() == "long" else Bias.SHORT
         return SchoolVerdict(

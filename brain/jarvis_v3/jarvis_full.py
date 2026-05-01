@@ -73,6 +73,12 @@ class FullJarvisVerdict:
     risk_budget_reason: str = ""
     final_size_multiplier: float = 1.0
     layer_errors: list[str] = field(default_factory=list)
+    sage_composite_bias: str = ""
+    sage_conviction: float = 0.0
+    sage_alignment: float = 0.5
+    sage_schools_aligned: int = 0
+    sage_schools_consulted: int = 0
+    sage_modulation: str = ""  # "none", "loosened", "tightened", "deferred"
 
     def is_blocked(self) -> bool:
         if self.consolidated.is_blocked():
@@ -95,6 +101,12 @@ class FullJarvisVerdict:
             "risk_budget_reason": self.risk_budget_reason,
             "final_size_multiplier": self.final_size_multiplier,
             "layer_errors": self.layer_errors,
+            "sage_composite_bias": self.sage_composite_bias,
+            "sage_conviction": self.sage_conviction,
+            "sage_alignment": self.sage_alignment,
+            "sage_schools_aligned": self.sage_schools_aligned,
+            "sage_schools_consulted": self.sage_schools_consulted,
+            "sage_modulation": self.sage_modulation,
         }
 
 
@@ -162,7 +174,37 @@ class JarvisFull:
         """Run the full pipeline. One call. All layers."""
         layer_errors: list[str] = []
 
-        # 1. Core intelligence layer
+        # 0. Sage multi-school consultation (best-effort, enriches intelligence)
+        sage_bias = ""
+        sage_conviction = 0.0
+        sage_alignment = 0.5
+        sage_aligned = 0
+        sage_consulted = 0
+        sage_modulation = "none"
+        sage_report = None
+        try:
+            sage_report = self._consult_sage_for_request(req)
+            if sage_report is not None:
+                sage_bias = sage_report.composite_bias.value
+                sage_conviction = sage_report.conviction
+                sage_alignment = sage_report.alignment_score
+                sage_aligned = sage_report.schools_aligned_with_entry
+                sage_consulted = sage_report.schools_consulted
+                # Infer modulation from conviction + alignment
+                if sage_conviction >= 0.65 and sage_alignment >= 0.70:
+                    sage_modulation = "loosened"
+                elif sage_conviction >= 0.65 and sage_alignment <= 0.30:
+                    sage_modulation = "tightened"
+        except Exception as exc:  # noqa: BLE001
+            layer_errors.append(f"sage: {exc}")
+
+        # 1. Core intelligence layer (enriched with sage score)
+        payload = getattr(req, "payload", None) or {}
+        if isinstance(payload, dict) and "sage_score" not in payload and sage_conviction > 0:
+            try:
+                object.__setattr__(req, "payload", {**payload, "sage_score": sage_conviction})
+            except Exception:  # noqa: BLE001
+                pass  # frozen or immutable request
         consolidated = self.intelligence.consult(
             req, ctx=ctx, current_narrative=current_narrative,
         )
@@ -278,7 +320,42 @@ class JarvisFull:
             risk_budget_reason=budget_reason,
             final_size_multiplier=round(final_size, 3),
             layer_errors=layer_errors,
+            sage_composite_bias=sage_bias,
+            sage_conviction=round(sage_conviction, 3),
+            sage_alignment=round(sage_alignment, 3),
+            sage_schools_aligned=sage_aligned,
+            sage_schools_consulted=sage_consulted,
+            sage_modulation=sage_modulation,
         )
+
+    # ── Sage integration ─────────────────────────────────
+
+    def _consult_sage_for_request(self, req: ActionRequest):
+        """Consult Sage schools from request payload bars.
+
+        Returns a SageReport or None if bars are missing or Sage fails.
+        """
+        payload = getattr(req, "payload", None) or {}
+        if not isinstance(payload, dict):
+            return None
+        sage_bars = payload.get("sage_bars")
+        if not sage_bars or not isinstance(sage_bars, list) or len(sage_bars) < 30:
+            return None
+        try:
+            from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage
+            side = payload.get("side", "long")
+            entry_price = float(payload.get("entry_price", 0))
+            symbol = payload.get("symbol", "")
+            ctx = MarketContext(
+                bars=sage_bars,
+                side=side,
+                entry_price=entry_price,
+                symbol=symbol,
+            )
+            return consult_sage(ctx)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("_consult_sage_for_request failed (non-fatal): %s", exc)
+            return None
 
     # ── Convenience helpers ──────────────────────────────────
 

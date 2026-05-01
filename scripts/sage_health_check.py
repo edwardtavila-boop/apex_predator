@@ -85,12 +85,31 @@ def main(argv: list[str] | None = None) -> int:
             len(critical),
             [i.school for i in critical],
         )
-        # Hook for future Resend / Slack alert integration:
-        # _send_alert(critical)
+        _dispatch_alerts(critical)
 
     if args.fail_on_critical and critical:
         return 1
     return 0
+
+
+def _dispatch_alerts(critical: list) -> None:
+    """Send Resend email / Slack / Pushover alert for degraded schools."""
+    try:
+        from eta_engine.obs.alert_dispatcher import dispatch
+        schools_str = ", ".join(i.school for i in critical)
+        dispatch(
+            event="sage_school_degraded",
+            title=f"JARVIS Sage: {len(critical)} schools critically degraded",
+            body=(
+                f"The following Sage schools have >95% neutral rate and may "
+                f"be silently broken: {schools_str}. Check state/sage/"
+                "last_health_report.json for details."
+            ),
+            severity="critical",
+            tags=["sage", "health", "auto"],
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sage health alert dispatch failed (non-fatal): %s", exc)
 
 
 if __name__ == "__main__":

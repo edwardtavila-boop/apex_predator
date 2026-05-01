@@ -98,6 +98,9 @@ class SmcIctSchool(SchoolBase):
         else:
             bias, rationale, conv = Bias.NEUTRAL, "Mixed structure -- no clear SMC setup", 0.15
 
+        if conv >= 0.30:
+            conv = calibrated_conviction_for(self.NAME, conv)
+
         entry_bias = Bias.LONG if ctx.side.lower() == "long" else Bias.SHORT
         return SchoolVerdict(
             school=self.NAME,

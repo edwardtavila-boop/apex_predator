@@ -79,6 +79,25 @@ class SchoolEdge:
         from math import tanh
         return 1.0 + 0.5 * tanh(self.expectancy)
 
+    def calibrate_conviction(self, raw_conviction: float) -> float:
+        """Self-tune a school's raw conviction using its track record.
+
+        Schools with high hit rates get conviction boosted; schools with
+        low hit rates get it dampened. No data means no adjustment (1.0x).
+        Returns adjusted conviction clamped to [0.05, 0.95].
+
+        The calibration factor uses tanh((hit_rate - 0.5) * 3) to map:
+          - hit_rate = 0.50 -> factor = 1.0 (no change)
+          - hit_rate = 0.70 -> factor ≈ 1.4 (boost)
+          - hit_rate = 0.30 -> factor ≈ 0.6 (dampen)
+        """
+        if self.n_obs < 8:
+            return raw_conviction  # insufficient data
+        from math import tanh
+        factor = 1.0 + 0.5 * tanh((self.hit_rate - 0.5) * 3.0)
+        calibrated = raw_conviction * factor
+        return max(0.05, min(0.95, calibrated))
+
 
 class EdgeTracker:
     """Thread-safe per-school edge tracker with JSON persistence."""
@@ -110,6 +129,18 @@ class EdgeTracker:
 
     def _save(self) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        # Auto-rotate when file exceeds 10MB to prevent unbounded growth
+        try:
+            if self.state_path.exists():
+                size_mb = self.state_path.stat().st_size / (1024 * 1024)
+                if size_mb > 10.0:
+                    archive_dir = self.state_path.parent / "_archive"
+                    archive_dir.mkdir(parents=True, exist_ok=True)
+                    archive_name = f"edge_tracker_{datetime.now(UTC).strftime('%Y-%m-%d_%H%M%S')}.json"
+                    self.state_path.rename(archive_dir / archive_name)
+                    logger.info("edge_tracker.json rotated (%0.1fMB -> archive)", size_mb)
+        except OSError:
+            pass
         try:
             self.state_path.write_text(json.dumps({
                 "saved_at": datetime.now(UTC).isoformat(),

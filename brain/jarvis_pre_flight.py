@@ -118,6 +118,7 @@ def bot_pre_flight(
                 payload["sage_bars"] = sage_bars
         except Exception:  # noqa: BLE001 -- never break the trading loop
             pass
+    # Sage bars are attached above (Wave-6)
     allowed, jarvis_cap, code = bot._ask_jarvis(ActionType.ORDER_PLACE, **payload)
     if not allowed:
         return PreflightDecision(
@@ -198,3 +199,45 @@ def record_fill_with_realized_r(
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("realized_r journal append failed (non-fatal): %s", exc)
+
+
+def sage_pre_open_check(*, bot, symbol: str = "") -> dict[str, Any] | None:
+    """Consult Sage before daily open for holistic regime + bias read.
+
+    Called by bots during their daily-open routine. Uses the bot's
+    accumulated sage_bars buffer to generate a pre-market Sage report
+    that the operator can review. Returns a dict with summary fields
+    or None if Sage isn't available / buffer too small.
+
+    Usage from a bot::
+
+        from eta_engine.brain.jarvis_pre_flight import sage_pre_open_check
+
+        read = sage_pre_open_check(bot=self, symbol=self.symbol)
+        if read:
+            log.info("pre-open sage: bias=%s conv=%.2f",
+                     read["composite_bias"], read["conviction"])
+    """
+    try:
+        sage_bars = None
+        if hasattr(bot, "recent_sage_bars"):
+            sage_bars = bot.recent_sage_bars()
+        if not sage_bars or len(sage_bars) < 30:
+            return None
+        from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage
+        ctx = MarketContext(
+            bars=list(sage_bars),
+            side="long",
+            symbol=symbol,
+        )
+        report = consult_sage(ctx)
+        return {
+            "composite_bias": report.composite_bias.value,
+            "conviction": round(report.conviction, 3),
+            "alignment_score": round(report.alignment_score, 3),
+            "schools_consulted": report.schools_consulted,
+            "schools_aligned": report.schools_aligned_with_entry,
+            "summary": report.summary_line(),
+        }
+    except Exception:  # noqa: BLE001
+        return None

@@ -142,8 +142,6 @@ CRYPTO_24_7_BOTS: frozenset[SubsystemId] = frozenset(
     }
 )
 
-
-# ---------------------------------------------------------------------------
 # Action taxonomy
 # ---------------------------------------------------------------------------
 
@@ -152,27 +150,55 @@ class ActionType(StrEnum):
     """Kind of autonomous action a subsystem is requesting approval for."""
 
     # signal / decision lifecycle
-    SIGNAL_EMIT = "SIGNAL_EMIT"  # strategy produces a signal
-    # order lifecycle
+    SIGNAL_EMIT = "SIGNAL_EMIT"
     ORDER_PLACE = "ORDER_PLACE"
-    ORDER_MODIFY = "ORDER_MODIFY"  # move stop, change size, etc.
+    ORDER_MODIFY = "ORDER_MODIFY"
     ORDER_CANCEL = "ORDER_CANCEL"
-    POSITION_FLATTEN = "POSITION_FLATTEN"  # emergency exit one position
-    # system-level
+    POSITION_FLATTEN = "POSITION_FLATTEN"
     KILL_SWITCH_TRIP = "KILL_SWITCH_TRIP"
-    KILL_SWITCH_RESET = "KILL_SWITCH_RESET"  # operator only
+    KILL_SWITCH_RESET = "KILL_SWITCH_RESET"
     AUTOPILOT_RESUME = "AUTOPILOT_RESUME"
-    GATE_OVERRIDE = "GATE_OVERRIDE"  # operator overriding a blocking gate
-    # strategy / portfolio lifecycle
-    STRATEGY_DEPLOY = "STRATEGY_DEPLOY"  # promote paper -> live
+    GATE_OVERRIDE = "GATE_OVERRIDE"
+    STRATEGY_DEPLOY = "STRATEGY_DEPLOY"
     STRATEGY_RETIRE = "STRATEGY_RETIRE"
-    PARAMETER_CHANGE = "PARAMETER_CHANGE"  # tune size/stop/target
-    CAPITAL_ALLOCATE = "CAPITAL_ALLOCATE"  # move capital between bots
-    # L4 / yield-infrastructure actions
-    PROTOCOL_EXPOSURE = "PROTOCOL_EXPOSURE"  # open/increase a DeFi position
-    REBALANCE = "REBALANCE"  # periodic ledger reconciliation
-    # LLM routing (not a trading action -- a cost-optimization decision)
-    LLM_INVOCATION = "LLM_INVOCATION"  # which model tier for this task?
+    PARAMETER_CHANGE = "PARAMETER_CHANGE"
+    CAPITAL_ALLOCATE = "CAPITAL_ALLOCATE"
+    PROTOCOL_EXPOSURE = "PROTOCOL_EXPOSURE"
+    REBALANCE = "REBALANCE"
+    LLM_INVOCATION = "LLM_INVOCATION"
+
+
+# Wave-17 (2026-04-30): Autonomous mode — proven subsystems may self-approve
+# routine operations when stress is low (< 0.3) and Jarvis is in TRADE tier.
+# All autonomous decisions are fully audited with reason_code "autonomous_trade"
+# and never override KILL, STAND_ASIDE, or REDUCE tiers.
+AUTONOMOUS_ACTIONS: frozenset[ActionType] = frozenset(
+    {
+        ActionType.ORDER_PLACE,
+        ActionType.ORDER_MODIFY,
+        ActionType.ORDER_CANCEL,
+        ActionType.POSITION_FLATTEN,
+        ActionType.SIGNAL_EMIT,
+        ActionType.PARAMETER_CHANGE,
+        ActionType.REBALANCE,
+        ActionType.STRATEGY_DEPLOY,
+        ActionType.STRATEGY_RETIRE,
+    }
+)
+
+AUTONOMOUS_SUBSYSTEMS: frozenset[SubsystemId] = frozenset(
+    {
+        SubsystemId.BOT_MNQ,
+        SubsystemId.BOT_BTC_PERP,
+        SubsystemId.BOT_ETH_PERP,
+        SubsystemId.BOT_SOL_PERP,
+        SubsystemId.BOT_XRP_PERP,
+    }
+)
+
+
+# (ActionType definition moved above AUTONOMOUS_ACTIONS — Wave-17 fix)
+# ---------------------------------------------------------------------------
 
 
 class Verdict(StrEnum):
@@ -509,7 +535,25 @@ def evaluate_request(
             reason_code="close_no_new_entries",
         )
 
-    # 8. TRADE tier -- APPROVED (with size cap from sizing_hint).
+    # 8. Autonomous mode — proven subsystems self-approve routine ops
+    #    when in TRADE tier with stress < 0.3. Fully audited.
+    if (
+        req.action in AUTONOMOUS_ACTIONS
+        and req.subsystem in AUTONOMOUS_SUBSYSTEMS
+        and (ctx.stress_score is None or ctx.stress_score.composite < 0.3)
+    ):
+        stress_str = (
+            f"stress {ctx.stress_score.composite:.2f}"
+            if ctx.stress_score else ""
+        )
+        return _build(
+            Verdict.APPROVED,
+            f"autonomous {req.subsystem.value}: {req.action.value} {stress_str}".strip(),
+            reason_code="autonomous_trade",
+            size_cap_mult=live_size,
+        )
+
+    # 9. TRADE tier -- APPROVED (with size cap from sizing_hint).
     return _build(
         Verdict.APPROVED,
         "all gates green; TRADE tier",

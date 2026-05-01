@@ -6,11 +6,25 @@ Kaizen propose -> Guard admit -> Parameter apply -> Hermes notify.
 No live money. No broker connection. Pure integration test with mock data.
 """
 
+import contextlib
 import json
+import sys
 import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+# -- ensure paths before any local imports
+
+_WORKSPACE = Path(__file__).resolve().parents[2]
+_SRC = _WORKSPACE / "firm" / "eta_engine" / "src"
+if _SRC.exists() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+if str(_WORKSPACE) not in sys.path:
+    sys.path.insert(0, str(_WORKSPACE))
+_ETA_ROOT = Path(__file__).resolve().parents[1]
+if str(_ETA_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ETA_ROOT))
 
 # ─── Helpers ─────────────────────────────────────────────────
 
@@ -84,11 +98,7 @@ class TestEndToEndPipeline:
             assert state_file.exists()
             state = json.loads(state_file.read_text())
             assert state["cycle_count"] >= 1
-
-            found_kaizen = any("Kaizen Cycle" in p.get("title", "") for p in pushed)
-            # Kaizen engine may not notify if no proposals were approved,
-            # which is fine for an empty test — the engine ran.
-            assert True  # Pipeline didn't crash
+        # Pipeline completed without crashing
 
     def test_quantum_should_invoke_integration(self):
         from eta_engine.brain.jarvis_v3.quantum.quantum_agent import (
@@ -145,12 +155,8 @@ class TestEndToEndPipeline:
             submodule_search_locations=[str(eta_root)],
         )
         mod = importlib.util.module_from_spec(spec)
-        try:
+        with contextlib.suppress(ModuleNotFoundError):
             spec.loader.exec_module(mod)
-        except ModuleNotFoundError:
-            # Can't resolve eta_engine imports from this context;
-            # the constants still exist in the module source
-            pass
 
         # The module file has these classes defined at module scope;
         # if import fails, verify the source directly

@@ -350,8 +350,50 @@ def _print_json() -> int:
         "health_results": [r.model_dump(mode="json") for r in health_results],
         "operator_queue": build_operator_queue_summary(),
         "bot_strategy_readiness": build_bot_strategy_readiness_summary(),
+        "sage": _collect_sage_state(),
     }
     print(json.dumps(out, indent=2, default=str))
+    return 0
+
+
+def _collect_sage_state() -> dict:
+    try:
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        from eta_engine.brain.jarvis_v3.sage.last_report_cache import cache_size
+        tracker = default_tracker()
+        monitor = default_monitor()
+        edges = tracker.snapshot()
+        issues = monitor.check_health()
+        return {
+            "edge_tracker": {
+                "n_schools": len(edges),
+                "top_by_expectancy": sorted(
+                    [{"school": k, **v} for k, v in edges.items()],
+                    key=lambda x: x.get("expectancy", 0),
+                    reverse=True,
+                )[:5],
+                "bottom_by_expectancy": sorted(
+                    [{"school": k, **v} for k, v in edges.items()],
+                    key=lambda x: x.get("expectancy", 0),
+                )[:5],
+            },
+            "health": {
+                "n_degraded": len(issues),
+                "issues": [
+                    {"school": i.school, "severity": i.severity, "detail": i.detail}
+                    for i in issues
+                ],
+            },
+            "cache_entries": cache_size(),
+        }
+    except Exception:
+        return {"status": "unavailable"}
+
+
+def _print_sage_state() -> int:
+    state = _collect_sage_state()
+    print(json.dumps(state, indent=2, default=str))
     return 0
 
 
@@ -364,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--daily", action="store_true", help="Generate the end-of-day markdown report")
     ap.add_argument("--json", action="store_true", help="Machine-readable JSON output (for dashboards)")
+    ap.add_argument("--sage", action="store_true", help="Print Sage health, edge tracker, and cache state")
     args = ap.parse_args(argv)
 
     if args.health:
@@ -376,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
         return _print_daily()
     if args.json:
         return _print_json()
+    if args.sage:
+        return _print_sage_state()
     return _print_status()
 
 

@@ -163,3 +163,30 @@ def clear_cache() -> int:
         n = len(_CACHE)
         _CACHE.clear()
         return n
+
+
+def pre_fetch_boot_symbols() -> None:
+    """Warm the on-chain cache for common crypto symbols at startup.
+
+    Runs best-effort in a background thread so the first order never
+    waits on HTTP round-trips. Safe to call from boot / warm scripts.
+    """
+    import threading
+    def _warm():
+        for sym in ("BTCUSDT", "ETHUSDT"):
+            try:
+                fetch_onchain(sym)
+                logger.debug("onchain pre-fetch: %s warmed", sym)
+            except Exception:  # noqa: BLE001
+                pass
+    t = threading.Thread(target=_warm, daemon=True)
+    t.start()
+
+    # Also pre-fetch native asset names (e.g. "BTC" as the symbol)
+    # in case the bot uses a different symbology
+    for sym in ("BTC", "ETH"):
+        try:
+            fetch_onchain(sym)
+            logger.debug("onchain pre-fetch native: %s warmed", sym)
+        except Exception:  # noqa: BLE001
+            pass

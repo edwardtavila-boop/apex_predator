@@ -2,7 +2,7 @@
 
 **Audience:** Edward Avila (operator).
 **Goal:** Run both bots in paper mode under JARVIS supervision, gather data, no real money flows.
-**Last updated:** 2026-04-26 (post v0.1.70 / mnq_bot bff9108 polish).
+**Last updated:** 2026-04-30 (post canonical workspace migration to C:\EvolutionaryTradingAlgo).
 
 ---
 
@@ -10,14 +10,14 @@
 
 ```powershell
 # 1. JARVIS supervisor (long-running daemon, watches both bots)
-cd C:\Users\edwar\OneDrive\Desktop\Base\eta_engine
+cd C:\EvolutionaryTradingAlgo\eta_engine
 python scripts/jarvis_live.py
 
 # 2. eta_engine BTC bot (paper mode by default)
 python scripts/btc_live.py --bars 1440 --warmup-bars 0
 
 # 3. mnq_bot (from its own repo)
-cd C:\Users\edwar\projects\mnq_bot
+cd C:\EvolutionaryTradingAlgo\mnq_bot
 python scripts/live_sim.py --variant r5_real_wide_target --n-days 5
 ```
 
@@ -58,7 +58,7 @@ flatline), the bots see denied approvals and stop opening new positions.
 ### eta_engine side
 
 ```powershell
-cd C:\Users\edwar\OneDrive\Desktop\Base\eta_engine
+cd C:\EvolutionaryTradingAlgo\eta_engine
 
 # 1. Verify all packages import + smoke runs
 python scripts/verify_all.py
@@ -78,7 +78,7 @@ python -m pytest -x -q
 ### mnq_bot side
 
 ```powershell
-cd C:\Users\edwar\projects\mnq_bot
+cd C:\EvolutionaryTradingAlgo\mnq_bot
 
 # 1. Doctor health check
 python -c "from mnq.cli.doctor import run_all_checks; [print(r) for r in run_all_checks()]"
@@ -145,17 +145,17 @@ live trading.
 
 ```powershell
 # Start of session (one terminal, leave running):
-cd C:\Users\edwar\OneDrive\Desktop\Base\eta_engine
+cd C:\EvolutionaryTradingAlgo\eta_engine
 python scripts/jarvis_live.py
 # Long-running. Tail docs/jarvis_live_health.json for state.
 
 # Open a SECOND terminal:
-cd C:\Users\edwar\OneDrive\Desktop\Base\eta_engine
+cd C:\EvolutionaryTradingAlgo\eta_engine
 python scripts/btc_live.py --bars 1440 --warmup-bars 0
 # Single 1440-bar (1 day) BTC paper run. Check audit_ok: GREEN at the end.
 
 # Open a THIRD terminal:
-cd C:\Users\edwar\projects\mnq_bot
+cd C:\EvolutionaryTradingAlgo\mnq_bot
 python scripts/live_sim.py --variant r5_real_wide_target --n-days 5
 # 5-day paper sim of the v2.2 variant. Writes journal to
 # data/live_sim/journal.sqlite (the canonical path the gate chain reads).

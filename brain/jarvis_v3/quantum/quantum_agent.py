@@ -1,21 +1,20 @@
-"""Quantum optimizer agent (Wave-9, 2026-04-27).
+"""Quantum optimizer agent (Wave-9 → Wave-10, 2026-04-30).
 
-Plugs into the firm-board as a 6th specialist role: it receives the
-current portfolio state + active candidate signals, formulates the
-allocation/sizing/selection sub-problem as a QUBO, dispatches to the
-QuantumCloudAdapter, and returns a structured recommendation.
+Plugs into the firm-board as a 6th specialist role + now also feeds
+real-time signals into JarvisFull.consult() for intraday optimization.
 
-Three problem types it handles out of the box:
+Six problem types it handles out of the box:
 
-  * PORTFOLIO_ALLOCATION  -- Markowitz mean-variance weights
-  * SIZING_BASKET         -- pick K-of-N signals this hour
-  * EXECUTION_SEQUENCING  -- order N orders to minimize cumulative slippage
+  * PORTFOLIO_ALLOCATION   -- Markowitz mean-variance weights
+  * SIZING_BASKET          -- pick K-of-N signals this hour
+  * EXECUTION_SEQUENCING   -- order N orders to minimize cumulative slippage
+  * RISK_PARITY             -- equalize risk contribution across assets
+  * REGIME_AWARE_ALLOCATION -- regime-warped returns/covariance
+  * HEDGING_BASKET          -- find optimal hedges for existing positions
 
-It is intentionally OFFLINE-FIRST. The audit list explicitly warns
-against putting cloud-quantum in the trade-decision hot path -- so
-this agent is designed to run on the daily-rebalance schedule, on
-new-regime triggers, or on operator demand. Its output is cached and
-consulted at trade-time by the firm-board Auditor role.
+It is intentionally OFFLINE-FIRST for the daily rebalance. Real-time
+event-driven optimization flows through the new ``fast_optimize()``
+method which uses adaptive_solve (auto-selects SA or PT based on size).
 
 Use case (cron job + firm-board hook):
 
@@ -68,6 +67,9 @@ class ProblemKind(StrEnum):
     PORTFOLIO_ALLOCATION = "PORTFOLIO_ALLOCATION"
     SIZING_BASKET = "SIZING_BASKET"
     EXECUTION_SEQUENCING = "EXECUTION_SEQUENCING"
+    RISK_PARITY = "RISK_PARITY"
+    REGIME_AWARE_ALLOCATION = "REGIME_AWARE_ALLOCATION"
+    HEDGING_BASKET = "HEDGING_BASKET"
 
 
 @dataclass
@@ -249,8 +251,7 @@ class QuantumOptimizerAgent:
         too many at once.
         """
         n = len(order_labels)
-        # Encode as QUBO: diagonal = impact[i]; off-diagonal = adjacency penalty
-        Q: dict[int, dict[int, float]] = {}  # noqa: N806 -- QUBO matrix
+        Q: dict[int, dict[int, float]] = {}
         for i in range(n):
             Q.setdefault(i, {})[i] = impact_estimates_bps[i]
             for j in range(n):
@@ -261,6 +262,270 @@ class QuantumOptimizerAgent:
         problem = QuboProblem(n_vars=n, Q=Q, labels=order_labels)
         result, record = self.adapter.solve(
             problem, n_iterations=self.n_iterations,
+        )
+        selected = result.selected_labels()
+        contrib = (
+            f"Execution sequencer picked {len(selected)}/{n} orders "
+            f"to send this slice ({', '.join(selected)}); "
+            f"estimated cumulative impact {result.energy:.2f} bps."
+        )
+        return Recommendation(
+            ts=datetime.now(UTC).isoformat(),
+            kind=ProblemKind.EXECUTION_SEQUENCING,
+            selected_labels=selected,
+            objective=result.energy,
+            backend_used=record.backend,
+            n_vars=record.n_vars,
+            runtime_ms=record.runtime_ms,
+            cost_estimate_usd=record.cost_estimate_usd,
+            used_cache=record.used_cache,
+            fell_back_to_classical=record.fell_back_to_classical,
+            contribution_summary=contrib,
+            raw_solution=list(result.x),
+        )
+
+    # ── Risk-parity allocation ──────────────────────────────
+
+    def allocate_risk_parity(
+        self,
+        *,
+        symbols: list[str],
+        expected_returns: list[float],
+        covariance: list[list[float]],
+        risk_aversion: float = 1.0,
+        max_assets: int | None = None,
+    ) -> Recommendation:
+        """Equalize risk contribution across selected assets.
+
+        Useful for multi-asset portfolios where concentration risk
+        must be kept in check (e.g. BTC + ETH + SOL + MNQ basket).
+        """
+        from eta_engine.brain.jarvis_v3.quantum.qubo_supercharged import (
+            risk_parity_qubo,
+        )
+        problem = risk_parity_qubo(
+            expected_returns=expected_returns,
+            covariance=covariance,
+            risk_aversion=risk_aversion,
+            max_assets=max_assets,
+            asset_labels=symbols,
+        )
+        result, record = self.adapter.solve(
+            problem, n_iterations=self.n_iterations,
+        )
+        selected = result.selected_labels()
+        contrib = (
+            f"Risk-parity optimizer (backend={record.backend}) selected "
+            f"{len(selected)}/{len(symbols)} symbols "
+            f"({', '.join(selected) if selected else 'none'}) "
+            f"with risk-parity energy {result.energy:+.4f}"
+        )
+        return Recommendation(
+            ts=datetime.now(UTC).isoformat(),
+            kind=ProblemKind.RISK_PARITY,
+            selected_labels=selected,
+            objective=result.energy,
+            backend_used=record.backend,
+            n_vars=record.n_vars,
+            runtime_ms=record.runtime_ms,
+            cost_estimate_usd=record.cost_estimate_usd,
+            used_cache=record.used_cache,
+            fell_back_to_classical=record.fell_back_to_classical,
+            contribution_summary=contrib,
+            raw_solution=list(result.x),
+        )
+
+    # ── Regime-aware allocation ─────────────────────────────
+
+    def allocate_regime_aware(
+        self,
+        *,
+        symbols: list[str],
+        expected_returns: list[float],
+        covariance: list[list[float]],
+        modifiers: list,  # RegimeModifier list
+        risk_aversion: float = 1.0,
+        cardinality_max: int | None = None,
+    ) -> Recommendation:
+        """Allocate across assets with regime-warped expectations.
+
+        Each asset gets a return_multiplier and risk_multiplier based
+        on how the current regime treats it. Assets with tailwinds
+        get boosted; headwind assets get penalized.
+        """
+        from eta_engine.brain.jarvis_v3.quantum.qubo_supercharged import (
+            regime_aware_qubo,
+        )
+        problem = regime_aware_qubo(
+            expected_returns=expected_returns,
+            covariance=covariance,
+            modifiers=modifiers,
+            risk_aversion=risk_aversion,
+            cardinality_max=cardinality_max,
+            asset_labels=symbols,
+        )
+        result, record = self.adapter.solve(
+            problem, n_iterations=self.n_iterations,
+        )
+        selected = result.selected_labels()
+        contrib = (
+            f"Regime-aware optimizer (backend={record.backend}) with "
+            f"{len(modifiers)} regime modifier(s) selected "
+            f"{len(selected)}/{len(symbols)} symbols "
+            f"({', '.join(selected) if selected else 'none'}); "
+            f"energy {result.energy:+.4f}"
+        )
+        return Recommendation(
+            ts=datetime.now(UTC).isoformat(),
+            kind=ProblemKind.REGIME_AWARE_ALLOCATION,
+            selected_labels=selected,
+            objective=result.energy,
+            backend_used=record.backend,
+            n_vars=record.n_vars,
+            runtime_ms=record.runtime_ms,
+            cost_estimate_usd=record.cost_estimate_usd,
+            used_cache=record.used_cache,
+            fell_back_to_classical=record.fell_back_to_classical,
+            contribution_summary=contrib,
+            raw_solution=list(result.x),
+            extra={"n_modifiers": len(modifiers)},
+        )
+
+    # ── Hedging basket optimization ─────────────────────────
+
+    def select_hedges(
+        self,
+        *,
+        positions: list[float],
+        candidates: list[float],
+        pairwise_correlation: list[list[float]],
+        target_net_beta: float = 0.0,
+        max_hedges: int | None = None,
+        position_labels: list[str] | None = None,
+        hedge_labels: list[str] | None = None,
+    ) -> Recommendation:
+        """Select optimal hedging instruments for existing positions.
+
+        Given current positions and candidate hedge instruments,
+        finds the subset that brings the portfolio beta closest to
+        the target (e.g., 0 for delta-neutral).
+        """
+        from eta_engine.brain.jarvis_v3.quantum.qubo_supercharged import (
+            hedging_basket_qubo,
+        )
+        problem = hedging_basket_qubo(
+            positions=positions,
+            candidates=candidates,
+            pairwise_correlation=pairwise_correlation,
+            target_net_beta=target_net_beta,
+            max_hedges=max_hedges,
+            position_labels=position_labels,
+            hedge_labels=hedge_labels,
+        )
+        result, record = self.adapter.solve(
+            problem, n_iterations=self.n_iterations,
+        )
+        selected = result.selected_labels()
+        contrib = (
+            f"Hedging optimizer (backend={record.backend}) selected "
+            f"{len(selected)} hedges out of {len(candidates)} candidates "
+            f"({', '.join(selected) if selected else 'none'}); "
+            f"target beta {target_net_beta:+.2f}, energy {result.energy:+.4f}"
+        )
+        return Recommendation(
+            ts=datetime.now(UTC).isoformat(),
+            kind=ProblemKind.HEDGING_BASKET,
+            selected_labels=selected,
+            objective=result.energy,
+            backend_used=record.backend,
+            n_vars=record.n_vars,
+            runtime_ms=record.runtime_ms,
+            cost_estimate_usd=record.cost_estimate_usd,
+            used_cache=record.used_cache,
+            fell_back_to_classical=record.fell_back_to_classical,
+            contribution_summary=contrib,
+            raw_solution=list(result.x),
+        )
+
+    # ── Fast real-time optimization (event-driven) ──────────
+
+    def fast_optimize(
+        self,
+        *,
+        problem: "ProblemKind",
+        symbols: list[str] | None = None,
+        expected_returns: list[float] | None = None,
+        covariance: list[list[float]] | None = None,
+        risk_aversion: float = 1.0,
+        max_picks: int | None = None,
+        **kwargs,
+    ) -> Recommendation:
+        """Real-time event-driven optimization — uses adaptive solver.
+
+        Designed for intraday triggers (regime change, volatility spike,
+        news event). Uses adaptive_solve (auto-selects SA or parallel
+        tempering based on problem size). NEVER uses cloud quantum —
+        pure classical path for latency guarantees.
+        """
+        from eta_engine.brain.jarvis_v3.quantum.qubo_solver import QuboProblem
+        from eta_engine.brain.jarvis_v3.quantum.qubo_supercharged import (
+            adaptive_solve,
+        )
+
+        n_vars = len(symbols) if symbols else (len(expected_returns) if expected_returns else 0)
+        if n_vars == 0:
+            return Recommendation(
+                ts=datetime.now(UTC).isoformat(),
+                kind=problem,
+                selected_labels=[],
+                objective=0.0,
+                backend_used="none",
+                n_vars=0,
+                runtime_ms=0.0,
+                cost_estimate_usd=0.0,
+                used_cache=False,
+                fell_back_to_classical=False,
+                contribution_summary="No variables to optimize.",
+            )
+
+        if problem == ProblemKind.PORTFOLIO_ALLOCATION:
+            q_problem = portfolio_allocation_qubo(
+                expected_returns=expected_returns or [0.0] * n_vars,
+                covariance=covariance or [[1.0 if i == j else 0.0 for j in range(n_vars)] for i in range(n_vars)],
+                risk_aversion=risk_aversion,
+                cardinality_max=max_picks,
+                asset_labels=symbols,
+            )
+        else:
+            q_problem = QuboProblem(n_vars=n_vars, Q={}, labels=symbols or [])
+            for i in range(n_vars):
+                q_problem.Q.setdefault(i, {})[i] = -(expected_returns[i] if expected_returns else 0.0)
+
+        t0 = __import__("time").perf_counter()
+        result = adaptive_solve(q_problem, n_iterations=max(1000, self.n_iterations // 2))
+        elapsed_ms = (__import__("time").perf_counter() - t0) * 1000.0
+        selected = result.selected_labels()
+
+        contrib = (
+            f"Fast-optimize ({problem.value}, adaptive PT/SA) selected "
+            f"{len(selected)}/{n_vars}: "
+            f"{', '.join(selected) if selected else 'none'}; "
+            f"energy {result.energy:+.4f}, {result.n_iterations} iters, "
+            f"{elapsed_ms:.1f}ms"
+        )
+        return Recommendation(
+            ts=datetime.now(UTC).isoformat(),
+            kind=problem,
+            selected_labels=selected,
+            objective=result.energy,
+            backend_used="adaptive_classical",
+            n_vars=n_vars,
+            runtime_ms=round(elapsed_ms, 1),
+            cost_estimate_usd=0.0,
+            used_cache=False,
+            fell_back_to_classical=False,
+            contribution_summary=contrib,
+            raw_solution=list(result.x),
         )
         selected = result.selected_labels()
         contrib = (

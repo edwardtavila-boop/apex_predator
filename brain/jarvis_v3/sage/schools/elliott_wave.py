@@ -16,6 +16,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 class ElliottWaveSchool(SchoolBase):
@@ -38,14 +39,13 @@ class ElliottWaveSchool(SchoolBase):
                 rationale=f"insufficient bars ({n} < 30)",
             )
         closes = ctx.closes()
-        # Last-3-bar return vs lookback's biggest 3-bar return
         last3_move = closes[-1] - closes[-4] if n >= 4 else 0
-        max_3bar_up = max(
-            closes[i] - closes[i - 3] for i in range(3, n) if i >= 3
-        )
-        max_3bar_dn = min(
-            closes[i] - closes[i - 3] for i in range(3, n) if i >= 3
-        )
+        def _3bar_extremes():
+            return (
+                max(closes[i] - closes[i - 3] for i in range(3, n) if i >= 3),
+                min(closes[i] - closes[i - 3] for i in range(3, n) if i >= 3),
+            )
+        max_3bar_up, max_3bar_dn = get_or_compute(ctx, "elliott_3bar_extremes", _3bar_extremes)
 
         # Wave-3 candidate = the latest 3-bar move equals (or close to) the
         # extreme run of the window

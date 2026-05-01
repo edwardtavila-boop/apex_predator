@@ -15,6 +15,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 class MarketProfileSchool(SchoolBase):
@@ -48,13 +49,17 @@ class MarketProfileSchool(SchoolBase):
             )
         bucket = max(1.0, last_close * self.PRICE_BUCKET_PCT)
 
-        vol_at: dict[float, float] = defaultdict(float)
-        for b in bars:
-            o, h, low, c = float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])
-            v = float(b.get("volume", 0))
-            mid = (o + h + low + c) / 4
-            key = round(mid / bucket) * bucket
-            vol_at[key] += v
+        def _build_vol_profile():
+            vol_at: dict[float, float] = defaultdict(float)
+            for b in bars:
+                o, h, low, c = float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])
+                v = float(b.get("volume", 0))
+                mid = (o + h + low + c) / 4
+                key = round(mid / bucket) * bucket
+                vol_at[key] += v
+            return dict(vol_at)
+
+        vol_at = get_or_compute(ctx, "market_profile_50_bars", _build_vol_profile)
 
         if not vol_at:
             return SchoolVerdict(

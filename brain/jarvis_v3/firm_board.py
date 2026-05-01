@@ -152,13 +152,39 @@ def _researcher(p: Proposal) -> Argument:
 
 
 def _strategist(p: Proposal) -> Argument:
-    """Theory layer: Sage's score IS the theory verdict."""
-    if p.sage_score > 0.4:
+    """Theory layer: Sage's score IS the theory verdict.
+
+    Now enriched: when the proposal carries a sage_report with per-school
+    granularity, the reasoning includes alignment counts and disagreement
+    detection for clearer debate output.
+    """
+    sage_align = getattr(p, "sage_alignment", None)
+    sage_bias = getattr(p, "sage_composite_bias", "")
+    sage_consulted = getattr(p, "sage_schools_consulted", 0)
+
+    if p.sage_score > 0.25:
+        detail = f"Sage confluence {p.sage_score:+.2f}"
+        if sage_align is not None:
+            detail += f" (align={sage_align:.2f}"
+            if sage_bias:
+                detail += f", bias={sage_bias}"
+            if sage_consulted:
+                detail += f", n={sage_consulted}"
+            detail += ")"
         return Argument(
             role=Role.STRATEGIST, stance="support", score=p.sage_score,
-            reasoning=f"Sage confluence score {p.sage_score:+.2f} (theory aligned)",
+            reasoning=f"{detail} (theory aligned)",
         )
-    if p.sage_score < -0.2:
+    if p.sage_score <= 0.15 and sage_align is not None and sage_align <= 0.35:
+        return Argument(
+            role=Role.STRATEGIST, stance="oppose", score=p.sage_score,
+            reasoning=(
+                f"Sage strongly disagrees (score={p.sage_score:+.2f}, "
+                f"align={sage_align:.2f}, bias={sage_bias})"
+            ),
+            concerns=["multi-school theory frameworks disagree with this entry"],
+        )
+    if p.sage_score < 0.0:
         return Argument(
             role=Role.STRATEGIST, stance="oppose", score=p.sage_score,
             reasoning=f"Sage signals divergence ({p.sage_score:+.2f})",

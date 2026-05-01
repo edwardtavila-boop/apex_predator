@@ -210,6 +210,22 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
     except Exception as exc:  # noqa: BLE001
         logger.debug("last_report_cache.set_last raised %s (non-fatal)", exc)
 
+    # Detect named school-vs-school clash patterns for richer reasoning
+    clash_modifier = 1.0
+    clash_names: list[str] = []
+    clash_verdict = None
+    try:
+        from eta_engine.brain.jarvis_v3.sage.disagreement import (
+            detect_clashes,
+            strongest_clash_modifier,
+        )
+        clashes = detect_clashes(report)
+        clash_verdict, clash_modifier = strongest_clash_modifier(clashes)
+        if clashes:
+            clash_names = [c.name for c in clashes]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("clash detection failed (non-fatal): %s", exc)
+
     # Below conviction floor -> don't modulate
     if report.conviction < t["conviction_floor"]:
         return base
@@ -229,18 +245,20 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
             "conditions": [*base.conditions, "v22_sage_loosened"],
         })
 
-    # High-conviction disagreement -> tighten or defer
+    # High-conviction disagreement -> tighten or defer, enriched by clash patterns
     if (
         report.conviction >= t["conviction_high"]
         and report.alignment_score <= t["disagree_threshold"]
     ):
+        cap = t["disagree_tighten_cap"] * clash_modifier
+        clash_note = f", clash={','.join(clash_names)}" if clash_names else ""
         if base.verdict == Verdict.APPROVED:
             return base.model_copy(update={
                 "verdict": Verdict.CONDITIONAL,
-                "size_cap_mult": t["disagree_tighten_cap"],
+                "size_cap_mult": cap,
                 "reason": (
                     f"{base.reason} [v22 sage disagrees strongly "
-                    f"({report.summary_line()}) -> downgrade APPROVED to CONDITIONAL@{t['disagree_tighten_cap']}]"
+                    f"({report.summary_line()}) -> downgrade APPROVED to CONDITIONAL@{cap:.2f}{clash_note}]"
                 ),
                 "conditions": [*base.conditions, "v22_sage_disagree_tighten"],
             })
@@ -250,7 +268,7 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
                 "size_cap_mult": 0.0,
                 "reason": (
                     f"{base.reason} [v22 sage disagrees strongly + already CONDITIONAL "
-                    f"-> DEFER ({report.summary_line()})]"
+                    f"-> DEFER ({report.summary_line()}){clash_note}]"
                 ),
                 "conditions": [*base.conditions, "v22_sage_disagree_defer"],
             })

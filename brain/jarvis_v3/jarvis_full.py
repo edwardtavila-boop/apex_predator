@@ -1,36 +1,24 @@
-"""JARVIS full-stack integration (Wave-16 final, 2026-04-27).
+"""JARVIS full-stack integration (Wave-16 final → Wave-17 supercharged, 2026-04-30).
 
-This module is the single entry point that wires every wave (7-16)
+This module is the single entry point that wires every wave (7-17)
 into one composable surface. Caller imports ONE thing:
 
     from eta_engine.brain.jarvis_v3.jarvis_full import JarvisFull
 
-    j = JarvisFull.bootstrap(admin=jarvis_admin)
+    j = JarvisFull.bootstrap(admin=jarvis_admin,
+                             quantum_agent=QuantumOptimizerAgent())
     verdict = j.consult(req, current_narrative="...")  # full pipeline
 
 What "full pipeline" means here:
 
-  1. JarvisIntelligence.consult() -- the wave-12 admin layer that
-     already wraps:
-        - operator_override
-        - JarvisAdmin.request_approval (chain-of-command)
-        - memory_rag
-        - causal_layer
-        - world_model_full
-        - firm_board_debate
-  2. wave-13 self-awareness layers attached as advisors:
-        - premortem
-        - ood_detector
-        - thesis_tracker (called via open_thesis when verdict approves)
-  3. wave-14 explanation layer:
-        - narrative_generator on every verdict (logged)
-        - operator_coach signal augmentation
-        - skill_health_registry as advisory health snapshot
-  4. wave-15 fleet/risk modulation:
-        - risk_budget_allocator on size_multiplier
-  5. wave-16 (used by operator tooling, not on hot path):
-        - pre_live_gate / walk_forward / regression / ab_framework
-          are exposed as helpers for promotion workflows
+  1. JarvisIntelligence.consult() -- the wave-12 admin layer
+  2. wave-13 self-awareness: premortem, ood_detector, thesis_tracker
+  3. wave-14 explanation: narrative_generator, operator_coach
+  4. wave-15 fleet/risk: risk_budget_allocator
+  5. wave-16 operator tooling: pre_live_gate, walk_forward
+  6. wave-17 QUANTUM SUPERCHARGE: quantum optimizer runs on every consult,
+     recommending allocation/sizing to the firm-board. Size multiplier
+     gets quantum-informed modulation.
 
 THIS MODULE DOES NOT OVERRULE JARVIS_ADMIN. It only annotates,
 narrates, and modulates size within the rules JarvisAdmin allows.
@@ -78,7 +66,12 @@ class FullJarvisVerdict:
     sage_alignment: float = 0.5
     sage_schools_aligned: int = 0
     sage_schools_consulted: int = 0
-    sage_modulation: str = ""  # "none", "loosened", "tightened", "deferred"
+    sage_modulation: str = ""
+    # Wave-17 quantum fields
+    quantum_recommended_symbols: list[str] = field(default_factory=list)
+    quantum_objective: float = 0.0
+    quantum_contribution: str = ""
+    quantum_modulation_mult: float = 1.0  # "none", "loosened", "tightened", "deferred"
 
     def is_blocked(self) -> bool:
         if self.consolidated.is_blocked():
@@ -107,6 +100,10 @@ class FullJarvisVerdict:
             "sage_schools_aligned": self.sage_schools_aligned,
             "sage_schools_consulted": self.sage_schools_consulted,
             "sage_modulation": self.sage_modulation,
+            "quantum_recommended_symbols": self.quantum_recommended_symbols,
+            "quantum_objective": self.quantum_objective,
+            "quantum_contribution": self.quantum_contribution,
+            "quantum_modulation_mult": self.quantum_modulation_mult,
         }
 
 
@@ -121,12 +118,14 @@ class JarvisFull:
         operator_coach: OperatorCoach | None = None,
         skill_registry: SkillRegistry | None = None,
         thesis_tracker: ThesisTracker | None = None,
+        quantum_agent: "QuantumOptimizerAgent | None" = None,
     ) -> None:
         self.intelligence = intelligence
         self.memory = memory
         self.operator_coach = operator_coach
         self.skill_registry = skill_registry
         self.thesis_tracker = thesis_tracker
+        self.quantum_agent = quantum_agent
 
     @classmethod
     def bootstrap(
@@ -135,8 +134,9 @@ class JarvisFull:
         admin: JarvisAdmin,
         memory: HierarchicalMemory | None = None,
         enable_intelligence: bool = True,
+        quantum_agent: "QuantumOptimizerAgent | None" = None,
     ) -> JarvisFull:
-        """Wire up the standard production stack."""
+        """Wire up the standard production stack with optional quantum."""
         from eta_engine.brain.jarvis_v3.intelligence import (
             IntelligenceConfig,
             JarvisIntelligence,
@@ -161,6 +161,7 @@ class JarvisFull:
             operator_coach=OperatorCoach.default(),
             skill_registry=SkillRegistry.default(),
             thesis_tracker=ThesisTracker.default(),
+            quantum_agent=quantum_agent,
         )
 
     def consult(
@@ -278,10 +279,47 @@ class JarvisFull:
         except Exception as exc:  # noqa: BLE001
             layer_errors.append(f"risk_budget: {exc}")
 
-        # 6. Combine size multiplier
+        # 6. Quantum optimization (Wave-17 — best-effort, non-blocking)
+        quantum_rec_symbols: list[str] = []
+        quantum_obj = 0.0
+        quantum_contrib = ""
+        quantum_mod = 1.0
+        if self.quantum_agent is not None and consolidated.intelligence_enabled:
+            try:
+                from eta_engine.brain.jarvis_v3.quantum.quantum_agent import (
+                    ProblemKind,
+                )
+                payload = getattr(req, "payload", {}) or {}
+                portfolio = payload.get("portfolio", {}) if isinstance(payload, dict) else {}
+                symbols = portfolio.get("symbols", [])
+                returns = portfolio.get("expected_returns", [])
+                cov = portfolio.get("covariance")
+
+                if symbols and returns and cov:
+                    q_rec = self.quantum_agent.fast_optimize(
+                        problem=ProblemKind.PORTFOLIO_ALLOCATION,
+                        symbols=symbols,
+                        expected_returns=returns,
+                        covariance=cov,
+                        max_picks=payload.get("max_picks", len(symbols)),
+                    )
+                    quantum_rec_symbols = q_rec.selected_labels
+                    quantum_obj = q_rec.objective
+                    quantum_contrib = q_rec.contribution_summary
+
+                    # Quantum modulation: if the optimizer picks fewer
+                    # symbols than available, reduce total exposure to
+                    # reflect conviction
+                    if len(quantum_rec_symbols) > 0:
+                        quantum_mod = min(1.0, len(quantum_rec_symbols) / len(symbols) + 0.3)
+            except Exception as exc:
+                layer_errors.append(f"quantum: {exc}")
+
+        # 7. Combine size multiplier
         final_size = consolidated.final_size_multiplier
         final_size *= coach_shrink
         final_size *= budget_mult
+        final_size *= quantum_mod
         # OOD-based attenuation
         if ood_score > 0.5:
             final_size *= max(0.3, 1.0 - 0.7 * ood_score)
@@ -326,6 +364,10 @@ class JarvisFull:
             sage_schools_aligned=sage_aligned,
             sage_schools_consulted=sage_consulted,
             sage_modulation=sage_modulation,
+            quantum_recommended_symbols=quantum_rec_symbols,
+            quantum_objective=round(quantum_obj, 4),
+            quantum_contribution=quantum_contrib,
+            quantum_modulation_mult=round(quantum_mod, 3),
         )
 
     # ── Sage integration ─────────────────────────────────

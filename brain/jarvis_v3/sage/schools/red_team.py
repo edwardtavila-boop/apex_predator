@@ -20,6 +20,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 def _ema(values: list[float], period: int) -> list[float]:
@@ -60,7 +61,7 @@ class RedTeamSchool(SchoolBase):
         last_close = closes[-1]
 
         # Counter-thesis 1: stretched from EMA-20 -> mean-reversion candidate
-        ema20 = _ema(closes, 20)[-1]
+        ema20 = get_or_compute(ctx, "ema_20", lambda: _ema(closes, 20))[-1]
         stretch = (last_close - ema20) / max(ema20, 1e-9)
         overstretched_up = stretch > self.OVERSTRETCH_PCT
         overstretched_dn = stretch < -self.OVERSTRETCH_PCT

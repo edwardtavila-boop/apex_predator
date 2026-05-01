@@ -13,7 +13,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
-from eta_engine.brain.jarvis_v3.sage.consultation import calibrated_conviction_for
+from eta_engine.brain.jarvis_v3.sage.edge_tracker import calibrated_conviction_for
 
 
 class DowTheorySchool(SchoolBase):

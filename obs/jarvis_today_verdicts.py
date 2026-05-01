@@ -123,6 +123,28 @@ def aggregate_today(
         with suppress(TypeError, ValueError):
             policy_versions_seen.add(int(pv))
 
+    # Sage modulation stats
+    sage_loosened = 0
+    sage_tightened = 0
+    sage_deferred = 0
+    sage_convictions: list[float] = []
+    sage_alignments: list[float] = []
+    for rec in records:
+        resp = rec.get("response", {}) or {}
+        sage_mod = resp.get("sage_modulation", "")
+        sage_conv = resp.get("sage_conviction")
+        sage_align = resp.get("sage_alignment")
+        if sage_mod == "loosened":
+            sage_loosened += 1
+        elif sage_mod in ("tightened", "deferred"):
+            sage_tightened += 1
+            if sage_mod == "deferred":
+                sage_deferred += 1
+        if isinstance(sage_conv, (int, float)):
+            sage_convictions.append(float(sage_conv))
+        if isinstance(sage_align, (int, float)):
+            sage_alignments.append(float(sage_align))
+
     avg_cap = sum(cond_caps) / len(cond_caps) if cond_caps else 1.0
 
     return {
@@ -137,4 +159,17 @@ def aggregate_today(
             for h in sorted(hourly.keys())
         ],
         "policy_versions_seen": sorted(policy_versions_seen),
+        "sage": {
+            "n_loosened": sage_loosened,
+            "n_tightened": sage_tightened,
+            "n_deferred": sage_deferred,
+            "avg_conviction": (
+                round(sum(sage_convictions) / len(sage_convictions), 4)
+                if sage_convictions else 0.0
+            ),
+            "avg_alignment": (
+                round(sum(sage_alignments) / len(sage_alignments), 4)
+                if sage_alignments else 0.5
+            ),
+        },
     }

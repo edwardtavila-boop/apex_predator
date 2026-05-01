@@ -13,6 +13,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.feature_cache import get_or_compute
 
 
 class VPASchool(SchoolBase):
@@ -39,9 +40,12 @@ class VPASchool(SchoolBase):
         last_close = float(last["close"])
         last_vol = float(last.get("volume", 0))
 
-        # Average TRUE volume over prior 20 bars
-        avg_vol = sum(float(b.get("volume", 0)) for b in bars[-21:-1]) / 20
-        avg_range = sum(float(b["high"]) - float(b["low"]) for b in bars[-21:-1]) / 20
+        # Baseline volume + range from prior 20 bars (cached)
+        def _baselines():
+            avg_vol = sum(float(b.get("volume", 0)) for b in bars[-21:-1]) / 20
+            avg_range = sum(float(b["high"]) - float(b["low"]) for b in bars[-21:-1]) / 20
+            return (avg_vol, avg_range)
+        avg_vol, avg_range = get_or_compute(ctx, "vpa_baselines", _baselines)
         last_range = float(last["high"]) - float(last["low"])
         last_body = abs(last_close - last_open)
 

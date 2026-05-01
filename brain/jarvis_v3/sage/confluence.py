@@ -89,12 +89,21 @@ def aggregate(
     if regime is not None:
         regime_mod_fn = _get_regime_mod_fn()
 
+    # Dependency boosts: when one school signals, correlate-affirming schools
+    # get a small bump (e.g. wyckoff spring + dow_theory uptrend = stronger together).
+    try:
+        from eta_engine.brain.jarvis_v3.sage.dependency_graph import apply_dependency_boosts
+        dependency_boosts = apply_dependency_boosts(verdicts)
+    except Exception:  # noqa: BLE001
+        dependency_boosts = {}
+
     for name, v in verdicts.items():
         school = schools.get(name)
         base_weight = school.WEIGHT if school is not None else 1.0
         regime_mod = regime_mod_fn(name, regime) if regime_mod_fn else 1.0
         edge_mod = edge_mods.get(name, 1.0)
-        weight = base_weight * regime_mod * edge_mod
+        dep_boost = dependency_boosts.get(name, 1.0)
+        weight = base_weight * regime_mod * edge_mod * dep_boost
         contrib = weight * v.conviction
         if v.bias == Bias.LONG:
             long_score += contrib

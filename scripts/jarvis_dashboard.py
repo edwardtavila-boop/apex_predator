@@ -129,6 +129,8 @@ def _render_drift() -> dict[str, object]:
 def collect_state() -> dict[str, object]:
     return {
         "drift": _render_drift(),
+        "sage": _render_sage(),
+        "sage_edge": _render_sage_edge(),
         "breaker": _empty_panel("breaker"),
         "deadman": _empty_panel("deadman"),
         "forecast": _empty_panel("forecast"),
@@ -138,6 +140,45 @@ def collect_state() -> dict[str, object]:
         "journal": _empty_panel("journal"),
         "alerts": _empty_panel("alerts"),
     }
+
+
+def _render_sage() -> dict[str, object]:
+    try:
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        edges = tracker.snapshot()
+        monitor = default_monitor()
+        issues = monitor.check_health()
+        return {
+            "status": "ok",
+            "n_schools_tracked": len(edges),
+            "n_schools_degraded": len(issues),
+            "degraded": [{"school": i.school, "severity": i.severity} for i in issues[:10]],
+            "top_edge": [
+                {"school": k, **v}
+                for k, v in sorted(
+                    edges.items(),
+                    key=lambda x: x[1].get("expectancy", 0),
+                    reverse=True,
+                )[:10]
+            ],
+        }
+    except Exception:
+        return {"status": "unavailable", "error": "sage not loaded"}
+
+
+def _render_sage_edge() -> dict[str, object]:
+    try:
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        return {
+            "status": "ok",
+            "weights": tracker.all_weight_modifiers(),
+            "snapshot": tracker.snapshot(),
+        }
+    except Exception:
+        return {"status": "unavailable", "error": "edge tracker not loaded"}
 
 
 def main() -> int:

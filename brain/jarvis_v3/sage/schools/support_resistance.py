@@ -57,8 +57,6 @@ class SupportResistanceSchool(SchoolBase):
                 rationale=f"insufficient bars ({n} < 30) for pivot detection",
             )
 
-        highs = ctx.highs()
-        lows = ctx.lows()
         last_close = float(ctx.bars[-1]["close"])
 
         pivot_highs = [v for _, v in _cached_pivots_high(ctx)]

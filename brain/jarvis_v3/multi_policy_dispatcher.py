@@ -98,6 +98,16 @@ def dispatch_all(req: object, ctx: object, *, champion_arm: str = "v17") -> Disp
             resp = policy(req, ctx)
             v_str = resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict)
             cap = resp.size_cap_mult if resp.size_cap_mult is not None else 1.0
+            # Extract Sage modulation metadata from v22's conditions list
+            sage_mod: str | None = None
+            conditions = getattr(resp, "conditions", None) or []
+            for cond in conditions:
+                if "v22_sage_loosened" in cond:
+                    sage_mod = "loosened"
+                elif "v22_sage_disagree_tighten" in cond:
+                    sage_mod = "tightened"
+                elif "v22_sage_disagree_defer" in cond:
+                    sage_mod = "deferred"
             verdicts.append(PolicyVerdict(
                 arm_id=arm_id,
                 parent_version=int(c.get("parent_version", 0)),
@@ -105,6 +115,7 @@ def dispatch_all(req: object, ctx: object, *, champion_arm: str = "v17") -> Disp
                 reason_code=resp.reason_code,
                 reason=resp.reason[:200],
                 size_cap_mult=cap,
+                sage_modulation=sage_mod,
             ))
             rank = _verdict_pessimism_rank(v_str)
             if rank < most_pessimistic_rank:
@@ -134,6 +145,11 @@ def dispatch_all(req: object, ctx: object, *, champion_arm: str = "v17") -> Disp
             if v.verdict != champion_verdict_str:
                 disagreement += 1
 
+    # Detect v22 sage disagreement
+    sage_disagree = any(
+        v.sage_modulation in ("tightened", "deferred") for v in verdicts
+    )
+
     return DispatchResult(
         request_id=getattr(req, "request_id", ""),
         champion_arm=champion_arm,
@@ -141,6 +157,7 @@ def dispatch_all(req: object, ctx: object, *, champion_arm: str = "v17") -> Disp
         consensus_verdict=consensus_verdict,
         consensus_size_cap_mult=round(consensus_cap, 4),
         disagreement_count=disagreement,
+        sage_disagreement=sage_disagree,
     )
 
 
@@ -152,13 +169,16 @@ def diff_matrix(result: DispatchResult) -> dict[str, Any]:
         "consensus_verdict": result.consensus_verdict,
         "consensus_size_cap_mult": result.consensus_size_cap_mult,
         "disagreement_count": result.disagreement_count,
+        "sage_disagreement": result.sage_disagreement,
         "per_arm": [
             {
                 "arm_id": v.arm_id,
                 "parent_version": v.parent_version,
                 "verdict": v.verdict,
                 "reason_code": v.reason_code,
+                "reason": v.reason,
                 "size_cap_mult": v.size_cap_mult,
+                "sage_modulation": v.sage_modulation,
                 "error": v.error,
             }
             for v in result.verdicts

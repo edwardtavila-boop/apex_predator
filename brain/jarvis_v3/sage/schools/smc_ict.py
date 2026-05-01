@@ -12,6 +12,7 @@ from eta_engine.brain.jarvis_v3.sage.base import (
     SchoolBase,
     SchoolVerdict,
 )
+from eta_engine.brain.jarvis_v3.sage.edge_tracker import calibrated_conviction_for
 from eta_engine.brain.jarvis_v3.sage.schools.support_resistance import (
     _cached_pivots_high,
     _cached_pivots_low,
@@ -40,8 +41,6 @@ class SmcIctSchool(SchoolBase):
                 rationale=f"insufficient bars ({n} < 30)",
             )
 
-        highs = ctx.highs()
-        lows = ctx.lows()
         last_close = float(ctx.bars[-1]["close"])
 
         pivot_highs = _cached_pivots_high(ctx)

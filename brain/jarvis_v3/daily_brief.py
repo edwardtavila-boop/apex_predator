@@ -55,6 +55,12 @@ class DailyBrief:
     drift_signals: list[str] = field(default_factory=list)
     degraded_skills: list[str] = field(default_factory=list)
     top_regimes: list[dict] = field(default_factory=list)
+    sage_composite_bias: str = ""
+    sage_conviction: float = 0.0
+    sage_schools_healthy: int = 0
+    sage_schools_degraded: int = 0
+    sage_top_schools: list[str] = field(default_factory=list)
+    sage_disagreement_summary: str = ""
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -120,6 +126,17 @@ class DailyBrief:
             lines.append("## Notes")
             for n in self.notes:
                 lines.append(f"- {n}")
+            lines.append("")
+
+        if self.sage_composite_bias:
+            lines.append("## Sage & Schools")
+            lines.append(f"- Composite bias: **{self.sage_composite_bias.upper()}**")
+            lines.append(f"- Conviction: {self.sage_conviction:.2f}")
+            lines.append(f"- Schools healthy: {self.sage_schools_healthy}, degraded: {self.sage_schools_degraded}")
+            if self.sage_top_schools:
+                lines.append(f"- Top schools: {', '.join(self.sage_top_schools)}")
+            if self.sage_disagreement_summary:
+                lines.append(f"- Disagreement: {self.sage_disagreement_summary}")
             lines.append("")
 
         return "\n".join(lines)
@@ -268,6 +285,37 @@ def generate_daily_brief(
     except Exception as exc:  # noqa: BLE001
         logger.debug("daily_brief: regime stats failed (%s)", exc)
 
+    # --- Sage & Schools summary ---
+    sage_bias, sage_conv, sage_healthy, sage_degraded = "", 0.0, 0, 0
+    sage_top: list[str] = []
+    sage_disagree = ""
+    try:
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        edges = tracker.snapshot()
+        if edges:
+            by_expectancy = sorted(
+                edges.items(), key=lambda x: x[1].get("expectancy", 0), reverse=True,
+            )
+            sage_top = [
+                f"{name} ({snap['expectancy']:+.2f}R)"
+                for name, snap in by_expectancy[:5]
+            ]
+        from eta_engine.brain.jarvis_v3.sage.health import default_monitor
+        monitor = default_monitor()
+        issues = monitor.check_health()
+        sage_healthy = len(edges) - len(issues)
+        sage_degraded = len(issues)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from eta_engine.brain.jarvis_v3.sage.last_report_cache import cache_size as sage_cache_sz
+        if sage_cache_sz() > 0:
+            # Best-effort: if a report is cached, read its summary
+            pass  # pop_last_any would destroy the cache; just note it's alive
+    except Exception:  # noqa: BLE001
+        pass
+
     # --- Health summary ---
     health_summary = "OK"
     try:
@@ -319,6 +367,12 @@ def generate_daily_brief(
         drift_signals=drift_signals,
         degraded_skills=degraded,
         top_regimes=top_regimes,
+        sage_composite_bias=sage_bias,
+        sage_conviction=sage_conv,
+        sage_schools_healthy=sage_healthy,
+        sage_schools_degraded=sage_degraded,
+        sage_top_schools=sage_top,
+        sage_disagreement_summary=sage_disagree,
         notes=notes,
     )
 

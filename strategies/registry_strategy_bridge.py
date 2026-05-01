@@ -28,6 +28,16 @@ if TYPE_CHECKING:
     from eta_engine.strategies.eta_policy import StrategyContext
     from eta_engine.strategies.per_bot_registry import StrategyAssignment
 
+_STRATEGY_CACHE: dict[str, object] = {}
+"""Per-bot_id strategy cache. Strategies are expensive to construct
+(ORB needs _DayState, sage-gated needs 22-school consensus engine, etc.)
+and are called on every bar in the paper-trade loop. Cache by bot_id
+so paper_trade_sim over thousands of bars doesn't reconstruct on every tick."""
+
+
+def _clear_strategy_cache() -> None:
+    _STRATEGY_CACHE.clear()
+
 _KIND_TO_SID: dict[str, StrategyId] = {
     "orb": StrategyId.REGISTRY_ORB,
     "drb": StrategyId.REGISTRY_DRB,
@@ -254,12 +264,6 @@ def _passthrough(bars: list[Bar], ctx: StrategyContext) -> StrategySignal:
 def build_registry_dispatch(
     bot_id: str,
 ) -> tuple[dict[str, tuple[StrategyId, ...]], dict[StrategyId, Callable[..., StrategySignal]]] | None:
-    """Read per_bot_registry for bot_id, build a dispatch table that routes
-    to the registry-assigned strategy instead of legacy SMC/ICT.
-
-    Returns (eligibility_map, registry_map) suitable for policy_router.dispatch(),
-    or None if the bot has no registry assignment.
-    """
     from eta_engine.strategies.per_bot_registry import get_for_bot, is_bot_active
 
     if not is_bot_active(bot_id):
@@ -273,9 +277,13 @@ def build_registry_dispatch(
     if sid is None:
         return None
 
-    callable_fn = _build_callable_for_assignment(assignment)
-    if callable_fn is None:
-        return None
+    if bot_id in _STRATEGY_CACHE:
+        callable_fn = _STRATEGY_CACHE[bot_id]
+    else:
+        callable_fn = _build_callable_for_assignment(assignment)
+        if callable_fn is None:
+            return None
+        _STRATEGY_CACHE[bot_id] = callable_fn
 
     eligibility = {assignment.symbol.upper(): (sid,)}
     registry = {sid: callable_fn}

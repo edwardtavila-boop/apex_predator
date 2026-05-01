@@ -250,3 +250,16 @@ def default_tracker() -> EdgeTracker:
     if _default is None:
         _default = EdgeTracker()
     return _default
+
+
+def calibrated_conviction_for(school_name: str, raw_conviction: float) -> float:
+    """Calibrate a school's raw conviction using its EdgeTracker track record.
+
+    Schools call this to self-tune their output conviction based on
+    realized hit rates. No edge data means no adjustment.
+    """
+    try:
+        edge = default_tracker().edge_for(school_name)
+        return edge.calibrate_conviction(raw_conviction)
+    except Exception:  # noqa: BLE001
+        return raw_conviction

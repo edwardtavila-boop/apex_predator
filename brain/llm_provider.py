@@ -236,9 +236,11 @@ def _call_deepseek(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_message})
 
-    # DeepSeek-R1 needs temperature fixed at 1.0
+    # DeepSeek-R1 needs temperature fixed at 1.0 and higher max_tokens
+    # because the reasoning chain consumes part of the budget.
     if model == "deepseek-reasoner":
         temperature = 1.0
+        max_tokens = max(max_tokens, 1024)  # ensure room for reasoning + answer
 
     resp = client.chat.completions.create(
         model=model, messages=messages, max_tokens=max_tokens, temperature=temperature,

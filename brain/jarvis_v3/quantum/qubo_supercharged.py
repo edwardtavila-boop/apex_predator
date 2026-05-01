@@ -62,17 +62,9 @@ def risk_parity_qubo(
     """Risk-parity allocation: equalize risk contribution across selected assets.
 
     Minimizes the variance of risk contributions across the portfolio.
-    Each asset gets a contribution proportional to w_i * (Cov w)_i.
-    We penalize deviation from equal contribution via a quadratic penalty.
-
-    Standard risk-parity objective decoded as QUBO:
-        minimize   risk_aversion * w^T Cov w
-                 + penalty * sum_i (RC_i - 1/n)^2
-
-    where RC_i = w_i * (Cov w)_i / portfolio_variance is the risk
-    contribution fraction. For the QUBO approximation we drop the
-    normalization and penalize variance of raw contributions.
     """
+    _guard_finite(expected_returns, "expected_returns")
+    _guard_finite_matrix(covariance, "covariance")
     n = len(expected_returns)
     labels = asset_labels or [f"asset{i}" for i in range(n)]
     Q: dict[int, dict[int, float]] = {}
@@ -369,6 +361,9 @@ def parallel_tempering_solve(
     accepted = 0
 
     for iteration in range(n_iterations):
+        # Timeout check
+        if time.monotonic() - start_time > timeout_seconds:
+            break
         # Metropolis step for each replica
         for r in range(n_replicas):
             i = rng.randint(0, n - 1)

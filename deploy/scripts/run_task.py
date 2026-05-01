@@ -254,13 +254,16 @@ def _task_prompt_warmup(state_dir: Path) -> dict:
     """
     import os
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return {"skipped": True, "reason": "no API key"}
-
     try:
-        import anthropic
+        from dotenv import load_dotenv
+        load_dotenv()
     except ImportError:
-        return {"skipped": True, "reason": "anthropic SDK not installed"}
+        pass
+
+    from eta_engine.brain.llm_provider import chat_completion, ModelTier
+
+    if not os.environ.get("DEEPSEEK_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
+        return {"skipped": True, "reason": "no API key"}
 
     from eta_engine.brain.jarvis_v3.claude_layer.prompts import (
         PERSONA_PREFIXES,
@@ -281,25 +284,19 @@ def _task_prompt_warmup(state_dir: Path) -> dict:
 
     for persona, prefix in PERSONA_PREFIXES.items():
         try:
-            resp = client.messages.create(
-                model="claude-haiku-4-5",
-                max_tokens=20,  # tiny -- just enough to prove cache
-                system=[
-                    {"type": "text", "text": prefix, "cache_control": {"type": "ephemeral"}},
-                ],
-                messages=[{"role": "user", "content": "warmup_ping"}],
+            resp = chat_completion(
+                tier=ModelTier.HAIKU,
+                system_prompt=prefix,
+                user_message="warmup_ping",
+                max_tokens=20,
             )
-            cache_read = getattr(resp.usage, "cache_read_input_tokens", 0) or 0
-            cache_write = getattr(resp.usage, "cache_creation_input_tokens", 0) or 0
             results[persona] = {
-                "input_tokens": resp.usage.input_tokens,
-                "output_tokens": resp.usage.output_tokens,
-                "cache_read": cache_read,
-                "cache_write": cache_write,
+                "input_tokens": resp.input_tokens,
+                "output_tokens": resp.output_tokens,
+                "model": resp.model,
             }
-            total_tokens += resp.usage.input_tokens + resp.usage.output_tokens
-            # Estimated cost for Haiku warmup (tiny)
-            total_cost_est += resp.usage.input_tokens * 0.80 / 1_000_000 + resp.usage.output_tokens * 4.00 / 1_000_000
+            total_tokens += resp.input_tokens + resp.output_tokens
+            total_cost_est += resp.cost_usd
         except Exception as exc:  # noqa: BLE001
             results[persona] = {"error": str(exc)[:200]}
 
@@ -571,20 +568,22 @@ def _task_self_test(state_dir: Path) -> dict:
     else:
         report["checks"]["heartbeat_fresh"] = {"ok": False, "error": "no heartbeat file"}
 
-    # 4. Live Claude call if key present (budget-sensitive: once per day is cheap)
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    # 4. Live LLM ping via provider (budget-sensitive: once per day)
+    ds_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    ant_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if ds_key or ant_key:
         try:
-            import anthropic
+            from eta_engine.brain.llm_provider import chat_completion, ModelTier
 
-            client = anthropic.Anthropic()
-            resp = client.messages.create(
-                model="claude-haiku-4-5",
+            resp = chat_completion(
+                tier=ModelTier.HAIKU,
+                user_message="ping",
                 max_tokens=5,
-                messages=[{"role": "user", "content": "ping"}],
             )
-            report["checks"]["claude_live"] = {
+            report["checks"]["llm_live"] = {
                 "ok": True,
-                "tokens": resp.usage.output_tokens,
+                "tokens": resp.output_tokens,
+                "provider": resp.provider.value,
             }
         except Exception as exc:  # noqa: BLE001
             report["checks"]["claude_live"] = {"ok": False, "error": str(exc)[:150]}

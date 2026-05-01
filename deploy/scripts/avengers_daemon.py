@@ -60,52 +60,12 @@ class AvengersDaemon:
             distiller=self.distiller,
         )
         # Fleet with DeepSeek-native executor by default.
-        # Falls back to Anthropic automatically if DEEPSEEK_API_KEY is missing
-        # and ANTHROPIC_API_KEY is present.
+        # Falls back to Anthropic automatically if DEEPSEEK_API_KEY is missing.
         self.fleet = Fleet(executor=DeepSeekExecutor())
         self.dispatch = AvengersDispatch(
             governor=self.governor,
             fleet=self.fleet,
         )
-
-        # Persistent HTTP/2 client for Anthropic (optimization #8). Saves
-        # TLS handshake on every call, 50-100ms each. Held across the
-        # daemon's life. Lazy-init so import cost is avoided if key is missing.
-        self._anthropic_client = None
-        self._init_anthropic_client()
-
-    def _init_anthropic_client(self) -> None:
-        """Build a long-lived Anthropic client with HTTP/2 + pooling."""
-        import os
-
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            logger.info("anthropic client: no API key, pooling skipped")
-            return
-        try:
-            import anthropic
-            import httpx
-        except ImportError as exc:
-            logger.info("anthropic client: sdk missing (%s); skipping pooling", exc)
-            return
-        try:
-            http_client = httpx.Client(
-                http2=True,
-                limits=httpx.Limits(
-                    max_connections=10,
-                    max_keepalive_connections=5,
-                    keepalive_expiry=120.0,
-                ),
-                timeout=httpx.Timeout(60.0, connect=10.0),
-            )
-            self._anthropic_client = anthropic.Anthropic(http_client=http_client)
-            logger.info("anthropic client: persistent HTTP/2 client ready")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("anthropic client init failed: %s", exc)
-
-    @property
-    def anthropic_client(self) -> object | None:
-        """Shared Anthropic client. None if no API key or SDK unavailable."""
-        return self._anthropic_client
 
     def persist(self) -> None:
         """Save all stateful components to disk."""

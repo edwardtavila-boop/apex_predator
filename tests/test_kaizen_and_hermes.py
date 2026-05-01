@@ -1,9 +1,15 @@
 """Tests for Kaizen Engine, Kaizen Guard, Hermes Bridge, and Supercharged QUBO."""
 
 import json
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+
+# Ensure shared jarvis module is importable
+_COMMON_SRC = Path(__file__).resolve().parents[2] / "firm" / "eta_engine" / "src"
+if _COMMON_SRC.exists() and str(_COMMON_SRC) not in sys.path:
+    sys.path.insert(0, str(_COMMON_SRC))
 
 import pytest
 

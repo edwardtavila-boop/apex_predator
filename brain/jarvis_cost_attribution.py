@@ -75,6 +75,7 @@ class CostEvent:
     input_tokens: int
     output_tokens: int
     ts_utc: datetime = field(default_factory=lambda: datetime.now(UTC))
+    provider: str = "deepseek"  # deepseek | anthropic
 
     @property
     def total_tokens(self) -> int:
@@ -82,7 +83,7 @@ class CostEvent:
 
     @property
     def sonnet_equiv_units(self) -> float:
-        """Tokens * cost multiplier -- the universal cost unit."""
+        """Tokens * cost multiplier — universal cost unit."""
         return float(self.total_tokens) * COST_RATIO[self.tier]
 
 

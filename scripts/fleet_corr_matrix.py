@@ -50,7 +50,7 @@ class CorrPair:
 
 def _load_daily_returns(ds: DatasetMeta, max_bars: int = 252) -> list[float] | None:
     try:
-        bars = default_library().load_bars(ds, limit=max_bars + 1)
+        bars = default_library().load_bars(ds, limit=max_bars + 1, require_positive_prices=True)
     except Exception:
         return None
     if len(bars) < 10:

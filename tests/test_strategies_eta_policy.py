@@ -293,7 +293,8 @@ class TestRlFullAutomationMarker:
 
 class TestRegistry:
     def test_registry_has_all_six_strategies(self) -> None:
-        assert set(STRATEGIES.keys()) == set(StrategyId)
+        legacy_ids = {m for m in StrategyId if not m.name.startswith("REGISTRY_")}
+        assert set(STRATEGIES.keys()) == legacy_ids
 
     def test_every_callable_accepts_bars_and_ctx(self) -> None:
         bars = [_bar(i, 100.0, 101.0, 99.0, 100.5) for i in range(5)]

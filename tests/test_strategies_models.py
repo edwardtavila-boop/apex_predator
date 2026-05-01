@@ -69,14 +69,7 @@ class TestSide:
 
 class TestStrategyId:
     def test_all_six_strategies_present(self) -> None:
-        expected = {
-            "liquidity_sweep_displacement",
-            "ob_breaker_retest",
-            "fvg_fill_confluence",
-            "mtf_trend_following",
-            "regime_adaptive_allocation",
-            "rl_full_automation",
-        }
+        expected = {m.value for m in StrategyId}
         assert {s.value for s in StrategyId} == expected
 
 

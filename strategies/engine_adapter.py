@@ -393,11 +393,6 @@ class RouterAdapter:
                     self._last_decision = None
                     return None
             except Exception:  # noqa: BLE001 -- never crash the hot loop
-                # If the registry import or lookup fails, default to
-                # ALLOWING the bot to fire. Failing-closed here would
-                # make a transient registry import error look like a
-                # global kill-switch event, which is worse than
-                # treating the registry as unavailable.
                 pass
         self._tick_scheduler_safely()
         ctx = context_from_dict(
@@ -405,12 +400,34 @@ class RouterAdapter:
             kill_switch_active=self.kill_switch_active,
             session_allows_entries=self.session_allows_entries,
         )
+        effective_eligibility = self._effective_eligibility()
+        effective_registry = self.registry
+        if self.bot_id is not None:
+            try:
+                from eta_engine.strategies.registry_strategy_bridge import (
+                    build_registry_dispatch,
+                )
+
+                bridge = build_registry_dispatch(self.bot_id)
+                if bridge is not None:
+                    bridge_elig, bridge_reg = bridge
+                    merged_elig = dict(bridge_elig)
+                    if effective_eligibility:
+                        for asset, sids in effective_eligibility.items():
+                            existing = list(merged_elig.get(asset, ()))
+                            merged_elig[asset] = tuple(existing) + tuple(sids)
+                    effective_eligibility = merged_elig
+                    if effective_registry is None:
+                        effective_registry = {}
+                    effective_registry = {**bridge_reg, **effective_registry}
+            except Exception:  # noqa: BLE001
+                pass
         decision = dispatch(
             self.asset,
             list(self._bars),
             ctx,
-            eligibility=self._effective_eligibility(),
-            registry=self.registry,
+            eligibility=effective_eligibility,
+            registry=effective_registry,
         )
         self._last_decision = decision
         if self.decision_sink is not None:

@@ -26,14 +26,34 @@ class StrategyId(StrEnum):
 
     Order = ranking by ``edge * ease-of-automation`` as delivered in
     the recommended-strategies note.
+
+    Registry-backed strategies (ORB, DRB, sage, crypto, etc.) are
+    added below — these map to the per_bot_registry.py assignments
+    and use the strategy_kind dispatch via registry_strategy_bridge.
     """
 
+    # SMC/ICT legacy strategies
     LIQUIDITY_SWEEP_DISPLACEMENT = "liquidity_sweep_displacement"
     OB_BREAKER_RETEST = "ob_breaker_retest"
     FVG_FILL_CONFLUENCE = "fvg_fill_confluence"
     MTF_TREND_FOLLOWING = "mtf_trend_following"
     REGIME_ADAPTIVE_ALLOCATION = "regime_adaptive_allocation"
     RL_FULL_AUTOMATION = "rl_full_automation"
+
+    # Registry-backed strategies (per_bot_registry.py strategy_kind dispatch)
+    REGISTRY_ORB = "registry_orb"
+    REGISTRY_DRB = "registry_drb"
+    REGISTRY_ORB_SAGE_GATED = "registry_orb_sage_gated"
+    REGISTRY_SAGE_CONSENSUS = "registry_sage_consensus"
+    REGISTRY_CRYPTO_ORB = "registry_crypto_orb"
+    REGISTRY_CRYPTO_TREND = "registry_crypto_trend"
+    REGISTRY_CRYPTO_REGRESSION = "registry_crypto_regime_trend"
+    REGISTRY_SAGE_DAILY_GATED = "registry_sage_daily_gated"
+    REGISTRY_ENSEMBLE_VOTING = "registry_ensemble_voting"
+    REGISTRY_CRYPTO_MACRO_CONFLUENCE = "registry_crypto_macro_confluence"
+    REGISTRY_COMPRESSION_BREAKOUT = "registry_compression_breakout"
+    REGISTRY_CRYPTO_MEANREV = "registry_crypto_meanrev"
+    REGISTRY_CONFLUENCE = "registry_confluence"
 
 
 # ---------------------------------------------------------------------------

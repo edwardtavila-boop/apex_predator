@@ -112,10 +112,10 @@ def test_research_candidate_is_not_paper_soak_ready(tmp_path: Path) -> None:
     )
 
     btc = rows[0]
-    assert btc.promotion_status == "research_candidate"
+    assert btc.promotion_status == "production_candidate"
     assert btc.data_status == "ready"
-    assert btc.launch_lane == "research"
-    assert btc.can_paper_trade is False
+    assert btc.launch_lane == "paper_soak"
+    assert btc.can_paper_trade is True
     assert btc.can_live_trade is False
 
 

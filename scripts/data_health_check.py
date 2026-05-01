@@ -32,7 +32,6 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 from eta_engine.data.library import default_library  # noqa: E402
-from eta_engine.scripts import workspace_roots  # noqa: E402
 
 if TYPE_CHECKING:
     from eta_engine.data.audit import BotAudit

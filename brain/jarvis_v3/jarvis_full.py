@@ -119,6 +119,7 @@ class JarvisFull:
         skill_registry: SkillRegistry | None = None,
         thesis_tracker: ThesisTracker | None = None,
         quantum_agent: "QuantumOptimizerAgent | None" = None,
+        kaizen_engine: "KaizenEngine | None" = None,
     ) -> None:
         self.intelligence = intelligence
         self.memory = memory
@@ -126,6 +127,7 @@ class JarvisFull:
         self.skill_registry = skill_registry
         self.thesis_tracker = thesis_tracker
         self.quantum_agent = quantum_agent
+        self.kaizen_engine = kaizen_engine
 
     @classmethod
     def bootstrap(
@@ -135,8 +137,9 @@ class JarvisFull:
         memory: HierarchicalMemory | None = None,
         enable_intelligence: bool = True,
         quantum_agent: "QuantumOptimizerAgent | None" = None,
+        kaizen_engine: "KaizenEngine | None" = None,
     ) -> JarvisFull:
-        """Wire up the standard production stack with optional quantum."""
+        """Wire up the standard production stack with optional quantum and kaizen."""
         from eta_engine.brain.jarvis_v3.intelligence import (
             IntelligenceConfig,
             JarvisIntelligence,
@@ -162,6 +165,7 @@ class JarvisFull:
             skill_registry=SkillRegistry.default(),
             thesis_tracker=ThesisTracker.default(),
             quantum_agent=quantum_agent,
+            kaizen_engine=kaizen_engine,
         )
 
     def consult(
@@ -414,3 +418,17 @@ class JarvisFull:
             detect_self_drift,
         )
         return detect_self_drift().to_dict()
+
+    def kaizen_cycle(
+        self,
+        *,
+        trades_by_instrument: dict | None = None,
+        oos_trades: dict | None = None,
+    ) -> "KaizenCycleReport | None":
+        """Run one autonomous kaizen cycle if engine is wired."""
+        if self.kaizen_engine is None:
+            return None
+        return self.kaizen_engine.cycle(
+            trades_by_instrument=trades_by_instrument,
+            oos_trades_by_instrument=oos_trades,
+        )

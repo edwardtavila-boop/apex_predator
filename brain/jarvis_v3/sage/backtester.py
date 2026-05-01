@@ -17,9 +17,11 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -76,15 +78,17 @@ def replay_trades_iter(
     trades: list[dict[str, Any]],
     *,
     bars_lookup: Callable[[str, str], list[dict[str, Any]]] | None = None,
+    parallel: bool = False,
 ) -> list[dict[str, Any]]:
     """For each trade dict {symbol, side, entry_ts, realized_r}, run the
     sage on bars at entry. ``bars_lookup`` is a callable
     ``(symbol, entry_ts) -> list[bar dict]``.
 
     Returns a list of summary dicts (one per trade) suitable for analysis
-    or dumping to JSON.
+    or dumping to JSON. Pass ``parallel=True`` to use ThreadPoolExecutor.
     """
     out: list[dict[str, Any]] = []
+    jobs: list[dict[str, Any]] = []
     for t in trades:
         if bars_lookup is None:
             logger.warning("no bars_lookup provided -- skipping %s", t.get("symbol"))
@@ -96,13 +100,35 @@ def replay_trades_iter(
             continue
         if not bars or len(bars) < 30:
             continue
-        out.append(replay_one_trade(
-            bars_at_entry=bars,
-            side=t["side"],
-            realized_r=float(t["realized_r"]),
-            symbol=t["symbol"],
-        ))
+        jobs.append({
+            "bars": bars, "side": t["side"],
+            "realized_r": float(t["realized_r"]), "symbol": t["symbol"],
+        })
+
+    if not jobs:
+        return out
+
+    if parallel and len(jobs) > 1:
+        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as ex:
+            futures = {ex.submit(_replay_job, j): j for j in jobs}
+            for f in as_completed(futures):
+                try:
+                    out.append(f.result())
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("replay_job failed: %s", exc)
+    else:
+        for j in jobs:
+            out.append(_replay_job(j))
     return out
+
+
+def _replay_job(j: dict[str, Any]) -> dict[str, Any]:
+    return replay_one_trade(
+        bars_at_entry=j["bars"],
+        side=j["side"],
+        realized_r=j["realized_r"],
+        symbol=j["symbol"],
+    )
 
 
 def _read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -224,8 +250,10 @@ def build_file_bars_lookup(
             if path is None:
                 return []
             cache[key] = _load_bars_file(path)
-        eligible = [bar for bar in cache[key] if _bar_ts(bar) <= entry_ts]
-        return eligible[-window_bars:]
+        # Bisect for O(log n) windowing instead of O(n) linear filter
+        timestamps = [_bar_ts(b) for b in cache[key]]
+        idx = bisect.bisect_right(timestamps, str(entry_ts))
+        return cache[key][max(0, idx - window_bars):idx]
 
     return _lookup
 
@@ -240,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--output", type=Path,
                    default=Path("state/sage/backtest.json"))
     p.add_argument("--window-bars", type=int, default=120)
+    p.add_argument("--parallel", action="store_true",
+                   help="Replay trades with ThreadPoolExecutor")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -269,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.bars_source is not None and args.bars_source.exists()
         else None
     )
-    replayed = replay_trades_iter(trades, bars_lookup=bars_lookup)
+    replayed = replay_trades_iter(trades, bars_lookup=bars_lookup, parallel=args.parallel)
     avg_r = (
         sum(float(row["realized_r"]) for row in replayed) / len(replayed)
         if replayed else 0.0

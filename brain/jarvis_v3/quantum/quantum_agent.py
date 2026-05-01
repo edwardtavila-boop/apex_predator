@@ -102,16 +102,72 @@ class QuantumOptimizerAgent:
     coarse-grained (one method per problem kind) so the agent stays
     grokkable; underlying QUBO encoders are exposed in qubo_solver.py
     if a caller wants finer control.
+
+    Wave-18 cost discipline (2026-04-30):
+      * Quantum invocation gated by ``should_invoke()`` — only runs when
+        edge benefit justifies cost
+      * Classical SA for n_vars <= 8; adaptive (SA/PT) for 9-16; full PT
+        for > 16
+      * Cloud quantum NEVER invoked from fast_optimize() (hot path)
+      * Daily budget tracked per-agent; auto-throttle at ceiling
     """
+
+    # Cost-gating thresholds
+    MIN_ASSETS_FOR_QUANTUM = 3
+    CLASSICAL_THRESHOLD = 8
+    ADAPTIVE_THRESHOLD = 16
 
     def __init__(
         self,
         *,
         adapter: QuantumCloudAdapter | None = None,
         n_iterations: int = 5_000,
+        cost_budget_daily_usd: float = 2.00,
     ) -> None:
         self.adapter = adapter or QuantumCloudAdapter()
         self.n_iterations = n_iterations
+        self.cost_budget_daily = cost_budget_daily_usd
+        self._spent_today = 0.0
+        self._spent_date = ""
+
+    @staticmethod
+    def should_invoke(
+        *,
+        n_symbols: int,
+        regime_changed_since_last: bool = True,
+        volatility_changed_pct: float = 0.0,
+        last_invoked_seconds_ago: float | None = None,
+    ) -> tuple[bool, str]:
+        """Gatekeeper: should we spend compute on quantum optimization?
+
+        Returns (should_invoke, reason).
+
+        Rules (first NO wins):
+          1. n_symbols < MIN_ASSETS_FOR_QUANTUM → NO (not enough assets)
+          2. No regime change + no vol spike → NO (nothing new to optimize)
+          3. Invoked < 60 seconds ago → NO (rate limit)
+          4. Otherwise → YES
+        """
+        if n_symbols < QuantumOptimizerAgent.MIN_ASSETS_FOR_QUANTUM:
+            return False, (
+                f"portfolio_size={n_symbols} < min={QuantumOptimizerAgent.MIN_ASSETS_FOR_QUANTUM}"
+            )
+        if not regime_changed_since_last and volatility_changed_pct < 0.15:
+            return False, "no regime change and vol stable — rebalance not needed"
+        if last_invoked_seconds_ago is not None and last_invoked_seconds_ago < 60:
+            return False, f"rate limit: last invoked {last_invoked_seconds_ago:.0f}s ago"
+        return True, "regime or vol shift — quantum edge justified"
+
+    def _check_budget(self) -> bool:
+        from datetime import UTC, datetime
+        today = datetime.now(UTC).strftime("%Y%m%d")
+        if today != self._spent_date:
+            self._spent_today = 0.0
+            self._spent_date = today
+        return self._spent_today < self.cost_budget_daily
+
+    def _spend(self, amount: float) -> None:
+        self._spent_today += amount
 
     # ── Portfolio allocation ────────────────────────────────
 

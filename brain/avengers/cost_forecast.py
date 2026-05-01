@@ -107,11 +107,17 @@ class CostForecast:
         self.sonnet_usd_per_call = sonnet_usd_per_call
         self._clock = clock or (lambda: datetime.now(UTC))
 
-    def _load(self, *, hours: float) -> list[dict]:
+    def _load_all(self) -> list[dict]:
+        """Read the entire journal once and parse all records.
+
+        Returns raw records with (ts, persona, caller, category, cost_multiplier).
+        Callers filter by time window locally instead of re-reading the file.
+        """
         if not self.journal_path.exists():
             return []
-        cutoff = self._clock() - timedelta(hours=hours)
-        out: list[dict] = []
+        if hasattr(self, "_all_rows_cache"):
+            return self._all_rows_cache
+        rows: list[dict] = []
         try:
             for raw in self.journal_path.read_text(encoding="utf-8").splitlines():
                 raw = raw.strip()
@@ -136,20 +142,21 @@ class CostForecast:
                         ts = ts.replace(tzinfo=UTC)
                 except (ValueError, TypeError):
                     continue
-                if ts < cutoff:
-                    continue
-                out.append(
-                    {
-                        "ts": ts,
-                        "persona": env.get("persona", res.get("persona_id", "")),
-                        "caller": env.get("caller", ""),
-                        "category": env.get("category", res.get("category", "")),
-                        "cost_multiplier": float(res.get("cost_multiplier", 0.0) or 0.0),
-                    }
-                )
+                rows.append({
+                    "ts": ts,
+                    "persona": env.get("persona", res.get("persona_id", "")),
+                    "caller": env.get("caller", ""),
+                    "category": env.get("category", res.get("category", "")),
+                    "cost_multiplier": float(res.get("cost_multiplier", 0.0) or 0.0),
+                })
         except OSError:
             return []
-        return out
+        self._all_rows_cache = rows
+        return rows
+
+    def _load(self, *, hours: float) -> list[dict]:
+        cutoff = self._clock() - timedelta(hours=hours)
+        return [r for r in self._load_all() if r["ts"] >= cutoff]
 
     def _window(self, *, hours: float) -> BurnWindow:
         rows = self._load(hours=hours)

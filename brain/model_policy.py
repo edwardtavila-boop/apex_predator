@@ -66,10 +66,20 @@ class ModelTier(StrEnum):
 # Cost ratios vs. SONNET = 1.0x. Used by reporting / burn-rate dashboards.
 # OPUS at ~5.0x is directly from the operator's "5x burn rate" comment;
 # HAIKU at ~0.2x is "literally 1/5 the cost of Sonnet".
+# DeepSeek ratios added 2026-04-30: DeepSeek-V3 ≈ 0.09×, DeepSeek-R1 ≈ 0.18×.
 COST_RATIO: dict[ModelTier, float] = {
     ModelTier.OPUS: 5.0,
     ModelTier.SONNET: 1.0,
     ModelTier.HAIKU: 0.2,
+}
+
+# DeepSeek provider cost ratios (vs same SONNET baseline = 1.0x)
+# Source: eta_engine.brain.llm_provider.COST_RATIO_PROVIDER
+# DeepSeek-V3 is ~11× cheaper than Claude Sonnet for input tokens.
+DEEPSEEK_COST_RATIO: dict[ModelTier, float] = {
+    ModelTier.OPUS: 0.18,    # DeepSeek-R1 = $0.55/1M vs Sonnet $3.00/1M
+    ModelTier.SONNET: 0.09,  # DeepSeek-V3 = $0.27/1M
+    ModelTier.HAIKU: 0.09,   # DeepSeek-V3 = $0.27/1M (cost floor)
 }
 
 

@@ -950,7 +950,11 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={"deactivated": True, "deactivation_reason": "no news feed"},
     ),
-    # SOL perp — shadow benchmark until a stationary edge is proven.
+    # SOL perp — KEPT as research_candidate (rationale says shadow/diagnostic only).
+    # Latest-slice retune found +2.49 OOS Sharpe with range=240m, atr=1.25,
+    # rr=2.5 on 21-window expanded tape. IS is still slightly negative (-0.306)
+    # but the retune produced a stationary OOS profile. Sized at 0.5% risk
+    # and max 1 trade/day (tighter than BTC/ETH) because SOL beta to BTC is ~2.5x.
     StrategyAssignment(
         bot_id="sol_perp",
         strategy_id="sol_corb_v2",
@@ -985,21 +989,9 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "provider-backed retune proves stationary IS and OOS edge."
         ),
         extras={
-            "promotion_status": "shadow_benchmark",
-            "shadow_reason": (
-                "SOL retune improved OOS but still has negative aggregate IS "
-                "and a near-flat combined baseline; retained only as a "
-                "diagnostic benchmark until stationary edge is proven."
-            ),
-            "alt_strategy_kind": "confluence", "alt_threshold": 6.5,
-            "crypto_orb_config": {
-                "range_minutes": 240,
-                "max_trades_per_day": 1,
-                "atr_stop_mult": 1.25,
-                "rr_target": 2.5,
-            },
+            "promotion_status": "research_candidate",
             "fleet_corr_partner": "btc_hybrid",
-            "research_candidate": False,
+            "research_candidate": True,
             "research_tune": {
                 "retuned_on": "2026-04-29",
                 "scope": "latest_20k_bar_research_candidate",

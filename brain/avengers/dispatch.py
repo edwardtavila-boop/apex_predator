@@ -359,6 +359,10 @@ class BackgroundTask(StrEnum):
     DISK_CLEANUP = "DISK_CLEANUP"  # ROBIN  -- weekly temp/cache prune
     BACKUP = "BACKUP"  # ALFRED -- daily state+config backup
     PROMETHEUS_EXPORT = "PROMETHEUS_EXPORT"  # ROBIN  -- every minute metrics flush
+    SAGE_HEALTH_CHECK = "SAGE_HEALTH_CHECK"  # ROBIN  -- daily school degradation detector
+    SAGE_ONCHAIN_WARM = "SAGE_ONCHAIN_WARM"  # ROBIN  -- every 5 min crypto on-chain cache warm
+    SAGE_BACKTEST = "SAGE_BACKTEST"  # ALFRED -- daily sage replay and edge learning
+    SAGE_EDGE_LEARN = "SAGE_EDGE_LEARN"  # ALFRED -- feed closed trades into EdgeTracker
 
 
 # Which persona owns which task. Used by the cron wrapper in scripts/.
@@ -383,6 +387,10 @@ TASK_OWNERS: dict[BackgroundTask, str] = {
     BackgroundTask.DISK_CLEANUP: "ROBIN",
     BackgroundTask.BACKUP: "ALFRED",
     BackgroundTask.PROMETHEUS_EXPORT: "ROBIN",
+    BackgroundTask.SAGE_HEALTH_CHECK: "ROBIN",
+    BackgroundTask.SAGE_ONCHAIN_WARM: "ROBIN",
+    BackgroundTask.SAGE_BACKTEST: "ALFRED",
+    BackgroundTask.SAGE_EDGE_LEARN: "ALFRED",
 }
 
 
@@ -408,4 +416,8 @@ TASK_CADENCE: dict[BackgroundTask, str] = {
     BackgroundTask.DISK_CLEANUP: "0 2 * * 0",  # Sundays 02:00 -- temp/cache prune
     BackgroundTask.BACKUP: "0 5 * * *",  # daily 05:00 -- state+config snapshot
     BackgroundTask.PROMETHEUS_EXPORT: "* * * * *",  # every minute -- OpenMetrics flush
+    BackgroundTask.SAGE_HEALTH_CHECK: "15 23 * * *",  # daily 23:15 -- school degradation alert
+    BackgroundTask.SAGE_ONCHAIN_WARM: "*/5 * * * *",  # every 5 min -- crypto on-chain cache warm
+    BackgroundTask.SAGE_BACKTEST: "0 2 * * *",  # daily 02:00 -- replay closed trades through sage
+    BackgroundTask.SAGE_EDGE_LEARN: "30 */2 * * *",  # every 2 hours -- feed EdgeTracker from closed fills
 }

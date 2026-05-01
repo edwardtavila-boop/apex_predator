@@ -171,11 +171,24 @@ def evaluate_v22(req: ActionRequest, ctx: JarvisContext) -> ActionResponse:
     funding = req.payload.get("funding") or req.payload.get("funding_basis")
     options = req.payload.get("options") or req.payload.get("options_greeks")
     if instrument_class == "crypto" and not onchain:
+        # Check local cache first to avoid HTTP on the hot path.
+        # The warm task pre-populates this every 5 min; this is a
+        # safety net that only fires when the cache is cold.
         try:
-            from eta_engine.brain.jarvis_v3.sage.onchain_fetcher import fetch_onchain
-            onchain = fetch_onchain(symbol) or {}
-        except Exception as exc:  # noqa: BLE001 -- on-chain is best-effort
-            logger.debug("fetch_onchain raised %s (non-fatal)", exc)
+            from eta_engine.brain.jarvis_v3.sage.onchain_fetcher import _CACHE
+            cache_key = symbol.upper()[:3]
+            entry = _CACHE.get(cache_key)
+            if entry is not None and hasattr(entry, "value"):
+                onchain = entry.value
+        except Exception:  # noqa: BLE001
+            pass
+        # Fall through to fetch only if cache is truly empty
+        if not onchain:
+            try:
+                from eta_engine.brain.jarvis_v3.sage.onchain_fetcher import fetch_onchain
+                onchain = fetch_onchain(symbol) or {}
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("fetch_onchain raised %s (non-fatal)", exc)
 
     try:
         from eta_engine.brain.jarvis_v3.sage import MarketContext, consult_sage

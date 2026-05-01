@@ -283,6 +283,14 @@ $tasks = @(
     },
     # Wave-6 pre-live (2026-04-27): sage on-chain cache warmer for crypto bots
     @{
+        Name       = "Eta-Sage-OnChain-Warm-Startup"
+        Exec       = $Python
+        Args       = "-m eta_engine.scripts.sage_onchain_warm --symbols BTCUSDT,ETHUSDT"
+        Cwd        = $EtaEngineDir
+        Trigger    = "AtStartup"
+        Notes      = "Boot-time on-chain cache warm so crypto bots never wait on first order after reboot."
+    },
+    @{
         Name       = "Eta-Sage-OnChain-Warm"
         Exec       = $Python
         Args       = "-m eta_engine.scripts.sage_onchain_warm --symbols BTCUSDT,ETHUSDT"

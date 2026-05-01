@@ -92,12 +92,14 @@ def explain_sage(
 
 
 def _llm_narrative(report: SageReport, *, symbol: str = "") -> str:
-    """Call Claude Haiku for a synthesized narrative.
+    """Call LLM (DeepSeek or Claude) for a synthesized narrative.
 
-    Lazily imports anthropic so we don't require it as a hard dependency.
+    Uses the provider abstraction layer so DeepSeek V3/V4 can replace
+    Claude for cost reduction. Falls back to Anthropic if DeepSeek
+    is not configured.
     """
-    from anthropic import Anthropic
-    client = Anthropic(timeout=10.0)
+    from eta_engine.brain.llm_provider import chat_completion, ModelTier as Tier
+
     school_lines = "\n".join(
         f"  - {name}: bias={v.bias.value}, conviction={v.conviction:.2f}, rationale={v.rationale}"
         for name, v in report.per_school.items()
@@ -115,9 +117,10 @@ def _llm_narrative(report: SageReport, *, symbol: str = "") -> str:
         f"Per-school verdicts:\n{school_lines}\n\n"
         f"Output ONLY the paragraph, no preamble."
     )
-    msg = client.messages.create(
-        model="claude-haiku-4-5",
+    resp = chat_completion(
+        tier=Tier.HAIKU,
+        user_message=prompt,
         max_tokens=350,
-        messages=[{"role": "user", "content": prompt}],
+        fallback_to_anthropic=True,
     )
-    return msg.content[0].text.strip()
+    return resp.text or _template_narrative(report, symbol=symbol)

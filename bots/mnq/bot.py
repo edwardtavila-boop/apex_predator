@@ -567,6 +567,7 @@ class MnqBot(BaseBot):
                 confidence=signal.confidence,
                 sage_bars=sage_bars,
                 entry_price=signal.price,
+                instrument_class="futures",
             )
             if not allowed:
                 self._record_event(

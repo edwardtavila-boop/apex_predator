@@ -324,34 +324,7 @@ def _btc_gate() -> Gate:
 # 4. Glide step (shared helper with final_revision).
 # ---------------------------------------------------------------------------
 
-
-def _glide_step(
-    baseline: dict[str, Any],
-    target: dict[str, Any],
-    *,
-    cap_rel: float = 0.34,
-) -> dict[str, Any]:
-    """Produce a MODERATE-compliant intermediate proposal.
-
-    Caps each numeric param's relative change at ``cap_rel`` so the
-    classifier tags the proposal as MODERATE (cap 0.34 < threshold 0.35).
-    """
-    out: dict[str, Any] = {}
-    for k, new in target.items():
-        old = baseline.get(k)
-        if isinstance(new, (int, float)) and isinstance(old, (int, float)) and old not in (0, 0.0):
-            max_delta = abs(old) * cap_rel
-            raw_delta = new - old
-            clipped = raw_delta
-            if abs(raw_delta) > max_delta:
-                clipped = max_delta if raw_delta > 0 else -max_delta
-            proposed = old + clipped
-            proposed = int(round(proposed)) if isinstance(old, int) and isinstance(new, int) else round(proposed, 4)
-            out[k] = proposed
-        else:
-            out[k] = old if old is not None else new
-    return out
-
+from eta_engine.core.sweep_helpers import glide_step as _glide_step  # shared with _jarvis_final_revision
 
 # ---------------------------------------------------------------------------
 # 5. Run one bot's sweep -> glide -> tweak pipeline.

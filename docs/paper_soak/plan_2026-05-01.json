@@ -34,5 +34,5 @@
     "_walk_forward_summary": "MNQ1/5m latest 20k imported bars, 60d/30d windows, 1/2 positive OOS, agg OOS Sharpe +1.788, DSR median 0.651, 50% pass fraction. Latest-slice retune: range=5m, rr=3.0, atr_stop=1.5, ema=50. Strict gate remains FAIL because pass fraction is exactly 50% and the second OOS fold only fired one trade.",
     "_notes": "Shadow/diagnostic baseline only, not a live or paper promotion candidate. Persisted so drift checks and launch readiness keep the known-bad plain ORB lane visible without blocking OP-16. Full latest-20k combined backtest: 50 trades, 20.0% win rate, avg R -0.2593, max DD 18.306%, total return -12.6815%; the improvement is OOS-slice relative to the prior latest-slice smoke, not a complete production promotion."
   },
-  "emitted_at_utc": "2026-05-01T04:06:12.849162+00:00"
+  "emitted_at_utc": "2026-05-01T12:17:56.764749+00:00"
 }

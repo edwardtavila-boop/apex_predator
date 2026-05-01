@@ -65,6 +65,53 @@ from typing import TYPE_CHECKING
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
+# Load .env so env vars (Telegram, broker, API keys) are available to subprocesses and the alerter
+_env_path = ROOT / ".env"
+if _env_path.exists():
+    try:
+        for line in _env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        pass
+# Also load root .env for shared keys (API keys etc.)
+_root_env = ROOT.parent / ".env"
+if _root_env.exists() and _root_env != _env_path:
+    try:
+        for line in _root_env.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        pass
+
+# Also load firm_command_center/broker_paper.env for broker settings
+_broker_env = ROOT.parent / "firm_command_center" / "secrets" / "broker_paper.env"
+if _broker_env.exists():
+    try:
+        for line in _broker_env.read_text(encoding="utf-8-sig").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        pass
+
 from eta_engine.brain.jarvis_context import (  # noqa: E402
     EquitySnapshot,
     JarvisContextBuilder,

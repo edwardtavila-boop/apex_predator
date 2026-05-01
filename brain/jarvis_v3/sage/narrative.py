@@ -24,6 +24,14 @@ _NARRATIVE_CACHE: dict[tuple[str, str], str] = {}
 _CACHE_LOCK = threading.Lock()
 
 
+def _any_llm_key() -> bool:
+    try:
+        from eta_engine.brain.llm_provider import _get_api_key, Provider
+        return bool(_get_api_key(Provider.DEEPSEEK) or _get_api_key(Provider.ANTHROPIC))
+    except Exception:
+        return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"))
+
+
 def _template_narrative(report: SageReport, *, symbol: str = "") -> str:
     """Fallback deterministic narrative (no LLM call)."""
     aligned = report.schools_aligned_with_entry
@@ -75,7 +83,7 @@ def explain_sage(
             return _NARRATIVE_CACHE[cache_key]
 
     text: str
-    if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
+    if use_llm and _any_llm_key():
         try:
             text = _llm_narrative(report, symbol=symbol)
         except Exception as exc:  # noqa: BLE001

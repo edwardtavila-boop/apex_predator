@@ -38,6 +38,10 @@ so paper_trade_sim over thousands of bars doesn't reconstruct on every tick."""
 def _clear_strategy_cache() -> None:
     _STRATEGY_CACHE.clear()
 
+
+# Public API for invalidation
+clear_strategy_cache = _clear_strategy_cache
+
 _KIND_TO_SID: dict[str, StrategyId] = {
     "orb": StrategyId.REGISTRY_ORB,
     "drb": StrategyId.REGISTRY_DRB,
@@ -236,10 +240,11 @@ def _build_callable_for_assignment(
         cfg = SweepReclaimConfig(
             level_lookback=int(extras.get("level_lookback", 20)),
             reclaim_window=int(extras.get("reclaim_window", 3)),
-            wick_pct_min=float(extras.get("wick_pct_min", 0.6)),
-            volume_z_min=float(extras.get("volume_z_min", 0.8)),
+            min_wick_pct=float(extras.get("min_wick_pct", extras.get("wick_pct_min", 0.6))),
+            min_volume_z=float(extras.get("min_volume_z", extras.get("volume_z_min", 0.8))),
             rr_target=float(extras.get("rr_target", 2.0)),
             atr_stop_mult=float(extras.get("atr_stop_mult", 1.5)),
+            max_trades_per_day=int(extras.get("max_trades_per_day", 3)),
         )
         return _wrap_strategy(SweepReclaimStrategy(cfg))
 

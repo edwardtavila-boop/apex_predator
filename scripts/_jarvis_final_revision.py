@@ -162,12 +162,73 @@ def _stage_principles() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _evaluate(params: dict[str, Any]) -> CellScore:
-    """Deterministic analytical scorer.
+def _try_real_backtest_score(params: dict[str, Any]) -> CellScore | None:
+    """Load walk-forward backtest results from state/sage/backtest.json.
 
-    Models expectancy from (confluence_threshold, RR, stop, DD cap,
-    max positions) so the sweep is reproducible without real data.
+    Returns CellScore from real data when the file exists and contains
+    enough trades for statistical significance. Returns None when
+    backtest data is missing/stale — caller falls back to synthetic.
     """
+    try:
+        import json
+        from pathlib import Path
+        bt_path = Path(__file__).resolve().parents[1] / "state" / "sage" / "backtest.json"
+        if not bt_path.exists():
+            return None
+        data = json.loads(bt_path.read_text(encoding="utf-8"))
+        rows = data.get("rows", [])
+        if len(rows) < 20:
+            return None
+        rs = [float(r.get("realized_r", 0)) for r in rows if r.get("realized_r") is not None]
+        if len(rs) < 20:
+            return None
+        expectancy = sum(rs) / len(rs)
+        win_rate = sum(1 for r in rs if r > 0) / len(rs)
+        max_dd = _rolling_dd(rs)
+        wf = _walk_forward_slices(rs, n_slices=4)
+        total_return = sum(rs)
+        return CellScore(
+            expectancy_r=round(expectancy, 4),
+            max_dd_pct=round(abs(max_dd), 4) if max_dd < 0 else 0.005,
+            win_rate=round(win_rate, 4),
+            n_trades=len(rs),
+            total_return_pct=round(total_return * 100 / len(rs), 4),
+            walk_forward_scores=wf,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _rolling_dd(rs: list[float]) -> float:
+    peak = 0.0
+    dd = 0.0
+    cumulative = 0.0
+    for r in rs:
+        cumulative += r
+        if cumulative > peak:
+            peak = cumulative
+        dd = min(dd, cumulative - peak)
+    return dd
+
+
+def _walk_forward_slices(rs: list[float], n_slices: int = 4) -> list[float]:
+    chunk = max(1, len(rs) // n_slices)
+    return [round(sum(rs[i:i + chunk]) / chunk, 4) for i in range(0, len(rs), chunk)][:n_slices]
+
+
+def _evaluate(params: dict[str, Any]) -> CellScore:
+    """Scorer with real backtest data when available, synthetic fallback.
+
+    Checks state/sage/backtest.json for pre-computed walk-forward results.
+    When real data exists, uses realized expectancy and drawdown instead of
+    heuristic formulas. Falls back to synthetic analytical model otherwise.
+    """
+    # Try real backtest data first
+    real = _try_real_backtest_score(params)
+    if real is not None:
+        return real
+
+    # Synthetic fallback — analytical model from parameter heuristics
     conf = params["confluence_threshold"]
     stop = params["stop_atr_mult"]
     tp = params["tp_atr_mult"]

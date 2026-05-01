@@ -89,16 +89,23 @@ class TastytradeConfig:
     require_cert_host: bool = True
     default_instrument_type: str = "Future"
     default_source: str = "EtaEnginePaper"
+    login: str = ""
+    password: str = ""
+    token_file: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> TastytradeConfig:
         env_map = _broker_paper_env(env)
+        token_file = _env_or_file_path(env_map, "TASTY_SESSION_TOKEN")
         return cls(
             base_url=str(env_map.get("TASTY_API_BASE_URL") or TASTY_CERT_BASE_URL).rstrip("/"),
             account_number=_env_or_file(env_map, "TASTY_ACCOUNT_NUMBER"),
             session_token=_env_or_file(env_map, "TASTY_SESSION_TOKEN"),
             venue_type=str(env_map.get("TASTY_VENUE_TYPE", "paper")).strip().lower(),
             require_cert_host=_env_bool(env_map.get("TASTY_REQUIRE_CERT_HOST"), default=True),
+            login=str(env_map.get("TASTY_LOGIN") or "").strip(),
+            password=_env_or_file(env_map, "TASTY_PASSWORD"),
+            token_file=token_file,
         )
 
     def missing_requirements(self) -> list[str]:
@@ -128,6 +135,65 @@ class TastytradeVenue(VenueBase):
         self.config = config if config is not None else TastytradeConfig.from_env()
         super().__init__(self.config.account_number, self.config.session_token)
         self._mock_orders: dict[str, OrderResult] = {}
+
+    async def refresh_session_token(self) -> bool:
+        """POST to /sessions to get a fresh token using stored credentials.
+
+        Writes the new token to disk so subsequent instantiations pick it up.
+        Returns True on success.
+        """
+        login = self.config.login
+        password = self.config.password
+        if not login or not password:
+            logger.warning("tastytrade: cannot refresh token — TASTY_LOGIN and TASTY_PASSWORD not configured")
+            return False
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=TASTY_HTTP_TIMEOUT_S) as client:
+                resp = await client.post(
+                    f"{self.config.base_url}/sessions",
+                    json={"login": login, "password": password, "remember-me": False},
+                    headers={"Accept": "application/json"},
+                )
+            if resp.status_code != 200:
+                logger.warning("tastytrade: token refresh returned %d", resp.status_code)
+                return False
+            body = resp.json()
+            new_token = str(body.get("data", {}).get("session-token") or "").strip()
+            if not new_token:
+                logger.warning("tastytrade: token refresh returned empty token")
+                return False
+            # Update in-memory config
+            import dataclasses
+            self.config = dataclasses.replace(self.config, session_token=new_token)
+            # Persist to disk if token_file is known
+            token_path = self.config.token_file or self._default_token_path()
+            if token_path:
+                try:
+                    Path(token_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(token_path).write_text(new_token, encoding="utf-8")
+                    logger.info("tastytrade: token refreshed and persisted to %s", token_path)
+                except OSError as exc:
+                    logger.warning("tastytrade: token persist failed: %s", exc)
+            return True
+        except Exception as exc:
+            logger.warning("tastytrade: token refresh failed: %s", exc)
+            return False
+
+    def _default_token_path(self) -> str:
+        """Resolve the default token file path from env conventions."""
+        import os
+        roots = [
+            os.environ.get("FIRM_RUNTIME_ROOT", ""),
+            os.environ.get("ETA_RUNTIME_ROOT", ""),
+            r"C:\EvolutionaryTradingAlgo\firm_command_center",
+        ]
+        for r in roots:
+            if r:
+                p = Path(r) / "secrets" / "tastytrade_session_token.txt"
+                if p.parent.exists():
+                    return str(p)
+        return r"C:\EvolutionaryTradingAlgo\firm_command_center\secrets\tastytrade_session_token.txt"
 
     def has_credentials(self) -> bool:
         return not self.config.missing_requirements()
@@ -455,6 +521,12 @@ def tastytrade_paper_readiness(env: Mapping[str, str] | None = None) -> dict[str
         ),
         "checked_utc": datetime.now(UTC).isoformat(),
     }
+
+
+def _env_or_file_path(env: Mapping[str, str], name: str) -> str:
+    """Return the file path if *_FILE variant exists, otherwise ''."""
+    file_value = str(env.get(f"{name}_FILE") or "").strip()
+    return os.path.expandvars(file_value) if file_value else ""
 
 
 def _env_or_file(env: Mapping[str, str], name: str) -> str:

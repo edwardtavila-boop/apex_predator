@@ -1,14 +1,9 @@
-"""Funding / Basis school (Wave-5 #8, 2026-04-27).
+"""Funding / Basis school — enhanced with cross-exchange spread and annualized yield.
 
-Returns NEUTRAL when funding-rate / basis fields are absent. When
-provided on MarketContext via ``ctx.funding`` or legacy direct attrs,
-produces a positioning-based verdict:
-
-  * elevated positive funding rate = longs paying = crowded long
-    -> contrarian SHORT bias
-  * negative funding = shorts paying = crowded short
-    -> contrarian LONG bias
-  * basis (perp - spot) divergence indicates same dynamic
+Wave-5 #8 + BTC integration 2026-05-01:
+  * cross-exchange funding spread → regime quality/convergence signal
+  * annualized yield → carry trade attractiveness
+  * perp vs spot vs CME futures basis across venues
 """
 from __future__ import annotations
 
@@ -26,14 +21,20 @@ class FundingBasisSchool(SchoolBase):
     INSTRUMENTS = frozenset({"crypto", "futures"})
     KNOWLEDGE = (
         "Funding / Basis school: for crypto perps, funding rate sign + "
-        "magnitude reveals crowded positioning. Elevated positive funding "
-        "= longs paying shorts = crowded long, contrarian short bias. "
-        "For CME futures, perp/spot or front/back basis tells similar "
-        "story. Mean-reverting positioning indicator."
+        "magnitude reveals crowded positioning. Cross-exchange spread "
+        "reveals regime health. Elevated positive funding = longs paying "
+        "shorts = crowded long, contrarian short bias. Negative funding "
+        "= shorts paying = crowded short, contrarian long bias. "
+        "Wide cross-exchange spread (>3bps) signals regime instability; "
+        "tight spread (<0.5bps) signals healthy market. "
+        "Annualized yield >20% suggests overheated carry trade. "
+        "For CME futures, perp/spot or front/back basis tells similar story."
     )
 
-    HIGH_FUNDING_BPS = 5.0   # 5 bps per 8h is elevated
+    HIGH_FUNDING_BPS = 5.0
     EXTREME_FUNDING_BPS = 15.0
+    WIDE_CROSS_EXCHANGE_BPS = 3.0
+    HIGH_ANNUALIZED_YIELD_PCT = 20.0
 
     def analyze(self, ctx: MarketContext) -> SchoolVerdict:
         telemetry = getattr(ctx, "funding", None)
@@ -41,6 +42,12 @@ class FundingBasisSchool(SchoolBase):
             telemetry = {}
         funding = telemetry.get("funding_rate_bps", getattr(ctx, "funding_rate_bps", None))
         basis = telemetry.get("perp_spot_basis_pct", getattr(ctx, "perp_spot_basis_pct", None))
+        cross_spread = telemetry.get("cross_exchange_spread_bps")
+        ann_yield = telemetry.get("annualized_yield_pct")
+        exchange_list = telemetry.get("exchange_rates", {})
+
+        signals: dict = {}
+        rationale_parts: list[str] = []
 
         if funding is None and basis is None:
             return SchoolVerdict(
@@ -50,34 +57,47 @@ class FundingBasisSchool(SchoolBase):
                 signals={"missing": ["funding_rate_bps", "perp_spot_basis_pct"]},
             )
 
-        # Combine funding + basis into a single positioning score
         score = 0.0
         if isinstance(funding, (int, float)):
-            score -= funding / max(self.HIGH_FUNDING_BPS, 1e-9)  # contrarian
+            score -= funding / max(self.HIGH_FUNDING_BPS, 1e-9)
+            signals["funding_rate_bps"] = funding
+            rationale_parts.append(f"funding={funding}bps")
+
         if isinstance(basis, (int, float)):
-            score -= basis * 5.0  # basis in pct; 0.5% premium -> -2.5
+            score -= basis * 5.0
+            signals["perp_spot_basis_pct"] = basis
+            rationale_parts.append(f"basis={basis}%")
+
+        # Cross-exchange spread: wide spread = regime instability
+        if isinstance(cross_spread, (int, float)) and cross_spread > 0:
+            signals["cross_exchange_spread_bps"] = cross_spread
+            if cross_spread > self.WIDE_CROSS_EXCHANGE_BPS:
+                score *= 0.7  # discount confidence due to regime noise
+                rationale_parts.append(f"wide cross-ex spread={cross_spread:.1f}bps (risk)")
+            else:
+                rationale_parts.append(f"tight cross-ex spread={cross_spread:.1f}bps (stable)")
+
+        # Annualized yield: extreme = overheated
+        if isinstance(ann_yield, (int, float)):
+            signals["annualized_yield_pct"] = ann_yield
+            if ann_yield > self.HIGH_ANNUALIZED_YIELD_PCT:
+                score *= 1.3  # amplify signal — carry trade extreme
+                rationale_parts.append(f"high ann yield={ann_yield:.1f}% (overheated)")
 
         if score <= -1.0:
-            bias, conv = Bias.SHORT, min(0.75, abs(score) * 0.4)
-            rationale = (
-                f"crowded long positioning (funding={funding}bps, "
-                f"basis={basis}%) -- contrarian short"
-            )
+            bias, conv = Bias.SHORT, min(0.85, abs(score) * 0.4)
+            rationale = "crowded long — " + "; ".join(rationale_parts)
         elif score >= 1.0:
-            bias, conv = Bias.LONG, min(0.75, abs(score) * 0.4)
-            rationale = (
-                f"crowded short positioning (funding={funding}bps, "
-                f"basis={basis}%) -- contrarian long"
-            )
+            bias, conv = Bias.LONG, min(0.85, abs(score) * 0.4)
+            rationale = "crowded short — " + "; ".join(rationale_parts)
         else:
             bias, conv = Bias.NEUTRAL, 0.20
-            rationale = "positioning balanced"
+            rationale = "positioning balanced — " + "; ".join(rationale_parts)
 
         entry_bias = Bias.LONG if ctx.side.lower() == "long" else Bias.SHORT
         return SchoolVerdict(
             school=self.NAME, bias=bias, conviction=conv,
             aligned_with_entry=(bias == entry_bias),
             rationale=rationale,
-            signals={"funding_rate_bps": funding, "perp_spot_basis_pct": basis,
-                     "positioning_score": score},
+            signals=signals,
         )

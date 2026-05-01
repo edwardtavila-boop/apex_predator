@@ -195,18 +195,19 @@ def _score_mnq(params: dict[str, Any]) -> CellScore:
 
 
 def _score_btc(params: dict[str, Any]) -> CellScore:
-    """Deterministic scorer for the BTC crypto_seed grid + overlay bot.
+    """Scorer with real backtest data when available, synthetic fallback.
 
-    Two revenue streams modeled:
-      * Grid harvest: scales with ``grid_n_levels`` and ``grid_usable_ratio``,
-        with diminishing returns past n=60 and a chop-fragility penalty
-        when leverage is too high.
-      * Directional overlay: wins scale with ``overlay_confluence_threshold``
-        (higher = more selective = higher wr), losses bounded by the -1R
-        stop built into the bot. The ``overlay_tp_r_mult`` amplifies wins.
-
-    Combined expectancy is the weighted sum, with diminishing returns.
+    Loads state/sage/backtest.json for realized expectancy and drawdown.
+    Falls back to analytical model when backtest data is missing.
     """
+    from eta_engine.scripts._jarvis_final_revision import (
+        _try_real_backtest_score,
+    )
+    real = _try_real_backtest_score(params)
+    if real is not None:
+        return real
+
+    # Synthetic fallback — analytical model for BTC grid + overlay bot
     n = params["grid_n_levels"]
     ur = params["grid_usable_ratio"]
     conf = params["overlay_confluence_threshold"]

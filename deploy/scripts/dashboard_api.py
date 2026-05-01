@@ -1391,15 +1391,10 @@ def jarvis_router_health() -> dict:
 # ─── Sage explain (Wave-6 #3, 2026-04-27) ──────────────────────────
 @app.get("/api/jarvis/sage_explain")
 def sage_explain_endpoint(symbol: str = "MNQ", side: str = "long") -> dict:
-    """1-paragraph LLM (or template-fallback) narrative of the current
-    sage report for ``symbol``.
-
-    Bars are fetched from state/raw_state/<symbol>_bars.json when present;
-    otherwise returns a stub indicating no recent bars available.
-    """
+    ...
     try:
         from pathlib import Path
-        bars_file = Path(STATE_DIR) / "raw_state" / f"{symbol}_bars.json" if "STATE_DIR" in globals() else None
+        bars_file = _state_dir() / "raw_state" / f"{symbol}_bars.json"
         bars: list = []
         if bars_file and bars_file.exists():
             import json as _json
@@ -1517,13 +1512,10 @@ def sage_school_registry_endpoint() -> dict:
 
 @app.get("/api/jarvis/sage_disagreement_heatmap")
 def sage_disagreement_heatmap_endpoint(symbol: str = "MNQ") -> dict:
-    """Per-school disagreement counts vs the current composite bias
-    over the last cached sage consultation. Used to render the
-    disagreement heatmap on the operator + investor dashboards.
-    """
+    ...
     try:
         from pathlib import Path
-        bars_file = Path(STATE_DIR) / "raw_state" / f"{symbol}_bars.json" if "STATE_DIR" in globals() else None
+        bars_file = _state_dir() / "raw_state" / f"{symbol}_bars.json"
         if not bars_file or not bars_file.exists():
             return {"symbol": symbol, "status": "no_bars", "heatmap": {}}
         import json as _json
@@ -1535,12 +1527,20 @@ def sage_disagreement_heatmap_endpoint(symbol: str = "MNQ") -> dict:
         ctx = MarketContext(bars=bars[-200:], side="long", symbol=symbol)
         report = consult_sage(ctx)
         clashes = detect_clashes(report)
-        # Per-school: bias vs composite
+        # Per-school: bias vs composite, enriched with edge tracker data
+        from eta_engine.brain.jarvis_v3.sage import SCHOOLS
+        from eta_engine.brain.jarvis_v3.sage.edge_tracker import default_tracker
+        tracker = default_tracker()
+        edges = tracker.snapshot()
         per_school_disagree = {
             name: {
                 "bias": v.bias.value,
                 "aligned_with_composite": v.bias == report.composite_bias,
                 "conviction": round(v.conviction, 4),
+                "weight": SCHOOLS.get(name, type("_", (), {"WEIGHT": 1.0})()).WEIGHT,
+                "edge_expectancy": edges.get(name, {}).get("expectancy", 0.0),
+                "edge_hit_rate": edges.get(name, {}).get("hit_rate", 0.5),
+                "edge_weight_modifier": edges.get(name, {}).get("weight_modifier", 1.0),
             }
             for name, v in report.per_school.items()
         }

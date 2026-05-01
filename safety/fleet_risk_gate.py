@@ -53,6 +53,9 @@ from datetime import UTC, date, datetime
 from threading import Lock
 
 DEFAULT_LIMIT_PCT: float = 0.035  # 3.5% per risk-sage 2026-04-27
+HIGH_CASCADE_DENSITY_USD: float = 50_000_000  # $50M liquidatable within 5% = RED
+MODERATE_CASCADE_DENSITY_USD: float = 10_000_000  # $10M = YELLOW
+CASCADE_ZONE_PCT: float = 0.05
 
 
 class FleetRiskBreach(RuntimeError):  # noqa: N818 -- domain term "Breach" preferred over "Error"
@@ -214,6 +217,32 @@ class FleetRiskGate:
             self._today = _today_utc()
             self._net_pnl_usd = 0.0
             self._per_bot_pnl.clear()
+
+    def cascade_risk_level(self, liq_telemetry: dict | None = None) -> str:
+        """Assess liquidation cascade risk from heatmap telemetry.
+
+        Returns GREEN (safe), YELLOW (caution), RED (block trading).
+        Requires ``liq_telemetry`` dict with ``levels`` containing
+        ``{"price": float, "total_size_usd": float}`` entries.
+        """
+        if not liq_telemetry or not isinstance(liq_telemetry, dict):
+            return "GREEN"
+        price = liq_telemetry.get("current_price", 0)
+        levels = liq_telemetry.get("levels", [])
+        if not price or not levels:
+            return "GREEN"
+        zone_total = 0.0
+        for level in levels:
+            p = level.get("price", 0)
+            if p <= 0:
+                continue
+            if abs(p - price) / max(price, 1e-9) <= CASCADE_ZONE_PCT:
+                zone_total += level.get("total_size_usd", 0)
+        if zone_total > HIGH_CASCADE_DENSITY_USD:
+            return "RED"
+        if zone_total > MODERATE_CASCADE_DENSITY_USD:
+            return "YELLOW"
+        return "GREEN"
 
     # ── Internal ──
 

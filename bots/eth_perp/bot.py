@@ -493,6 +493,7 @@ class EthPerpBot(BaseBot):
                 leverage=float(lev) if isinstance(lev, int | float) else 1.0,
                 sage_bars=sage_bars,
                 entry_price=signal.price,
+                instrument_class="crypto",
             )
             if not allowed:
                 self._record_event(

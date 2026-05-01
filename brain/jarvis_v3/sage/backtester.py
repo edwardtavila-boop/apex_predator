@@ -321,6 +321,27 @@ def main(argv: list[str] | None = None) -> int:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    # MLflow experiment tracking
+    try:
+        from eta_engine.brain.jarvis_v3.sage.mlflow_tracker import track_backtest
+        with track_backtest(
+            name=f"sage_backtest_{datetime.now(UTC).strftime('%Y%m%d_%H%M')}",
+            params={
+                "window_bars": args.window_bars,
+                "n_trades": len(trades),
+                "n_replayed": len(replayed),
+                "parallel": args.parallel,
+            },
+        ) as run:
+            run.log_metrics({
+                "avg_realized_r": round(avg_r, 4),
+                "avg_alignment_score": round(avg_alignment, 4),
+            })
+            run.log_artifact(args.output)
+    except Exception:  # noqa: BLE001
+        pass
+
     return 0
 
 

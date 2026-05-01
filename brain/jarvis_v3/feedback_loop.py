@@ -182,7 +182,22 @@ def close_trade(
     except Exception as exc:  # noqa: BLE001
         layer_errors.append(f"sage_edge_tracker: {exc}")
 
-    # 7. Persist trade-close audit record
+    # 7. Mem0 semantic memory — store episode for embedding-based retrieval
+    try:
+        from eta_engine.brain.jarvis_v3.mem0_memory import Mem0Memory
+        mem0 = Mem0Memory()
+        mem0.store(
+            category="trade_close",
+            goal=narrative or f"trade {direction} {bot_id}",
+            outcome=realized_r > 0,
+            realized_r=realized_r,
+            metadata={"bot_id": bot_id, "regime": regime, "session": session, "action": action_taken},
+        )
+        layers_updated.append("mem0_memory")
+    except Exception as exc:  # noqa: BLE001
+        layer_errors.append(f"mem0_memory: {exc}")
+
+    # 8. Persist trade-close audit record
     record = TradeCloseRecord(
         ts=datetime.now(UTC).isoformat(),
         signal_id=signal_id,

@@ -1,6 +1,9 @@
 """
-LLM provider abstraction — DeepSeek is the native default.
-Anthropic/Claude is retained as a fallback only.
+LLM provider abstraction — DeepSeek native default with multi-provider routing.
+Anthropic/Claude is retained as a fallback.
+LiteLLM provides unified API routing with automatic failover across 100+ models.
+OpenRouter auto-routes to cheapest provider in real-time.
+Langfuse traces every call for observability.
 
 Architecture
 ============
@@ -9,20 +12,25 @@ The provider is selected ONCE at startup via ``_default_provider()``:
 
   ETA_LLM_PROVIDER=deepseek   → DeepSeek (native, default)
   ETA_LLM_PROVIDER=anthropic  → Anthropic (legacy fallback)
+  ETA_LLM_PROVIDER=litellm    → LiteLLM (unified API, automatic failover)
+  ETA_LLM_PROVIDER=openrouter → OpenRouter (real-time cheapest routing)
   (auto)                      → DeepSeek if DEEPSEEK_API_KEY set, else Anthropic
+
+Langfuse traces every completion call with input/output tokens, latency,
+cost, and model — auto-disabled when LANGFUSE_PUBLIC_KEY not set.
 
 Tier → Model mapping
 ====================
-  OPUS   (adversarial reasoning)   → DeepSeek-R1 (deepseek-reasoner)  $0.55/1M
-  SONNET (routine development)     → DeepSeek-V3 (deepseek-chat)      $0.27/1M
-  HAIKU  (mechanical grunt work)   → DeepSeek-V3 (deepseek-chat)      $0.27/1M
+  OPUS     → DeepSeek-R1 (deepseek-reasoner)    $0.55/1M
+  SONNET   → DeepSeek-V3 (deepseek-chat)        $0.27/1M
+  HAIKU    → DeepSeek-V3 (deepseek-chat)        $0.27/1M
+  REASONER → DeepSeek-R1 (deepseek-reasoner)    $0.55/1M
 
-Agents & their native models
-=============================
-  JARVIS  — deterministic admin (no LLM)
-  BATMAN  — DeepSeek-R1 (OPUS tier)  — architectural / adversarial
-  ALFRED  — DeepSeek-V3 (SONNET tier) — routine / documentation
-  ROBIN   — DeepSeek-V3 (HAIKU tier)  — grunt / log parsing
+Via OpenRouter (auto cheapest):
+  OPUS     → openrouter/anthropic/claude-opus-4-7
+  SONNET   → openrouter/anthropic/claude-sonnet-4-5
+  HAIKU    → openrouter/deepseek/deepseek-chat
+  REASONER → openrouter/deepseek/deepseek-r1
 
 Pricing (per 1M tokens, USD)
 =============================
@@ -37,6 +45,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -71,12 +80,15 @@ def _ensure_dotenv() -> None:
 class Provider(StrEnum):
     DEEPSEEK = "deepseek"
     ANTHROPIC = "anthropic"
+    LITELLM = "litellm"
+    OPENROUTER = "openrouter"
 
 
 class ModelTier(StrEnum):
     OPUS = "opus"
     SONNET = "sonnet"
     HAIKU = "haiku"
+    REASONER = "reasoner"
 
 
 # ---------------------------------------------------------------------------
@@ -84,24 +96,42 @@ class ModelTier(StrEnum):
 # ---------------------------------------------------------------------------
 
 _TIER_MODEL: dict[tuple[ModelTier, Provider], str] = {
-    (ModelTier.OPUS,   Provider.DEEPSEEK):  "deepseek-reasoner",
-    (ModelTier.SONNET, Provider.DEEPSEEK):  "deepseek-chat",
-    (ModelTier.HAIKU,  Provider.DEEPSEEK):  "deepseek-chat",
-    (ModelTier.OPUS,   Provider.ANTHROPIC): "claude-opus-4-7-20250601",
-    (ModelTier.SONNET, Provider.ANTHROPIC): "claude-sonnet-4-5-20250929",
-    (ModelTier.HAIKU,  Provider.ANTHROPIC): "claude-haiku-4-5-20251001",
+    (ModelTier.OPUS,     Provider.DEEPSEEK):   "deepseek-reasoner",
+    (ModelTier.SONNET,   Provider.DEEPSEEK):   "deepseek-chat",
+    (ModelTier.HAIKU,    Provider.DEEPSEEK):   "deepseek-chat",
+    (ModelTier.REASONER, Provider.DEEPSEEK):   "deepseek-reasoner",
+    (ModelTier.OPUS,     Provider.ANTHROPIC):  "claude-opus-4-7-20250601",
+    (ModelTier.SONNET,   Provider.ANTHROPIC):  "claude-sonnet-4-5-20250929",
+    (ModelTier.HAIKU,    Provider.ANTHROPIC):  "claude-haiku-4-5-20251001",
+    (ModelTier.REASONER, Provider.ANTHROPIC):  "claude-sonnet-4-5-20250929",
+    (ModelTier.OPUS,     Provider.LITELLM):    "anthropic/claude-opus-4-7-20250601",
+    (ModelTier.SONNET,   Provider.LITELLM):    "anthropic/claude-sonnet-4-5-20250929",
+    (ModelTier.HAIKU,    Provider.LITELLM):    "deepseek/deepseek-chat",
+    (ModelTier.REASONER, Provider.LITELLM):    "deepseek/deepseek-reasoner",
+    (ModelTier.OPUS,     Provider.OPENROUTER): "openrouter/anthropic/claude-opus-4-7",
+    (ModelTier.SONNET,   Provider.OPENROUTER): "openrouter/anthropic/claude-sonnet-4-5",
+    (ModelTier.HAIKU,    Provider.OPENROUTER): "openrouter/deepseek/deepseek-chat",
+    (ModelTier.REASONER, Provider.OPENROUTER): "openrouter/deepseek/deepseek-r1",
 }
 
 
 _COST_1M: dict[str, tuple[float, float]] = {
-    "deepseek-reasoner":          (0.55, 2.19),
-    "deepseek-chat":              (0.27, 1.10),
-    "claude-opus-4-7-20250601":   (15.00, 75.00),
-    "claude-sonnet-4-5-20250929": (3.00, 15.00),
-    "claude-haiku-4-5-20251001":  (0.80, 4.00),
+    "deepseek-reasoner":                          (0.55, 2.19),
+    "deepseek-chat":                              (0.27, 1.10),
+    "claude-opus-4-7-20250601":                   (15.00, 75.00),
+    "claude-sonnet-4-5-20250929":                 (3.00, 15.00),
+    "claude-haiku-4-5-20251001":                  (0.80, 4.00),
+    "anthropic/claude-opus-4-7-20250601":         (15.00, 75.00),
+    "anthropic/claude-sonnet-4-5-20250929":       (3.00, 15.00),
+    "deepseek/deepseek-chat":                     (0.27, 1.10),
+    "deepseek/deepseek-reasoner":                 (0.55, 2.19),
+    "openrouter/anthropic/claude-opus-4-7":       (15.00, 75.00),
+    "openrouter/anthropic/claude-sonnet-4-5":     (3.00, 15.00),
+    "openrouter/deepseek/deepseek-chat":          (0.27, 1.10),
+    "openrouter/deepseek/deepseek-r1":            (0.55, 2.19),
 }
 
-_SONNET_BASELINE = 3.00  # Claude Sonnet input cost per 1M
+_SONNET_BASELINE = 3.00
 
 COST_RATIO: dict[tuple[ModelTier, Provider], float] = {}
 for (tier, prov), model in _TIER_MODEL.items():
@@ -122,33 +152,83 @@ class LLMResponse:
     output_tokens: int = 0
     cost_usd: float = 0.0
     cached: bool = False
-    reasoning: str = ""  # DeepSeek-R1 thinking trace
+    reasoning: str = ""
 
 
 # ---------------------------------------------------------------------------
-# Provider selection — DeepSeek is the native default
+# Langfuse observability — traces every LLM call
+# ---------------------------------------------------------------------------
+
+_LANGFUSE_ENABLED: bool | None = None
+
+
+def _langfuse_available() -> bool:
+    global _LANGFUSE_ENABLED
+    if _LANGFUSE_ENABLED is not None:
+        return _LANGFUSE_ENABLED
+    _LANGFUSE_ENABLED = bool(os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip())
+    return _LANGFUSE_ENABLED
+
+
+def _langfuse_trace(name: str, metadata: dict[str, Any]) -> Any:
+    """Create a Langfuse trace that auto-closes. Returns None if unavailable."""
+    try:
+        from langfuse import Langfuse
+        trace = Langfuse().trace(name=name, metadata=metadata)
+        return trace
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _langfuse_generation(trace: Any, name: str, model: str, input_data: str,
+                          output_data: str, usage: dict[str, int],
+                          metadata: dict[str, Any] | None = None) -> None:
+    """Log a generation span to Langfuse. Silent no-op when unavailable."""
+    if trace is None:
+        return
+    try:
+        trace.generation(
+            name=name,
+            model=model,
+            input={"messages": input_data},
+            output={"text": output_data},
+            usage={"input": usage.get("input_tokens", 0), "output": usage.get("output_tokens", 0)},
+            metadata=metadata or {},
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Provider selection
 # ---------------------------------------------------------------------------
 
 def _default_provider() -> Provider:
-    """DeepSeek is the native default. Anthropic is fallback only.
+    """DeepSeek native default. OpenRouter for real-time cheapest. LiteLLM for auto-failover.
 
     Priority:
-      1. ETA_LLM_PROVIDER=anthropic  → explicit Anthropic override
-      2. Everything else             → DeepSeek (auto-detect key OR not)
+      1. ETA_LLM_PROVIDER=openrouter → OpenRouter (real-time cheapest routing)
+      2. ETA_LLM_PROVIDER=litellm     → LiteLLM (unified, auto-failover)
+      3. ETA_LLM_PROVIDER=anthropic   → explicit Anthropic override
+      4. Everything else              → DeepSeek
     """
     _ensure_dotenv()
     explicit = os.environ.get("ETA_LLM_PROVIDER", "").strip().lower()
+    if explicit in ("openrouter", "or"):
+        if os.environ.get("OPENROUTER_API_KEY", "").strip():
+            return Provider.OPENROUTER
+        logger.warning("ETA_LLM_PROVIDER=openrouter but no OPENROUTER_API_KEY — falling back")
+    if explicit in ("litellm", "lite"):
+        if os.environ.get("LITELLM_MASTER_KEY", "").strip():
+            return Provider.LITELLM
+        logger.warning("ETA_LLM_PROVIDER=litellm but no LITELLM_MASTER_KEY — falling back")
     if explicit in ("anthropic", "claude", "ant"):
         return Provider.ANTHROPIC
-
-    # DeepSeek is native: try key, then fall back to Anthropic only if
-    # DeepSeek key is missing AND Anthropic key is present.
     if os.environ.get("DEEPSEEK_API_KEY", "").strip():
         return Provider.DEEPSEEK
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         logger.warning("No DEEPSEEK_API_KEY — falling back to Anthropic")
         return Provider.ANTHROPIC
-    # Neither key — return DeepSeek anyway; chat_completion will return empty
     return Provider.DEEPSEEK
 
 
@@ -165,12 +245,13 @@ def chat_completion(
     temperature: float = 0.7,
     provider: Provider | None = None,
 ) -> LLMResponse:
-    """Single-entry chat completion. DeepSeek-native, Anthropic as fallback.
+    """Single-entry chat completion with Langfuse observability.
 
     Tier routing:
-      OPUS   → DeepSeek-R1 (deepseek-reasoner) — reasoning model
-      SONNET → DeepSeek-V3 (deepseek-chat)     — general purpose
-      HAIKU  → DeepSeek-V3 (deepseek-chat)     — cost floor
+      OPUS     → DeepSeek-R1 (deepseek-reasoner) — reasoning model
+      SONNET   → DeepSeek-V3 (deepseek-chat)     — general purpose
+      HAIKU    → DeepSeek-V3 (deepseek-chat)     — cost floor
+      REASONER → DeepSeek-R1 (deepseek-reasoner) — chain-of-thought
 
     Falls back to Anthropic automatically if DeepSeek is unavailable.
     Returns empty ``LLMResponse(text="")`` if no API key is configured.
@@ -185,7 +266,6 @@ def chat_completion(
 
     api_key = _get_api_key(provider)
     if not api_key:
-        # Auto-fallback: try the other provider
         other = Provider.ANTHROPIC if provider == Provider.DEEPSEEK else Provider.DEEPSEEK
         other_key = _get_api_key(other)
         if other_key:
@@ -197,13 +277,54 @@ def chat_completion(
         logger.warning("No API key for any provider")
         return LLMResponse(text="")
 
-    if provider == Provider.DEEPSEEK:
-        return _call_deepseek(model=model, system_prompt=system_prompt,
-                              user_message=user_message, max_tokens=max_tokens,
-                              temperature=temperature)
-    return _call_anthropic(model=model, system_prompt=system_prompt,
-                           user_message=user_message, max_tokens=max_tokens,
-                           temperature=temperature)
+    started_at = time.time()
+    lf_trace = _langfuse_trace(
+        f"completion_{tier.value}_{provider.value}",
+        {"tier": tier.value, "provider": provider.value, "model": model},
+    )
+
+    try:
+        if provider == Provider.DEEPSEEK:
+            resp = _call_deepseek(model=model, system_prompt=system_prompt,
+                                  user_message=user_message, max_tokens=max_tokens,
+                                  temperature=temperature)
+        elif provider == Provider.LITELLM:
+            resp = _call_litellm(model=model, system_prompt=system_prompt,
+                                  user_message=user_message, max_tokens=max_tokens,
+                                  temperature=temperature)
+        elif provider == Provider.OPENROUTER:
+            resp = _call_openrouter(model=model, system_prompt=system_prompt,
+                                     user_message=user_message, max_tokens=max_tokens,
+                                     temperature=temperature)
+        else:
+            resp = _call_anthropic(model=model, system_prompt=system_prompt,
+                                   user_message=user_message, max_tokens=max_tokens,
+                                   temperature=temperature)
+    except Exception:
+        if lf_trace is not None:
+            try:
+                lf_trace.generation(
+                    name="completion_error", model=model,
+                    input={"messages": user_message[:200]},
+                    output={"error": "provider failed"},
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        raise
+
+    elapsed_ms = (time.time() - started_at) * 1000
+    _langfuse_generation(
+        lf_trace, name="completion", model=resp.model,
+        input_data=user_message[:500],
+        output_data=resp.text[:500],
+        usage={"input_tokens": resp.input_tokens, "output_tokens": resp.output_tokens},
+        metadata={
+            "tier": tier.value, "provider": resp.provider.value,
+            "cost_usd": resp.cost_usd, "elapsed_ms": round(elapsed_ms),
+        },
+    )
+
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +333,12 @@ def chat_completion(
 
 def _get_api_key(provider: Provider) -> str:
     _ensure_dotenv()
-    env_map = {Provider.DEEPSEEK: "DEEPSEEK_API_KEY", Provider.ANTHROPIC: "ANTHROPIC_API_KEY"}
+    env_map = {
+        Provider.DEEPSEEK: "DEEPSEEK_API_KEY",
+        Provider.ANTHROPIC: "ANTHROPIC_API_KEY",
+        Provider.LITELLM: "LITELLM_MASTER_KEY",
+        Provider.OPENROUTER: "OPENROUTER_API_KEY",
+    }
     return os.environ.get(env_map[provider], "").strip()
 
 
@@ -225,7 +351,7 @@ def _call_deepseek(
     *, model: str, system_prompt: str, user_message: str,
     max_tokens: int, temperature: float,
 ) -> LLMResponse:
-    """Call DeepSeek via OpenAI-compatible API. Handles R1 reasoning_content."""
+    """Call DeepSeek via OpenAI-compatible API."""
     from openai import OpenAI
 
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -236,11 +362,9 @@ def _call_deepseek(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_message})
 
-    # DeepSeek-R1 needs temperature fixed at 1.0 and higher max_tokens
-    # because the reasoning chain consumes part of the budget.
     if model == "deepseek-reasoner":
         temperature = 1.0
-        max_tokens = max(max_tokens, 1024)  # ensure room for reasoning + answer
+        max_tokens = max(max_tokens, 1024)
 
     resp = client.chat.completions.create(
         model=model, messages=messages, max_tokens=max_tokens, temperature=temperature,
@@ -248,8 +372,6 @@ def _call_deepseek(
 
     choice = resp.choices[0]
     text = choice.message.content or ""
-
-    # Extract R1 reasoning trace if present
     reasoning = getattr(choice.message, "reasoning_content", "") or ""
 
     in_tok = resp.usage.prompt_tokens if resp.usage else 0
@@ -288,42 +410,92 @@ def _call_anthropic(
     )
 
 
+def _call_litellm(
+    *, model: str, system_prompt: str, user_message: str,
+    max_tokens: int, temperature: float,
+) -> LLMResponse:
+    """Call via LiteLLM — OpenAI-format API with automatic provider failover."""
+    import litellm
+
+    litellm.master_key = _get_api_key(Provider.LITELLM)
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+
+    resp = litellm.completion(
+        model=model, messages=messages, max_tokens=max_tokens, temperature=temperature,
+    )
+    choice = resp.choices[0]
+    text = choice.message.content or ""
+    reasoning = getattr(choice.message, "reasoning_content", "") or ""
+
+    in_tok = resp.usage.prompt_tokens if resp.usage else 0
+    out_tok = resp.usage.completion_tokens if resp.usage else 0
+    actual_model = getattr(resp, "model", model) or model
+
+    return LLMResponse(
+        text=text.strip(), model=actual_model, provider=Provider.LITELLM,
+        input_tokens=in_tok, output_tokens=out_tok,
+        cost_usd=_cost(model, in_tok, out_tok),
+        reasoning=reasoning,
+    )
+
+
+def _call_openrouter(
+    *, model: str, system_prompt: str, user_message: str,
+    max_tokens: int, temperature: float,
+) -> LLMResponse:
+    """Call via OpenRouter — real-time cheapest provider routing."""
+    from openai import OpenAI
+
+    api_key = _get_api_key(Provider.OPENROUTER)
+    client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1", timeout=60.0)
+
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+
+    resp = client.chat.completions.create(
+        model=model, messages=messages, max_tokens=max_tokens, temperature=temperature,
+    )
+
+    choice = resp.choices[0]
+    text = choice.message.content or ""
+
+    in_tok = resp.usage.prompt_tokens if resp.usage else 0
+    out_tok = resp.usage.completion_tokens if resp.usage else 0
+    actual_model = getattr(resp, "model", model) or model
+
+    return LLMResponse(
+        text=text.strip(), model=actual_model, provider=Provider.OPENROUTER,
+        input_tokens=in_tok, output_tokens=out_tok,
+        cost_usd=_cost(model, in_tok, out_tok),
+    )
+
+
 # ---------------------------------------------------------------------------
 # DeepSeekExecutor — plugs into Avengers Fleet as the Executor callable
 # ---------------------------------------------------------------------------
 
 class DeepSeekExecutor:
-    """Implements the Avengers ``Executor`` Protocol using DeepSeek-native API.
-
-    Usage::
-
-        from eta_engine.brain.llm_provider import DeepSeekExecutor
-        fleet = Fleet(executor=DeepSeekExecutor())
-        daemon = AvengerDaemon(persona="batman", fleet=fleet)
-    """
+    """Implements the Avengers ``Executor`` Protocol using the provider layer."""
 
     def __call__(
-        self,
-        *,
-        tier,            # model_policy.ModelTier (compatible by value)
-        system_prompt: str = "",
-        user_prompt: str = "",
-        envelope: Any = None,  # TaskEnvelope — unused by provider
+        self, *, tier, system_prompt: str = "", user_prompt: str = "", envelope: Any = None,
     ) -> str:
-        # Convert to llm_provider.ModelTier by value
         tier_value = tier.value if hasattr(tier, "value") else str(tier)
         ds_tier = ModelTier(tier_value)
 
         resp = chat_completion(
-            tier=ds_tier,
-            system_prompt=system_prompt,
-            user_message=user_prompt,
-            max_tokens=1200 if ds_tier == ModelTier.OPUS else 800,
-            temperature=0.3 if ds_tier == ModelTier.OPUS else 0.7,
+            tier=ds_tier, system_prompt=system_prompt, user_message=user_prompt,
+            max_tokens=1200 if ds_tier in (ModelTier.OPUS, ModelTier.REASONER) else 800,
+            temperature=0.3 if ds_tier in (ModelTier.OPUS, ModelTier.REASONER) else 0.7,
         )
         if resp.reasoning:
-            logger.debug("DeepSeek-R1 reasoning (%d chars): %s...",
-                         len(resp.reasoning), resp.reasoning[:200])
+            logger.debug("%s reasoning (%d chars): %s...",
+                         resp.model, len(resp.reasoning), resp.reasoning[:200])
         return resp.text
 
 
@@ -344,15 +516,15 @@ def model_for_tier(tier: ModelTier, provider: Provider | None = None) -> str:
 def native_provider_info() -> dict[str, Any]:
     """Return a dict suitable for logging / status dashboards."""
     prov = _default_provider()
+    tiers = [ModelTier.OPUS, ModelTier.SONNET, ModelTier.HAIKU, ModelTier.REASONER]
     return {
         "provider": prov.value,
-        "models": {
-            "opus": model_for_tier(ModelTier.OPUS, prov),
-            "sonnet": model_for_tier(ModelTier.SONNET, prov),
-            "haiku": model_for_tier(ModelTier.HAIKU, prov),
-        },
-        "cost_ratios": {f"{t.value}_{prov.value}": COST_RATIO[(t, prov)]
-                        for t in ModelTier},
+        "models": {t.value: model_for_tier(t, prov) for t in tiers},
+        "cost_ratios": {f"{t.value}_{prov.value}": COST_RATIO.get((t, prov), 0.0)
+                        for t in tiers},
         "deepseek_key_configured": bool(_get_api_key(Provider.DEEPSEEK)),
         "anthropic_key_configured": bool(_get_api_key(Provider.ANTHROPIC)),
+        "litellm_key_configured": bool(_get_api_key(Provider.LITELLM)),
+        "openrouter_key_configured": bool(_get_api_key(Provider.OPENROUTER)),
+        "langfuse_enabled": _langfuse_available(),
     }

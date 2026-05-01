@@ -102,8 +102,14 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
         raise ValueError(f"Not enough bars: {len(bars)}")
 
     pv = point_value or _MULTIPLIERS.get(assignment.symbol, 0.50)
+    equity = 10000.0
 
-    from eta_engine.strategies.registry_strategy_bridge import build_registry_dispatch
+    from eta_engine.strategies.registry_strategy_bridge import (
+        build_registry_dispatch,
+        clear_strategy_cache,
+    )
+
+    clear_strategy_cache()
 
     bridge = build_registry_dispatch(bot_id)
     if bridge is None:
@@ -127,10 +133,11 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
 
     position: PaperPosition | None = None
     trades: list[PaperTrade] = []
-    equity = 0.0
-    equity_curve: list[float] = [0.0]
+    starting_equity = 10000.0
+    equity = starting_equity
+    equity_curve: list[float] = [starting_equity]
     signals = 0
-    peak_equity = 0.0
+    peak_equity = starting_equity
     max_dd = 0.0
 
     for i in range(max(2, len(eta_bars) // 20), len(eta_bars)):
@@ -139,9 +146,10 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
         bar_ts = bars[i].timestamp
 
         if position is not None:
+            qty = position.qty
             if position.side == "LONG":
                 if bar.low <= position.stop:
-                    pnl_points = position.stop - position.entry_price
+                    pnl_points = (position.stop - position.entry_price) * qty
                     pnl_usd = pnl_points * pv
                     trades.append(PaperTrade(
                         bot_id=bot_id, side="LONG",
@@ -154,7 +162,7 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
                     equity += pnl_usd
                     position = None
                 elif bar.high >= position.target:
-                    pnl_points = position.target - position.entry_price
+                    pnl_points = (position.target - position.entry_price) * qty
                     pnl_usd = pnl_points * pv
                     trades.append(PaperTrade(
                         bot_id=bot_id, side="LONG",
@@ -168,7 +176,7 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
                     position = None
             else:
                 if bar.high >= position.stop:
-                    pnl_points = position.entry_price - position.stop
+                    pnl_points = (position.entry_price - position.stop) * qty
                     pnl_usd = pnl_points * pv
                     trades.append(PaperTrade(
                         bot_id=bot_id, side="SHORT",
@@ -181,7 +189,7 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
                     equity += pnl_usd
                     position = None
                 elif bar.low <= position.target:
-                    pnl_points = position.entry_price - position.target
+                    pnl_points = (position.entry_price - position.target) * qty
                     pnl_usd = pnl_points * pv
                     trades.append(PaperTrade(
                         bot_id=bot_id, side="SHORT",
@@ -198,6 +206,32 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
             signal = fn(eta_bars[:i + 1], ctx)
             if signal.is_actionable and signal.stop > 0 and signal.target > 0:
                 signals += 1
+                # Risk-optimized sizing: scale based on DD, win streak, confluence
+                from eta_engine.strategies.risk_optimizer import compute_optimal_size
+
+                risk_pct = 0.01
+                trades_today = sum(1 for t in trades if t.entry_ts[:10] == bar_ts.strftime("%Y-%m-%d"))
+                wins_in_row = 0
+                losses_in_row = 0
+                for t in reversed(trades):
+                    if t.pnl_usd > 0:
+                        wins_in_row += 1
+                        break
+                    else:
+                        losses_in_row += 1
+                dd_pct = (peak_equity - equity) / peak_equity if peak_equity > 0 else 0.0
+                score = int(signal.confidence / 2.0) + 2
+                size_mult = compute_optimal_size(
+                    bot_id=bot_id, equity=peak_equity,
+                    base_risk_pct=risk_pct, current_dd_pct=dd_pct,
+                    confluence_score=score, pyramid_count=0,
+                    max_trades_today=trades_today,
+                    trades_allowed_per_day=2,
+                    wins_in_a_row=wins_in_row, losses_in_a_row=losses_in_row,
+                )
+                qty = size_mult / (abs(signal.entry - signal.stop) * pv) if signal.entry and signal.stop and signal.entry != signal.stop else 1.0
+                qty = max(qty, 1.0)
+
                 position = PaperPosition(
                     bot_id=bot_id,
                     side=signal.side.value,
@@ -205,6 +239,7 @@ def run_simulation(bot_id: str, max_bars: int = 10000, bar_limit: int | None = N
                     stop=signal.stop,
                     target=signal.target,
                     entry_bar_ts=bar_ts.isoformat(),
+                    qty=round(qty, 4),
                 )
 
         equity_curve.append(equity)

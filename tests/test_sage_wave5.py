@@ -322,12 +322,12 @@ def test_red_team_finds_counter_when_overstretched() -> None:
     from eta_engine.brain.jarvis_v3.sage.base import Bias
     from eta_engine.brain.jarvis_v3.sage.schools.red_team import RedTeamSchool
 
-    # Build bars where last close is very stretched above EMA20
     bars = _bars(40, trend="up")
-    bars[-1]["close"] += 500  # huge stretch
+    # Stretch last close far above EMA20 (>5%) to trigger overstretched detection
+    bars[-1]["close"] = bars[-1]["close"] * 1.08
     v = RedTeamSchool().analyze(MarketContext(bars=bars, side="long"))
     assert v.school == "red_team"
-    assert v.bias == Bias.SHORT  # counter to the long entry
+    assert v.bias == Bias.SHORT
     assert v.aligned_with_entry is False
 
 

@@ -78,7 +78,8 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
     },
 
     # ═══════════════════════════════════════════════════════════════
-    # BTC — 24/7, ETF-flow-driven, trend-prone
+    # BTC — 24/7, ETF-flow-driven, trend-prone, pattern-based
+    # Approach: MTF scalp — HTF regime bias → LTF entry with confluence
     # ═══════════════════════════════════════════════════════════════
     "BTC": {
         "regime": {
@@ -93,20 +94,17 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
             },
         },
         "entry": {
-            "module": "sage_daily_gated",
+            "module": "mtf_scalp",
             "params": {
-                "min_daily_conviction": 0.50, "strict_mode": False,
-                "underlying": "crypto_macro_confluence",
-                "crypto_regime_trend": {
-                    "regime_ema": 100, "pullback_ema": 21,
-                    "pullback_tolerance_pct": 3.0, "atr_stop_mult": 2.0,
-                    "rr_target": 3.0, "warmup_bars": 120,
-                },
-                "macro_confluence": {
-                    "require_etf_flow_alignment": True,
-                    "require_eth_alignment": False,
-                    "extreme_funding_threshold": 0.005,
-                },
+                "htf_timeframe": "1h",
+                "ltf_timeframe": "5m",
+                "ema_bias_period": 200,
+                "atr_period": 14,
+                "atr_stop_mult": 1.5,
+                "rr_target": 2.5,
+                "volume_z_min": 0.3,
+                "cooldown_bars": 6,
+                "max_trades_per_day": 3,
             },
         },
         "gate": {
@@ -115,11 +113,10 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
             "factors": {
                 "trend_alignment": {"ema_periods": [21, 50, 100]},
                 "funding_skew": True,
-                "etf_flow_alignment": True,
-                "liquidity_proximity": {"distance_pct": 0.01},
+                "volume_z": {"lookback": 20, "min_z": 0.3},
             },
         },
-        "sizing": {"risk_pct": 0.01, "max_trades_per_day": 2},
+        "sizing": {"risk_pct": 0.01, "max_trades_per_day": 3},
         "sage_schools_hint": [
             "Dow", "Elliott", "Fib", "on-chain", "funding", "cross-asset corr",
             "Gann", "NEoWave", "vol_regime", "sentiment", "ML",
@@ -127,7 +124,9 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
     },
 
     # ═══════════════════════════════════════════════════════════════
-    # ETH — oscillating crab regime, compression breakout
+    # ETH — oscillating, liquidity-driven, sweep/reclaim dominant
+    # Approach: Sweep reclaim — detect liquidity sweep, wait for
+    # reclaim at key levels, enter with volume + sage confirmation.
     # ═══════════════════════════════════════════════════════════════
     "ETH": {
         "regime": {
@@ -139,56 +138,14 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
                 "warmup_bars": 200,
             },
             "allowed_modes": ["trend_follow", "mean_revert"],
-            "skip_on": ["volatile"],
         },
         "entry": {
-            "module": "htf_routed_strategy",
-            "trend_follow": {
-                "strategy": "sage_daily_gated",
-                "params": {"min_daily_conviction": 0.30, "strict_mode": False},
-            },
-            "mean_revert": {
-                "strategy": "compression_breakout",
-                "params": {"close_location_min": 0.65, "volume_z_min": 0.4,
-                           "bb_width_pct_max": 0.30, "rr_target": 2.5,
-                           "atr_stop_mult": 1.8, "cooldown_bars": 12},
-                "preset": "eth",
-            },
-            "enforce_htf_bias_alignment": True,
-            "honor_htf_skip": True,
-        },
-        "gate": {
-            "module": "confluence_scorecard",
-            "min_score": 2, "a_plus_score": 3, "a_plus_size_mult": 1.2,
-            "factors": {
-                "trend_alignment": {"ema_periods": [21, 50, 100]},
-                "funding_skew": True,
-                "volume_z": {"lookback": 20, "min_z": 0.2},
-            },
-        },
-        "sizing": {"risk_pct": 0.01, "max_trades_per_day": 2},
-        "sage_schools_hint": [
-            "Dow", "Wyckoff", "Fib", "S/R", "trend", "volume_profile",
-            "market_profile", "funding", "cross-asset corr", "vol_regime",
-        ],
-    },
-
-    # ═══════════════════════════════════════════════════════════════
-    # SOL — high-beta BTC proxy, wider stops
-    # ═══════════════════════════════════════════════════════════════
-    "SOL": {
-        "regime": {
-            "module": "feature_regime_classifier",
+            "module": "sweep_reclaim",
             "params": {
-                "use_funding": True, "funding_extreme": 0.005,
-                "bull_threshold": 0.25,
-            },
-        },
-        "entry": {
-            "module": "crypto_orb",
-            "params": {
-                "range_minutes": 240, "atr_stop_mult": 1.25,
-                "rr_target": 2.5, "max_trades_per_day": 1,
+                "level_lookback": 20, "reclaim_window": 3,
+                "min_wick_pct": 0.7, "min_volume_z": 1.2,
+                "rr_target": 2.0, "atr_stop_mult": 1.8,
+                "max_trades_per_day": 2,
             },
         },
         "gate": {
@@ -199,7 +156,7 @@ PER_TICKER_OPTIMAL: dict[str, dict] = {
                 "require_bias_match_side": True,
             },
         },
-        "sizing": {"risk_pct": 0.005, "max_trades_per_day": 1},
+        "sizing": {"risk_pct": 0.005, "max_trades_per_day": 2},
         "sage_schools_hint": [
             "Dow", "trend", "funding", "cross-asset corr", "vol_regime",
         ],

@@ -1,16 +1,10 @@
-"""Adversarial Red-Team school (Wave-5 #14, 2026-04-27).
+"""Adversarial Red-Team school — enhanced with crypto attack surfaces.
 
-Deliberately argues the OPPOSITE of the proposed entry. Looks for the
-strongest counter-thesis using a small set of known reversal cues:
-
-  * over-extension from MA (mean-reversion candidate)
-  * recent failure at S/R (failed breakout)
-  * volume divergence (price up + volume down = exhaustion)
-  * crowded position (consensus trade often fails)
-
-If Red Team finds no credible counter, conviction is low (good --
-trade the proposed side). If Red Team finds STRONG counter, conviction
-is high in the OPPOSITE direction.
+BTC integration 2026-05-01:
+  * Whale manipulation risk: weekend thin liquidity, exchange concentration
+  * Liquidation cascade vulnerability: high-lev positions near price
+  * Weekend/session liquidity: crypto 24/7 ≠ uniform liquidity
+  * Stablecoin/flow manipulation risk
 """
 from __future__ import annotations
 
@@ -35,120 +29,158 @@ def _ema(values: list[float], period: int) -> list[float]:
 
 class RedTeamSchool(SchoolBase):
     NAME = "red_team"
-    WEIGHT = 0.8
+    WEIGHT = 1.3
     KNOWLEDGE = (
-        "Adversarial Red-Team school: deliberately argues the OPPOSITE of "
-        "the proposed entry. If Red Team finds no credible counter, the "
-        "consensus is robust. If Red Team finds STRONG counter (extension, "
-        "failure at S/R, volume divergence), conviction in the OPPOSITE "
-        "direction stress-tests the trade. Inspired by red-team / "
-        "devil's-advocate practices in adversarial review."
+        "Adversarial Red Team: deliberately argues opposite of proposed entry. "
+        "Standard technical counters: over-extension from MA, volume divergence, "
+        "failed S/R breakouts, crowded positioning. Crypto-specific counters: "
+        "whale manipulation risk (thin weekend liquidity, large wallets near "
+        "key levels), liquidation cascade vulnerability (high-lev positions "
+        "clustered within 3-5% of price), session-risk (crypto 24/7 ≠ uniform "
+        "liquidity — weekends drop 40-60%, overnight spread widens), "
+        "stablecoin flow regime changes (sudden USDT minting = buy pressure)."
     )
 
-    OVERSTRETCH_PCT = 0.015  # 150 bps from EMA-20 = stretched
-    DIVERGENCE_LOOKBACK = 5
+    STRETCH_EMA20 = 0.02
+    WEEKEND_VOL_DROP_THRESHOLD = 0.4
+
+    def _bars(self, ctx: MarketContext) -> list[dict]:
+        return getattr(ctx, "bars", []) or []
 
     def analyze(self, ctx: MarketContext) -> SchoolVerdict:
-        if ctx.n_bars < 25:
-            return SchoolVerdict(
-                school=self.NAME, bias=Bias.NEUTRAL, conviction=0.0,
-                aligned_with_entry=False,
-                rationale=f"insufficient bars ({ctx.n_bars} < 25)",
-            )
-
-        closes = ctx.closes()
-        volumes = ctx.volumes()
-        last_close = closes[-1]
-
-        # Counter-thesis 1: stretched from EMA-20 -> mean-reversion candidate
-        ema20 = get_or_compute(ctx, "ema_20", lambda: _ema(closes, 20))[-1]
-        stretch = (last_close - ema20) / max(ema20, 1e-9)
-        overstretched_up = stretch > self.OVERSTRETCH_PCT
-        overstretched_dn = stretch < -self.OVERSTRETCH_PCT
-
-        # Counter-thesis 2: volume divergence over last N bars
-        # Price up + volume DOWN = bearish divergence; price down + volume DOWN = bullish
-        n = self.DIVERGENCE_LOOKBACK
-        if n + 1 < len(closes):
-            price_change = closes[-1] - closes[-(n + 1)]
-            recent_vol_avg = sum(volumes[-n:]) / n
-            prior_vol_avg = sum(volumes[-(2 * n):-n]) / n if len(volumes) >= 2 * n else recent_vol_avg
-            vol_change = recent_vol_avg - prior_vol_avg
-            bearish_div = price_change > 0 and vol_change < -0.1 * abs(prior_vol_avg)
-            bullish_div = price_change < 0 and vol_change < -0.1 * abs(prior_vol_avg)
-        else:
-            bearish_div = bullish_div = False
-
         entry_side = ctx.side.lower()
+        bars = self._bars(ctx)
+        closes = [b.get("close", 0) for b in bars if isinstance(b, dict)]
+        volumes = [b.get("volume", 0) for b in bars if isinstance(b, dict)]
 
-        # Synthesize counter-thesis
+        stretch = 0.0
+        overstretched_up = overstretched_dn = False
+        bearish_div = bullish_div = False
+
+        if len(closes) >= 20:
+            ema20 = get_or_compute(ctx, "ema_20", lambda: _ema(closes, 20))
+            if ema20 and ema20[-1] > 0 and closes[-1] > 0:
+                stretch = (closes[-1] - ema20[-1]) / ema20[-1]
+                overstretched_up = stretch > self.STRETCH_EMA20
+                overstretched_dn = stretch < -self.STRETCH_EMA20
+
+        if len(closes) >= 5 and len(volumes) >= 5:
+            price_up = closes[-1] > closes[-5]
+            vol_down = volumes[-1] < sum(volumes[-5:]) / max(len(volumes[-5:]), 1) * 0.8
+            bearish_div = price_up and vol_down
+            bullish_div = not price_up and vol_down
+
+        crypto_attack = self._check_crypto_attacks(ctx)
+        signals: dict = {}
+
         if entry_side == "long":
-            # Looking for SHORT counter
+            counter_bias = Bias.SHORT
+            counter_reasons: list[str] = []
+
             if overstretched_up and bearish_div:
+                conviction = 0.75
+                counter_reasons.append(f"overstretched +{stretch*100:.1f}% + bearish vol divergence")
+            elif overstretched_up:
+                conviction = 0.45
+                counter_reasons.append(f"overstretched +{stretch*100:.1f}% from EMA20")
+            elif bearish_div:
+                conviction = 0.40
+                counter_reasons.append("bearish volume divergence")
+            else:
+                conviction = 0.10
+
+            if crypto_attack:
+                for attack in crypto_attack:
+                    counter_reasons.append(attack)
+                    conviction = max(conviction, 0.55)
+
+            if conviction >= 0.40:
                 return SchoolVerdict(
-                    school=self.NAME, bias=Bias.SHORT, conviction=0.75,
+                    school=self.NAME, bias=counter_bias, conviction=conviction,
                     aligned_with_entry=False,
-                    rationale=(
-                        f"strong COUNTER to long: overstretched (+{stretch*100:.1f}% from EMA20) "
-                        f"+ bearish vol divergence -- mean-reversion candidate"
-                    ),
-                    signals={
-                        "stretch": stretch, "overstretched_up": overstretched_up,
-                        "bearish_div": bearish_div,
-                    },
-                )
-            if overstretched_up:
-                return SchoolVerdict(
-                    school=self.NAME, bias=Bias.SHORT, conviction=0.45,
-                    aligned_with_entry=False,
-                    rationale=f"counter to long: stretched +{stretch*100:.1f}% from EMA20",
-                    signals={"stretch": stretch, "overstretched_up": True},
-                )
-            if bearish_div:
-                return SchoolVerdict(
-                    school=self.NAME, bias=Bias.SHORT, conviction=0.40,
-                    aligned_with_entry=False,
-                    rationale="counter to long: bearish volume divergence",
-                    signals={"bearish_div": True},
+                    rationale="COUNTER to long: " + "; ".join(counter_reasons),
+                    signals={**signals, "stretch": stretch, "crypto_attacks": len(crypto_attack)},
                 )
             return SchoolVerdict(
                 school=self.NAME, bias=Bias.NEUTRAL, conviction=0.10,
                 aligned_with_entry=True,
-                rationale="no credible counter to long entry -- consensus robust",
-                signals={"stretch": stretch, "bearish_div": False},
+                rationale="no credible counter to long entry",
+                signals={"stretch": stretch},
             )
+
         else:
-            # entry_side == "short" -- look for LONG counter
+            counter_bias = Bias.LONG
+            counter_reasons: list[str] = []
+
             if overstretched_dn and bullish_div:
+                conviction = 0.75
+                counter_reasons.append(f"overstretched {stretch*100:.1f}% + bullish vol divergence")
+            elif overstretched_dn:
+                conviction = 0.45
+                counter_reasons.append(f"overstretched {stretch*100:.1f}% below EMA20")
+            elif bullish_div:
+                conviction = 0.40
+                counter_reasons.append("bullish volume divergence")
+            else:
+                conviction = 0.10
+
+            if crypto_attack:
+                for attack in crypto_attack:
+                    counter_reasons.append(attack)
+                    conviction = max(conviction, 0.55)
+
+            if conviction >= 0.40:
                 return SchoolVerdict(
-                    school=self.NAME, bias=Bias.LONG, conviction=0.75,
+                    school=self.NAME, bias=counter_bias, conviction=conviction,
                     aligned_with_entry=False,
-                    rationale=(
-                        f"strong COUNTER to short: overstretched ({stretch*100:.1f}% from EMA20) "
-                        f"+ bullish vol divergence -- mean-reversion candidate"
-                    ),
-                    signals={
-                        "stretch": stretch, "overstretched_dn": overstretched_dn,
-                        "bullish_div": bullish_div,
-                    },
-                )
-            if overstretched_dn:
-                return SchoolVerdict(
-                    school=self.NAME, bias=Bias.LONG, conviction=0.45,
-                    aligned_with_entry=False,
-                    rationale=f"counter to short: stretched {stretch*100:.1f}% below EMA20",
-                    signals={"stretch": stretch, "overstretched_dn": True},
-                )
-            if bullish_div:
-                return SchoolVerdict(
-                    school=self.NAME, bias=Bias.LONG, conviction=0.40,
-                    aligned_with_entry=False,
-                    rationale="counter to short: bullish volume divergence",
-                    signals={"bullish_div": True},
+                    rationale="COUNTER to short: " + "; ".join(counter_reasons),
+                    signals={**signals, "stretch": stretch, "crypto_attacks": len(crypto_attack)},
                 )
             return SchoolVerdict(
                 school=self.NAME, bias=Bias.NEUTRAL, conviction=0.10,
                 aligned_with_entry=True,
-                rationale="no credible counter to short entry -- consensus robust",
-                signals={"stretch": stretch, "bullish_div": False},
+                rationale="no credible counter to short entry",
+                signals={"stretch": stretch},
             )
+
+    def _check_crypto_attacks(self, ctx: MarketContext) -> list[str]:
+        """Identify crypto-specific attack vectors. Returns list of attack strings."""
+        attacks: list[str] = []
+        telemetry = getattr(ctx, "onchain", None) or {}
+
+        # 1. Whale proximity — large wallets near current price
+        whale_levels = telemetry.get("whale_concentration_pct")
+        if isinstance(whale_levels, (int, float)) and whale_levels > 10.0:
+            price = getattr(ctx, "price", 0)
+            if price > 0:
+                attacks.append("whale concentration >10% — potential manipulation near key levels")
+
+        # 2. Weekend/session risk
+        from datetime import datetime
+        now = datetime.now()
+        if now.weekday() >= 5:
+            vol_factor = telemetry.get("weekend_vol_factor", 1.0)
+            if vol_factor < self.WEEKEND_VOL_DROP_THRESHOLD:
+                attacks.append(
+                    f"weekend liquidity {vol_factor*100:.0f}% of weekday — "
+                    "slippage risk 2-5x, whale moves close markets"
+                )
+
+        # 3. Stablecoin flow manipulation
+        stablecoin_ratio = telemetry.get("stablecoin_supply_ratio")
+        if isinstance(stablecoin_ratio, (int, float)):
+            if stablecoin_ratio < 0.05:
+                attacks.append(
+                    "stablecoin supply depleted (<5%) — limited buying power, "
+                    "any sell order can cascade"
+                )
+
+        # 4. Exchange concentration risk
+        exchange_netflow = telemetry.get("exchange_netflow")
+        if isinstance(exchange_netflow, (int, float)) and exchange_netflow > 5000:
+            attacks.append(
+                f"large exchange inflow {exchange_netflow:+,.0f} — "
+                "potential sell-side pressure from exchange deposits"
+            )
+
+        return attacks

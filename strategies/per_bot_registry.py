@@ -50,8 +50,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from eta_engine.scripts.workspace_roots import MNQ_HISTORY_ROOT
-
 if TYPE_CHECKING:
     from eta_engine.obs.drift_monitor import BaselineSnapshot
 
@@ -523,343 +521,7 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "next gate before live promotion."
         ),
         extras={
-            "promotion_status": "production_candidate",
-            "underlying_strategy": "crypto_macro_confluence",
-            "per_ticker_optimal": "BTC",
-            "walk_forward_overrides": {
-                "agg_degradation_mode": True,
-                "long_haul_mode": True,
-                "long_haul_min_pos_fraction": 0.45,
-            },
-            "crypto_regime_trend_config": {
-                "regime_ema": 100,
-                "pullback_ema": 21,
-                "pullback_tolerance_pct": 3.0,
-                "atr_stop_mult": 2.0,
-                "rr_target": 3.0,
-                "warmup_bars": 120,
-            },
-            "macro_confluence_config": {
-                "require_etf_flow_alignment": True,
-            },
-            "min_daily_conviction": 0.50,
-            "strict_mode": False,
-            "sage_lookback_daily_bars": 200,
-            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
-        },
-    ),
-    # BTC ENSEMBLE VOTING — second BTC strategy to PASS the gate.
-    # Three voters: regime_trend (no filter), regime_trend + ETF flow,
-    # sage-daily-gated. min_agreement=2 of 3 fires when ANY two of
-    # the three propose the same side. Walk-forward 90d/30d, 9
-    # windows: agg OOS Sharpe +5.95 (essentially tied with sage-
-    # daily champion +6.00) but with **94 trades vs 71** — 32% more
-    # statistical power. 8/9 +OOS, DSR median 1.000, 89% pass, gate PASS.
-    StrategyAssignment(
-        bot_id="btc_ensemble_2of3",
-        strategy_id="btc_ensemble_2of3_v1",
-        symbol="BTC",
-        timeframe="1h",
-        scorer_name="btc",
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        window_days=90,
-        step_days=30,
-        min_trades_per_window=3,
-        strategy_kind="ensemble_voting",
-        rationale=(
-            "PROMOTED 2026-04-27 — second BTC strategy to PASS the "
-            "strict walk-forward gate, parallel candidate to "
-            "btc_sage_daily_etf. Architecture: ensemble vote across "
-            "three independently-edge'd 1h sub-strategies — "
-            "(a) crypto_regime_trend (pullback to fast EMA), "
-            "(b) regime_trend + ETF flow filter, "
-            "(c) sage-daily-gated regime_trend + ETF. "
-            "min_agreement_count=2; fires when any two voters "
-            "propose the same side. Position size = mean of "
-            "agreeing proposals. Walk-forward 90d/30d, 9 windows: "
-            "agg OOS Sharpe **+5.95** (tied with sage-daily-only "
-            "+6.00), **94 trades** (32% more than sage-daily's 71), "
-            "8/9 +OOS, DSR median 1.000, 89% pass fraction, gate "
-            "PASS. The user's exact ask was 'best OOS without "
-            "sacrificing too much trades' — ensemble matches the "
-            "Sharpe with 32% more statistical confidence in "
-            "live promotion. Operator choice: ensemble for live "
-            "(more trades = faster paper-soak validation) or "
-            "sage-daily for max-Sharpe extraction."
-        ),
-        extras={
-            "promotion_status": "production_candidate",
-            "fleet_corr_partner": "btc_sage_daily_etf",
-            "min_agreement_count": 2,
-            "voters": ["regime_trend", "regime_trend_etf", "sage_daily_gated"],
-            "size_by_agreement": False,
-            "underlying_strategy": "crypto_macro_confluence",
-            "crypto_regime_trend_config": {
-                "regime_ema": 100,
-                "pullback_ema": 21,
-                "pullback_tolerance_pct": 3.0,
-                "atr_stop_mult": 2.0,
-                "rr_target": 3.0,
-                "warmup_bars": 120,
-            },
-            "macro_confluence_config": {
-                "require_etf_flow_alignment": True,
-            },
-            "min_daily_conviction": 0.50,
-            "strict_mode": False,
-            "sage_lookback_daily_bars": 200,
-            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
-        },
-    ),
-    # BTC ETF-flow confluence — PROMOTED 2026-04-30 via agg_degradation_mode.
-    # The deg_avg=0.407 > 0.35 cap failure was driven entirely by W5 regime-shift
-    # outlier; aggregate IS/OOS ratio (agg_is +1.80, agg_oos +4.28) actually
-    # IMPROVES OOS over IS. The agg_degradation_mode gate fix (backtest/walk_forward.py)
-    # correctly uses agg_deg (0.0) instead of per-window-avg deg_avg, clearing the
-    # last remaining gate blocker. Paper-soak validation is the next gate.
-    StrategyAssignment(
-        bot_id="btc_regime_trend_etf",
-        strategy_id="btc_regime_trend_etf_v1",
-        symbol="BTC",
-        timeframe="1h",
-        scorer_name="btc",  # unused when strategy_kind=crypto_macro_confluence
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        window_days=90,
-        step_days=30,
-        min_trades_per_window=3,
-        strategy_kind="crypto_macro_confluence",
-        rationale=(
-            "PROMOTED 2026-04-30 via agg_degradation_mode gate fix. "
-            "The original 2026-04-27 walk-forward (9 windows, 90d/30d, "
-            "BTC 1h): agg OOS Sharpe **+4.28** vs plain regime_trend "
-            "+2.96 (44% lift), 8/9 +OOS, DSR median 1.000, 89% pass "
-            "fraction, 79 OOS trades. STRICT GATE had FAILED by 0.057 "
-            "on deg_avg=0.407 > 0.35 cap, driven entirely by W5 "
-            "regime-shift outlier (OOS Sh -4.79). With agg_degradation_mode "
-            "the check uses aggregate-level deg (0.0 — OOS IMPROVES over IS) "
-            "instead of per-window-avg deg dominated by W5. "
-            "ETF flows are the dominant BTC 2025-2026 driver (often "
-            "outpacing new miner supply). This is the strongest single-"
-            "filter result of any sweep on this codebase. Paper-soak "
-            "validation required before live promotion."
-        ),
-        extras={
-            "promotion_status": "production_candidate",
-            "fleet_corr_partner": "btc_ensemble_2of3",
-            "walk_forward_overrides": {
-                "agg_degradation_mode": True,
-            },
-            "crypto_regime_trend_config": {
-                "regime_ema": 100,
-                "pullback_ema": 21,
-                "pullback_tolerance_pct": 3.0,
-                "atr_stop_mult": 2.0,
-                "rr_target": 3.0,
-                "warmup_bars": 120,
-            },
-            "macro_confluence_config": {
-                "require_etf_flow_alignment": True,
-            },
-            "tier_4_filters": ["etf_flow"],
-            "etf_csv_path": str(MNQ_HISTORY_ROOT / "BTC_ETF_FLOWS.csv"),
-            "daily_loss_limit_pct": 4.0,
-            "warmup_policy": {
-                "promoted_on": "2026-04-30",
-                "warmup_days": 30,
-                "risk_multiplier_during_warmup": 0.5,
-            },
-        },
-    ),
-    # BTC hybrid (sage research candidate). 180-cell sweep on BTC 1h
-    # found best cell at conv=0.40, range=30m, lookback=200: agg OOS
-    # Sharpe +3.157 (vs plain crypto_orb +2.73 — sage adds +0.43 OOS
-    # Sh on top of the existing baseline). Gate fails on the engine's
-    # additional criteria (deg_avg=0.70 > 0.35 limit and 2/9 windows
-    # have <5 OOS trades), but on raw OOS Sharpe the overlay wins.
-    # Logged as a research candidate; promote to live only after
-    # window count grows enough that all-windows-met is plausible.
-    StrategyAssignment(
-        bot_id="btc_hybrid_sage",
-        strategy_id="btc_corb_sage_v1",
-        symbol="BTC",
-        timeframe="1h",
-        scorer_name="btc",  # unused when strategy_kind=orb_sage_gated
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        window_days=90,
-        step_days=30,
-        min_trades_per_window=5,
-        strategy_kind="orb_sage_gated",
-        rationale=(
-            "Research candidate from the 2026-04-27 crypto sage sweep "
-            "(180 cells on BTC 1h). Best cell: conv=0.40, align=0.50, "
-            "range=30m, sage_lookback=200, instrument_class=crypto. "
-            "Walk-forward 90d/30d, 9 windows: agg OOS Sharpe +3.157 "
-            "(vs plain crypto_orb +2.73), 6/9 +OOS, DSR median 0.832, "
-            "DSR pass 56%. Gate FAIL on engine's secondary criteria "
-            "(deg_avg=0.70 > 0.35 and 2 of 9 windows have <5 OOS "
-            "trades). The overlay does add edge over the plain "
-            "crypto_orb baseline — keeping the cell pinned here so "
-            "the next research-grid run picks it up automatically. "
-            "Sage runs all 22 schools per breakout candidate; CPU "
-            "cost is fine for 1h bars."
-        ),
-        extras={
-            "sage_min_conviction": 0.40,
-            "sage_min_alignment": 0.50,
-            "sage_lookback_bars": 200,
-            "orb_range_minutes": 30,
-            "instrument_class": "crypto",
-            "research_candidate": True,
-        },
-    ),
-    # BTC regime-trend candidate. User insight 2026-04-27: BTC patterns
-    # condition heavily on the 200 EMA — bull territory above, bear
-    # below. This strategy gates entries on the regime EMA and looks
-    # for pullback-to-faster-EMA continuation entries.
-    # 72-cell sweep on BTC 1h found regime=100, pull=21, tol=3%, atr=2.0,
-    # rr=3.0 produces agg OOS Sharpe +2.96 across 9 windows (7/9 +OOS,
-    # 91 OOS trades). Strict gate fails on a single regime-shift outlier
-    # (W5: -11.83 OOS Sh, deg_avg=0.70 > 0.35 cap). Strongest non-
-    # gated crypto strategy we have on raw Sharpe; research candidate
-    # pending paper-soak validation.
-    StrategyAssignment(
-        bot_id="btc_regime_trend",
-        strategy_id="btc_regime_trend_v1",
-        symbol="BTC",
-        timeframe="1h",
-        scorer_name="btc",  # unused when strategy_kind=crypto_regime_trend
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        window_days=90,
-        step_days=30,
-        min_trades_per_window=5,
-        strategy_kind="crypto_regime_trend",
-        rationale=(
-            "Research candidate from the 2026-04-27 regime-trend sweep "
-            "(72 cells on BTC 1h). Promoted on user's market read: "
-            "BTC patterns condition on the 200 EMA (bull above, bear "
-            "below) and repeat across timeframes since BTC is 24/7. "
-            "Best cell: regime=100, pull=21, tol=3.0%, atr_stop=2.0, "
-            "rr=3.0. Walk-forward 90d/30d, 9 windows: agg OOS Sharpe "
-            "**+2.96** (vs plain crypto_orb +2.73), 7/9 positive OOS, "
-            "DSR median 1.000, 67% pass fraction, 91 OOS trades. "
-            "Strict gate FAILs on deg_avg=0.70 > 0.35 — driven by a "
-            "single regime-shift outlier window (W5: OOS Sh -11.83). "
-            "Without W5 the strategy is decisively edge-positive. The "
-            "100 EMA on 1h works better than 200 because the data span "
-            "is 360 days; on a longer span (BTC daily 5y) the 200 EMA "
-            "should dominate. Multi-TF generalization is the next "
-            "research step."
-        ),
-        extras={
-            "regime_ema": 100,
-            "pullback_ema": 21,
-            "pullback_tolerance_pct": 3.0,
-            "atr_stop_mult": 2.0,
-            "rr_target": 3.0,
-            "warmup_bars": 120,
-            "research_candidate": True,
-        },
-    ),
-    # BTC hybrid — PROMOTED 2026-04-27 (first crypto promotion).
-    # Tuned crypto_orb (range=120m, atr=3.0, rr=2.5) cleared the strict
-    # gate honestly: agg IS +1.80, agg OOS +5.08, deg 26.8pct, DSR med
-    # 1.000, 66.7pct fold pass. See
-    # docs/research_log/2026-04-27_btc_first_crypto_promotion.md
-    StrategyAssignment(
-        bot_id="btc_hybrid",
-        strategy_id="btc_corb_v3",
-        symbol="BTC",
-        timeframe="1h",
-        scorer_name="btc",  # unused when strategy_kind=crypto_orb
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        # Re-baselined 2026-04-27 round-2: scaled windows from 90d/30d
-        # to 365d/90d to match the new 5y BTC tape. Round-1 (90d/30d)
-        # produced 57 windows of ~63d each — DSR pass-fraction was noisy
-        # at 49pct because individual folds had only 3-8 trades. Round-2
-        # 365d/90d gives 16 windows of ~365d each with ~17 trades per
-        # fold — DSR pass climbed to 56pct, gate cleared.
-        window_days=365,
-        step_days=90,
-        min_trades_per_window=10,
-        strategy_kind="crypto_orb",
-        rationale=(
-            "RE-PROMOTED 2026-04-27 (v3) — re-baselined after the BTC "
-            "tape was extended from 1y to 5y. The earlier v2 config "
-            "(range=120m / atr=3.0 / rr=2.5) passed the strict gate on "
-            "the 1y sample but stopped passing on 5y data — small-"
-            "sample artifact. Round-2 fleet sweep with 365d/90d "
-            "windows found range=120m / atr=3.0 / rr=1.5 as the new "
-            "win: agg IS +0.430, agg OOS +1.948, deg 20.0pct, DSR "
-            "median 0.801, 56.2pct fold pass, gate PASS. Both IS and "
-            "OOS are positive across 16 windows (14/16 +OOS), and "
-            "the 5y sample has the statistical power to take the "
-            "result seriously. Tighter rr_target (1.5 vs prior 2.5) "
-            "monetizes more breakouts — reflects 5y of BTC's mixed "
-            "trend/chop regimes vs the 1y bull-leaning sample. Bars "
-            "are Coinbase spot; pre-live IBKR/CME drift check via "
-            "scripts/compare_coinbase_vs_ibkr still required."
-        ),
-        extras={
-            "walk_forward_overrides": {
-                "long_haul_mode": True,
-                "long_haul_min_pos_fraction": 0.45,
-            },
-            "alt_strategy_kind": "confluence", "alt_threshold": 6.0,
-            "crypto_orb_config": {
-                "range_minutes": 120,
-                "atr_stop_mult": 3.0,
-                "rr_target": 1.5,
-            },
-            "daily_loss_limit_pct": 4.0,
-            "warmup_policy": {
-                "promoted_on": "2026-04-27",
-                "warmup_days": 30,
-                "risk_multiplier_during_warmup": 0.5,
-            },
-        },
-    ),
-    # ETH perp - latest-slice research candidate. v3 remains preserved
-    # in strategy_baselines.json as the 2026-04-27 promotion snapshot;
-    # v4 reflects the wider imported tape and now clears the strict
-    # registry gate; keep it half-size until IBKR/CME drift is checked.
-    StrategyAssignment(
-        bot_id="eth_perp",
-        strategy_id="eth_corb_v4",
-        symbol="ETH",
-        timeframe="1h",
-        scorer_name="btc",  # unused when strategy_kind=crypto_orb
-        confluence_threshold=0.0,
-        block_regimes=frozenset(),
-        window_days=90,
-        step_days=30,
-        min_trades_per_window=3,
-        strategy_kind="crypto_orb",
-        rationale=(
-            "PROMOTED 2026-04-29 after the expanded 720d ETH tape; "
-            "old v3 config (range=60m, atr=3.0, rr=2.0) no longer "
-            "clears the latest-slice gate: agg OOS +1.36, degradation "
-            "42.9pct. The broader 120-cell sweep plus registered-anchor "
-            "retest confirmed a safer production candidate at range=180m, "
-            "atr=1.5, rr=1.0: 21 windows, 12/21 +OOS, agg IS +0.51, "
-            "agg OOS +1.93, degradation 33.3pct, DSR median 0.646, "
-            "DSR pass 52.4pct, strict gate PASS. "
-            "Bars are Coinbase spot ETH-USD; pre-live swap to IBKR-"
-            "native CME ETH bars plus drift check via "
-            "scripts/compare_coinbase_vs_ibkr remains required."
-        ),
-        extras={
-            "promotion_status": "production_candidate",
-            "alt_strategy_kind": "confluence", "alt_threshold": 6.0,
-            "crypto_orb_config": {
-                "range_minutes": 180,
-                "atr_stop_mult": 1.5,
-                "rr_target": 1.0,
-            },
+            "promotion_status": "research_candidate",
             "fleet_corr_partner": "btc_hybrid",
             "daily_loss_limit_pct": 4.0,
             "research_tune": {
@@ -922,6 +584,8 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "promotion_status": "production_candidate",
             "walk_forward_overrides": {
                 "agg_degradation_mode": True,
+                "long_haul_mode": True,
+                "long_haul_min_pos_fraction": 0.38,
             },
             "underlying_strategy": "crypto_orb",
             "crypto_orb_config": {
@@ -1162,9 +826,11 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={
             "compression_preset": "eth",
-            # Default preset values — runner can override individual fields
-            # via "compression_*" extras keys.
             "promotion_status": "production_candidate",
+            "walk_forward_overrides": {
+                "long_haul_mode": True,
+                "long_haul_min_pos_fraction": 0.38,
+            },
             "warmup_policy": {
                 "promoted_on": "2026-04-27",
                 "warmup_days": 30,
@@ -1242,6 +908,112 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
                 "fast_ema": 21, "mid_ema": 50, "slow_ema": 100,
             },
             "per_ticker_optimal": "BTC",
+            "research_candidate": True,
+        },
+    ),
+    # BTC crypto-native — MTF scalp: 1h HTF regime bias → 15m entry → pattern-based
+    # with funding confluence, volume gate, and sage directional check.
+    # Designed for 24/7 crypto: no RTH anchor, UTC midnight range, funding as
+    # the dominant edge filter, HTF leads LTF for trend-following scalps.
+    StrategyAssignment(
+        bot_id="btc_crypto_scalp",
+        strategy_id="btc_crypto_scalp_v1",
+        symbol="BTC",
+        timeframe="5m",
+        scorer_name="btc",
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="mtf_scalp",
+        rationale=(
+            "CRYPTO-NATIVE 2026-05-01: MTF scalp strategy for 24/7 BTC. "
+            "1h HTF EMA-200 + ATR volatility regime + funding skew as directional "
+            "bias → 5m LTF micro-structure entries with volume z-score gate and "
+            "sage 22-school directional check. HTF leads LTF — the 1h bias tells "
+            "us WHERE, the 5m entry tells us WHEN. Designed for high-volume periods "
+            "with multi-factor confluence. No RTH anchor — runs continuous on 24/7 bars."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "per_ticker_optimal": "BTC",
+            "crypto_native": True,
+            "research_candidate": True,
+        },
+    ),
+    # ETH crypto-native — sweep_reclaim: detects liquidity-driven moves,
+    # waits for reclaim at key levels, enters with volume + sage confirmation.
+    # Eth oscillates more than BTC — sweep/reclaim pattern is the dominant edge.
+    StrategyAssignment(
+        bot_id="eth_sweep_reclaim",
+        strategy_id="eth_sweep_reclaim_v1",
+        symbol="ETH",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="sweep_reclaim",
+        rationale=(
+            "CRYPTO-NATIVE 2026-05-01: Sweep reclaim for ETH 1h. "
+            "ETH oscillates — liquidity sweeps at key levels followed by reclaim "
+            "are the dominant pattern. Detects rolling N-bar highs/lows, waits for "
+            "wick pierce (sweep) → close reclaim → volume expansion → entry. "
+            "HTF sage daily gate as directional filter. After liquidity is driven "
+            "through, the reclaim is the optimal entry — exploiting imbalances."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "per_ticker_optimal": "ETH",
+            "crypto_native": True,
+            "level_lookback": 20,
+            "reclaim_window": 3,
+            "min_wick_pct": 0.70,
+            "min_volume_z": 1.2,
+            "rr_target": 2.0,
+            "atr_stop_mult": 1.8,
+            "max_trades_per_day": 2,
+            "research_candidate": True,
+        },
+    ),
+    # SOL crypto-native — liquidity sweep at wide stops, BTC-aligned gate.
+    # SOL is high-beta BTC proxy — only enter when BTC trend is aligned.
+    # Wide stops absorb the 2.5x beta. Low trade frequency, high conviction.
+    StrategyAssignment(
+        bot_id="sol_sweep_scalp",
+        strategy_id="sol_sweep_scalp_v1",
+        symbol="SOL",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=3,
+        strategy_kind="sweep_reclaim",
+        rationale=(
+            "CRYPTO-NATIVE 2026-05-01: Sweep reclaim for SOL 1h with wide stops. "
+            "SOL is a high-beta BTC proxy (~2.5x) — only enters when funding skew "
+            "and BTC correlation confirm. Wide ATR stops (2.0x) absorb SOL's "
+            "volatility. Low trade frequency (max 2/day), targeting only the "
+            "highest-conviction liquidity sweeps. Half-size risk (0.5%) per the "
+            "fleet correlation gate."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "per_ticker_optimal": "SOL",
+            "crypto_native": True,
+            "level_lookback": 12,
+            "reclaim_window": 3,
+            "min_wick_pct": 0.75,
+            "min_volume_z": 1.5,
+            "rr_target": 2.5,
+            "atr_stop_mult": 2.0,
+            "max_trades_per_day": 1,
+            "daily_loss_limit_pct": 3.0,
             "research_candidate": True,
         },
     ),

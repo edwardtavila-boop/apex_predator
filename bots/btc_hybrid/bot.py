@@ -2089,6 +2089,7 @@ class BtcHybridBot(BaseBot):
             overnight_explicit=True,
             sage_bars=sage_bars,
             entry_price=signal.price,
+            instrument_class="crypto",
         )
         if not allowed:
             return None

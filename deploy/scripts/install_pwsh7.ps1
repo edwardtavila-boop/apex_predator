@@ -1,5 +1,5 @@
 # ============================================================================
-# install_pwsh7.ps1 -- Install PowerShell 7 + repoint all Apex-* tasks to pwsh
+# install_pwsh7.ps1 -- Install PowerShell 7 + repoint all ETA-* tasks to pwsh
 #
 # After this, scheduled tasks get ~2x faster pipeline/format ops and cleaner
 # error handling (&&, ||, null-coalescing).

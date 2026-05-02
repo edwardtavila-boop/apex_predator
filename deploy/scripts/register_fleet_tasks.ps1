@@ -3,13 +3,13 @@
 # Register the BTC broker-paper fleet + MNQ live supervisor as
 # Windows Scheduled Tasks so they survive VPS reboots.
 #
-# Pattern matches Apex-Dashboard: runs as S4U principal (no password
+# Pattern matches ETA-Dashboard: runs as S4U principal (no password
 # prompt, runs after reboot without a logged-in session), AtStartup
 # trigger, per-task argument line in the ScheduledTaskAction.
 #
 # After running, tasks are visible as:
-#   - Apex-BTC-Fleet      (starts btc_broker_fleet --start)
-#   - Apex-MNQ-Supervisor (optional; disabled by default -- needs a
+#   - ETA-BTC-Fleet      (starts btc_broker_fleet --start)
+#   - ETA-MNQ-Supervisor (optional; disabled by default -- needs a
 #                          bar source on disk)
 #
 # Usage (run elevated):
@@ -23,7 +23,7 @@
 param(
     [string]$McpRoot = "C:\EvolutionaryTradingAlgo\eta_engine",
     [string]$PythonExe = "C:\EvolutionaryTradingAlgo\eta_engine\.venv\Scripts\python.exe",
-    [string]$RunAsUser = "",  # e.g. "trader"; auto-detects from Apex-Dashboard if empty
+    [string]$RunAsUser = "",  # e.g. "trader"; auto-detects from ETA-Dashboard if empty
     [switch]$BtcAutoSubmit,
     [string]$PaperLaneAnchorPrice = "90000",
     [switch]$RegisterMnqSupervisor,
@@ -32,21 +32,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Auto-detect the principal from an existing Apex-* task so we run
-# under the same identity as Apex-Dashboard (the operator-chosen
+# Auto-detect the principal from an existing ETA-* task so we run
+# under the same identity as ETA-Dashboard (the operator-chosen
 # runtime account, typically 'trader' on this VPS).
 if (-not $RunAsUser) {
-    $existingDashboard = Get-ScheduledTask -TaskName "Apex-Dashboard" -ErrorAction SilentlyContinue
+    $existingDashboard = Get-ScheduledTask -TaskName "ETA-Dashboard" -ErrorAction SilentlyContinue
     if ($existingDashboard) {
         $RunAsUser = $existingDashboard.Principal.UserId
-        Write-Host "Auto-detected RunAsUser from Apex-Dashboard: $RunAsUser"
+        Write-Host "Auto-detected RunAsUser from ETA-Dashboard: $RunAsUser"
     } else {
         $RunAsUser = "Administrator"
-        Write-Host "No Apex-Dashboard task found; defaulting RunAsUser to Administrator"
+        Write-Host "No ETA-Dashboard task found; defaulting RunAsUser to Administrator"
     }
 }
 
-function Register-ApexTask {
+function Register-ETATask {
     param(
         [string]$Name,
         [string]$Description,
@@ -92,13 +92,13 @@ function Register-ApexTask {
         -RestartInterval (New-TimeSpan -Minutes 1) `
         -ExecutionTimeLimit (New-TimeSpan -Hours 0)  # 0 = unlimited
 
-    # Match whatever principal Apex-Dashboard uses. 'trader' on this
+    # Match whatever principal ETA-Dashboard uses. 'trader' on this
     # VPS; fallback 'Administrator' for clean boxes. LogonType follows
     # what works for the same account -- Interactive/S4U are both
     # valid depending on operator policy, but auto-detect from the
-    # existing Apex-Dashboard task when possible.
+    # existing ETA-Dashboard task when possible.
     $dashPrincipal = (
-        Get-ScheduledTask -TaskName "Apex-Dashboard" -ErrorAction SilentlyContinue
+        Get-ScheduledTask -TaskName "ETA-Dashboard" -ErrorAction SilentlyContinue
     )
     if ($dashPrincipal) {
         $logonType = $dashPrincipal.Principal.LogonType
@@ -134,8 +134,8 @@ if ($BtcAutoSubmit) {
     $btcEnv["BTC_PAPER_LANE_AUTO_SUBMIT"] = "1"
 }
 
-Register-ApexTask `
-    -Name "Apex-BTC-Fleet" `
+Register-ETATask `
+    -Name "ETA-BTC-Fleet" `
     -Description "BTC broker-paper fleet (4 lanes: directional/grid x tastytrade/ibkr). Survives reboots via AtStartup trigger." `
     -WorkingDir $McpRoot `
     -Executable $PythonExe `
@@ -154,8 +154,8 @@ if ($RegisterMnqSupervisor) {
         Write-Host "WARNING: MnqBarsPath does not exist: $MnqBarsPath"
         Write-Host "         task will be registered but will exit until the file is created."
     }
-    Register-ApexTask `
-        -Name "Apex-MNQ-Supervisor" `
+    Register-ETATask `
+        -Name "ETA-MNQ-Supervisor" `
         -Description "MNQ live supervisor -- drives MnqBot through a JSONL bar stream with JARVIS + IBKR paper routing." `
         -WorkingDir $McpRoot `
         -Executable $PythonExe `
@@ -164,4 +164,4 @@ if ($RegisterMnqSupervisor) {
 
 Write-Host ""
 Write-Host "Done. Verify with:"
-Write-Host "  Get-ScheduledTask -TaskName 'Apex-*' | Select-Object TaskName, State"
+Write-Host "  Get-ScheduledTask -TaskName 'ETA-*' | Select-Object TaskName, State"

@@ -181,9 +181,9 @@ if (-not $SkipIbkrGateway) {
     if (Test-Path $ibkrWatchdogScript) {
         if (-not $WhatIf) {
             & $pwshPath -ExecutionPolicy Bypass -File $ibkrWatchdogScript `
-                -ApexRoot "$InstallRoot\firm_command_center" `
+                -ETARoot "$InstallRoot\firm_command_center" `
                 -RunNow
-            Write-Host "  Registered: ApexIbkrGatewayWatchdog (every 5m, auto-start on boot)" -ForegroundColor Green
+            Write-Host "  Registered: ETAIbkrGatewayWatchdog (every 5m, auto-start on boot)" -ForegroundColor Green
         }
     } else {
         Write-Host "  register_ibkr_gateway_watchdog_task.ps1 not found at $ibkrWatchdogScript — skipping" -ForegroundColor Yellow

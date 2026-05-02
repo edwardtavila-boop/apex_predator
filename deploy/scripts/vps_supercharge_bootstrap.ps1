@@ -136,7 +136,7 @@ if ($SkipTasks) {
 
 # ---4. optionally register fleet daemons ────────────────────────────
 if ($IncludeFleetDaemons) {
-    Write-Banner "4/5  fleet/persona daemons (Apex/Eta-Robin, -Alfred, -Batman, -Jarvis)"
+    Write-Banner "4/5  fleet/persona daemons (ETA/Eta-Robin, -Alfred, -Batman, -Jarvis)"
     $fleetScript = Join-Path $ScriptDir "register_tasks.ps1"
     if (Test-Path $fleetScript) {
         & powershell.exe -File $fleetScript -InstallDir $EtaEngineDir
@@ -202,7 +202,7 @@ foreach ($name in $opTasks) {
 Write-Host ""
 Write-Host "  $registeredCount / $($opTasks.Count) operator tasks registered"
 if ($IncludeFleetDaemons) {
-    $fleetCount = (Get-ScheduledTask -TaskName "Apex-*","Eta-*" -ErrorAction SilentlyContinue | Measure-Object).Count
+    $fleetCount = (Get-ScheduledTask -TaskName "ETA-*","Eta-*" -ErrorAction SilentlyContinue | Measure-Object).Count
     Write-Host "  $fleetCount fleet/persona tasks registered"
 }
 

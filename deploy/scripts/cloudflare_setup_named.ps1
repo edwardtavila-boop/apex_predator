@@ -158,7 +158,7 @@ $stateFile = Join-Path $stateDir "cloudflare_tunnel.json"
 } | ConvertTo-Json | Set-Content -Path $stateFile -Encoding UTF8
 
 # Kill old quick tunnel task, install new named one
-Unregister-ScheduledTask -TaskName "Apex-Cloudflare-Tunnel" -Confirm:$false -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "ETA-Cloudflare-Tunnel" -Confirm:$false -ErrorAction SilentlyContinue
 
 $action = New-ScheduledTaskAction -Execute "cloudflared" `
     -Argument "tunnel --config `"$configPath`" run $TunnelName"
@@ -166,15 +166,15 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries `
     -AllowStartIfOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
     -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName "Apex-Cloudflare-Tunnel" -Action $action -Trigger $trigger `
+Register-ScheduledTask -TaskName "ETA-Cloudflare-Tunnel" -Action $action -Trigger $trigger `
     -Settings $settings -User $env:USERNAME -RunLevel Limited | Out-Null
-Write-OK "task Apex-Cloudflare-Tunnel registered for named tunnel"
+Write-OK "task ETA-Cloudflare-Tunnel registered for named tunnel"
 
 # ---------- 5. Start it ----------
 # Stop any existing quick tunnel processes first
 Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
-Start-ScheduledTask -TaskName "Apex-Cloudflare-Tunnel"
+Start-ScheduledTask -TaskName "ETA-Cloudflare-Tunnel"
 
 Write-OK "DONE"
 Write-Host ""

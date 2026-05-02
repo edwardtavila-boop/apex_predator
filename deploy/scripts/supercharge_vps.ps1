@@ -7,7 +7,7 @@
 #   #13 Python bytecode precompile (.venv)
 #   #15 Windows Time sync -> time.cloudflare.com (stratum-1)
 #   #21 TCP window scaling + autotuning
-#   #22 Apex PowerShell $PROFILE with helper aliases
+#   #22 ETA PowerShell $PROFILE with helper aliases
 #
 # Idempotent. Report OK/SKIP per step.
 # ============================================================================
@@ -44,7 +44,7 @@ try {
 Log "Step 2/6 -- hot-path priority helper"
 # We can't change priority of a scheduled task's payload via Task Scheduler
 # directly, so we register a small priority-setter task that runs every minute
-# and bumps Apex-Jarvis-Live / Apex-Avengers-Fleet / Apex-Dashboard processes
+# and bumps ETA-Jarvis-Live / ETA-Avengers-Fleet / ETA-Dashboard processes
 # to AboveNormal if they've dropped to Normal.
 $priorityScript = Join-Path $InstallDir "deploy\scripts\priority_boost.ps1"
 $priorityContent = @'
@@ -74,7 +74,7 @@ Get-Process -Name python, cloudflared -ErrorAction SilentlyContinue | ForEach-Ob
 '@
 Set-Content -Path $priorityScript -Value $priorityContent -Encoding UTF8 -Force
 
-$taskName = "Apex-Priority-Boost"
+$taskName = "ETA-Priority-Boost"
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$priorityScript`""
@@ -87,7 +87,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings | Out-Null
 Start-ScheduledTask -TaskName $taskName
-OK "Apex-Priority-Boost registered + started (runs every minute)"
+OK "ETA-Priority-Boost registered + started (runs every minute)"
 
 # ----------------------------------------------------------------------------
 # #13 -- Python bytecode precompile
@@ -135,19 +135,19 @@ try {
 }
 
 # ----------------------------------------------------------------------------
-# #22 -- Apex PowerShell $PROFILE aliases
+# #22 -- ETA PowerShell $PROFILE aliases
 # ----------------------------------------------------------------------------
-Log "Step 6/6 -- PowerShell profile aliases (apex-*)"
+Log "Step 6/6 -- PowerShell profile aliases (ETA-*)"
 $profilePath = $PROFILE.CurrentUserAllHosts
 if (-not (Test-Path (Split-Path $profilePath))) {
     New-Item -ItemType Directory -Force -Path (Split-Path $profilePath) | Out-Null
 }
-$marker = "# --- BEGIN apex aliases ---"
+$marker = "# --- BEGIN ETA aliases ---"
 $existing = if (Test-Path $profilePath) { Get-Content $profilePath -Raw } else { "" }
 if ($existing -match [regex]::Escape($marker)) {
-    Skip "profile already contains apex aliases"
+    Skip "profile already contains ETA aliases"
 } else {
-    $apexBlock = @"
+    $ETABlock = @"
 
 $marker
 `$global:ETA_ROOT    = "$InstallDir"
@@ -155,20 +155,20 @@ $marker
 `$global:ETA_STATE   = "$stateDir"
 `$global:ETA_LOGS    = "$logDir"
 
-function apex-status    { & `$global:ETA_PY -m deploy.scripts.smoke_check --skip-systemd }
-function apex-heartbeat { Get-Content "`$global:ETA_STATE\avengers_heartbeat.json" | ConvertFrom-Json | ConvertTo-Json }
+function ETA-status    { & `$global:ETA_PY -m deploy.scripts.smoke_check --skip-systemd }
+function ETA-heartbeat { Get-Content "`$global:ETA_STATE\avengers_heartbeat.json" | ConvertFrom-Json | ConvertTo-Json }
 function eta-dashboard { Get-Content "`$global:ETA_STATE\dashboard_payload.json" | ConvertFrom-Json | ConvertTo-Json -Depth 6 }
-function apex-tasks     { Get-ScheduledTask -TaskName "Apex-*" | Select-Object TaskName, State | Format-Table -AutoSize }
-function apex-logs      { param(`$n = 50) Get-Content "`$global:ETA_LOGS\avengers-fleet.log" -Tail `$n -Wait }
-function apex-restart   { Stop-ScheduledTask "Apex-Jarvis-Live","Apex-Avengers-Fleet","Apex-Dashboard" -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask "Apex-Jarvis-Live"; Start-ScheduledTask "Apex-Avengers-Fleet"; Start-ScheduledTask "Apex-Dashboard" }
-function apex-test      { & `$global:ETA_PY -m deploy.scripts.live_claude_smoke }
-function apex-task      { param([string]`$Task) & `$global:ETA_PY -m deploy.scripts.run_task `$Task --state-dir "`$global:ETA_STATE" --log-dir "`$global:ETA_LOGS" }
-function apex-health    { Invoke-RestMethod http://127.0.0.1:8000/health }
-# --- END apex aliases ---
+function ETA-tasks     { Get-ScheduledTask -TaskName "ETA-*" | Select-Object TaskName, State | Format-Table -AutoSize }
+function ETA-logs      { param(`$n = 50) Get-Content "`$global:ETA_LOGS\avengers-fleet.log" -Tail `$n -Wait }
+function ETA-restart   { Stop-ScheduledTask "ETA-Jarvis-Live","ETA-Avengers-Fleet","ETA-Dashboard" -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask "ETA-Jarvis-Live"; Start-ScheduledTask "ETA-Avengers-Fleet"; Start-ScheduledTask "ETA-Dashboard" }
+function ETA-test      { & `$global:ETA_PY -m deploy.scripts.live_claude_smoke }
+function ETA-task      { param([string]`$Task) & `$global:ETA_PY -m deploy.scripts.run_task `$Task --state-dir "`$global:ETA_STATE" --log-dir "`$global:ETA_LOGS" }
+function ETA-health    { Invoke-RestMethod http://127.0.0.1:8000/health }
+# --- END ETA aliases ---
 "@
-    Add-Content -Path $profilePath -Value $apexBlock -Encoding UTF8
+    Add-Content -Path $profilePath -Value $ETABlock -Encoding UTF8
     OK "profile updated: $profilePath"
-    OK "aliases: apex-status, apex-heartbeat, eta-dashboard, apex-tasks, apex-logs, apex-restart, apex-test, apex-task, apex-health"
+    OK "aliases: ETA-status, ETA-heartbeat, eta-dashboard, ETA-tasks, ETA-logs, ETA-restart, ETA-test, ETA-task, ETA-health"
 }
 
 Write-Host ""

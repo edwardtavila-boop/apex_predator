@@ -35,7 +35,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Write-Log   { param($msg) Write-Host "[apex-install] $msg" -ForegroundColor Cyan }
+function Write-Log   { param($msg) Write-Host "[ETA-install] $msg" -ForegroundColor Cyan }
 function Write-OK    { param($msg) Write-Host "[ OK ] $msg"        -ForegroundColor Green }
 function Write-Warn2 { param($msg) Write-Host "[WARN] $msg"        -ForegroundColor Yellow }
 function Die         { param($msg) Write-Host "[FATAL] $msg"       -ForegroundColor Red; exit 1 }
@@ -171,7 +171,7 @@ $scheduledTasks = @(
     @{ Name = "ETA-Reasoner-DoctrineReview";     Task = "DOCTRINE_REVIEW";    Trigger = "QUARTERLY-0500" }
 )
 
-function New-ApexTrigger {
+function New-ETATrigger {
     param([string]$Spec)
     switch -Regex ($Spec) {
         "^MINUTELY$"          { return New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::MaxValue) }
@@ -210,7 +210,7 @@ foreach ($t in $scheduledTasks) {
         $action = New-ScheduledTaskAction -Execute $venvPython `
             -Argument "-m deploy.scripts.run_task $bgTask --state-dir `"$stateDir`" --log-dir `"$logDir`"" `
             -WorkingDirectory $InstallDir
-        $trigger = New-ApexTrigger -Spec $t.Trigger
+        $trigger = New-ETATrigger -Spec $t.Trigger
         $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries `
             -AllowStartIfOnBatteries -RunOnlyIfNetworkAvailable:$false `
             -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
@@ -260,9 +260,9 @@ Write-Log "Step 8/8 -- DONE. Next steps:"
        $venvPython -m deploy.scripts.smoke_check --skip-systemd
 
   3. Start the boot tasks manually for the first time:
-       Start-ScheduledTask -TaskName "Apex-Jarvis-Live"
-       Start-ScheduledTask -TaskName "Apex-Avengers-Fleet"
-       Start-ScheduledTask -TaskName "Apex-Dashboard"
+       Start-ScheduledTask -TaskName "ETA-Jarvis-Live"
+       Start-ScheduledTask -TaskName "ETA-Avengers-Fleet"
+       Start-ScheduledTask -TaskName "ETA-Dashboard"
 
   4. View logs:
        Get-Content "$logDir\jarvis-live.log" -Tail 50 -Wait
@@ -272,9 +272,9 @@ Write-Log "Step 8/8 -- DONE. Next steps:"
        http://127.0.0.1:8000
 
   6. View / manage tasks:
-       Get-ScheduledTask -TaskName "Apex-*" | Format-Table TaskName, State
-       # Disable a task:  Disable-ScheduledTask -TaskName Apex-...
-       # Stop a task:     Stop-ScheduledTask -TaskName Apex-...
+       Get-ScheduledTask -TaskName "ETA-*" | Format-Table TaskName, State
+       # Disable a task:  Disable-ScheduledTask -TaskName ETA-...
+       # Stop a task:     Stop-ScheduledTask -TaskName ETA-...
 
 "@ | Write-Host
 Write-OK "install complete"

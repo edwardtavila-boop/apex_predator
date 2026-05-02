@@ -1,6 +1,6 @@
 # ============================================================================
 # EVOLUTIONARY TRADING ALGO // uninstall_windows.ps1
-# Removes all Apex-* Task Scheduler entries. Source code + .env preserved.
+# Removes all ETA-* Task Scheduler entries. Source code + .env preserved.
 # Usage: powershell -ExecutionPolicy Bypass -File .\deploy\uninstall_windows.ps1
 # ============================================================================
 [CmdletBinding()]
@@ -14,8 +14,8 @@ if (-not $InstallDir) {
 }
 $workspaceRoot = Split-Path -Parent $InstallDir
 
-Write-Host "[apex-uninstall] stopping + removing Apex-* scheduled tasks" -ForegroundColor Cyan
-Get-ScheduledTask -TaskName "Apex-*" -ErrorAction SilentlyContinue | ForEach-Object {
+Write-Host "[ETA-uninstall] stopping + removing ETA-* scheduled tasks" -ForegroundColor Cyan
+Get-ScheduledTask -TaskName "ETA-*" -ErrorAction SilentlyContinue | ForEach-Object {
     try { Stop-ScheduledTask -TaskName $_.TaskName -ErrorAction SilentlyContinue } catch {}
     Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false
     Write-Host "  removed $($_.TaskName)"
@@ -24,9 +24,9 @@ Get-ScheduledTask -TaskName "Apex-*" -ErrorAction SilentlyContinue | ForEach-Obj
 if ($Purge) {
     $stateDir = Join-Path $workspaceRoot "var\eta_engine\state"
     $logDir   = Join-Path $workspaceRoot "logs\eta_engine"
-    Write-Host "[apex-uninstall] PURGE: removing state + logs" -ForegroundColor Yellow
+    Write-Host "[ETA-uninstall] PURGE: removing state + logs" -ForegroundColor Yellow
     Remove-Item -Recurse -Force $stateDir -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $logDir -ErrorAction SilentlyContinue
 }
 
-Write-Host "[apex-uninstall] complete. Source + .env preserved." -ForegroundColor Green
+Write-Host "[ETA-uninstall] complete. Source + .env preserved." -ForegroundColor Green

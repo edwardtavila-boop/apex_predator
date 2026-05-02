@@ -1,6 +1,6 @@
 # ============================================================================
 # register_cloudflare_quick.ps1
-# Registers Apex-Cloudflare-Tunnel as an AtLogOn Task Scheduler task that
+# Registers ETA-Cloudflare-Tunnel as an AtLogOn Task Scheduler task that
 # runs a Quick Tunnel (random *.trycloudflare.com URL, no auth needed).
 #
 # This is the ephemeral proof-of-life. URL changes on every restart. For
@@ -10,7 +10,7 @@
 [CmdletBinding()]
 param(
     [int]$LocalPort = 8000,
-    [string]$TaskName = "Apex-Cloudflare-Tunnel"
+    [string]$TaskName = "ETA-Cloudflare-Tunnel"
 )
 
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path

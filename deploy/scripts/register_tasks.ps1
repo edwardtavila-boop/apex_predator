@@ -17,34 +17,34 @@ if (-not $LogDir) {
 
 $venvPython = Join-Path $InstallDir ".venv\Scripts\python.exe"
 
-Write-Host "[apex-tasks] InstallDir=$InstallDir" -ForegroundColor Cyan
-Write-Host "[apex-tasks] StateDir  =$StateDir"
-Write-Host "[apex-tasks] LogDir    =$LogDir"
+Write-Host "[ETA-tasks] InstallDir=$InstallDir" -ForegroundColor Cyan
+Write-Host "[ETA-tasks] StateDir  =$StateDir"
+Write-Host "[ETA-tasks] LogDir    =$LogDir"
 
 # ----- 12 scheduled tasks ---------------------------------------------------
 $tasks = @(
-    @{ Name="Apex-Robin-DashboardAssemble";  Task="DASHBOARD_ASSEMBLE"; Trigger="MINUTELY" },
-    @{ Name="Apex-Robin-LogCompact";         Task="LOG_COMPACT";        Trigger="HOURLY" },
-    @{ Name="Apex-Robin-PromptWarmup";       Task="PROMPT_WARMUP";      Trigger="DAILY-1325" },
-    @{ Name="Apex-Robin-AuditSummarize";     Task="AUDIT_SUMMARIZE";    Trigger="DAILY-0600" },
-    @{ Name="Apex-Alfred-ShadowTick";        Task="SHADOW_TICK";        Trigger="EVERY-5MIN" },
-    @{ Name="Apex-Alfred-DriftSummary";      Task="DRIFT_SUMMARY";      Trigger="EVERY-15MIN" },
-    @{ Name="Apex-Alfred-KaizenRetro";       Task="KAIZEN_RETRO";       Trigger="DAILY-2300" },
-    @{ Name="Apex-Alfred-DistillTrain";      Task="DISTILL_TRAIN";      Trigger="WEEKLY-SUN-0200" },
-    @{ Name="Apex-Batman-TwinVerdict";       Task="TWIN_VERDICT";       Trigger="DAILY-2200" },
-    @{ Name="Apex-Batman-StrategyMine";      Task="STRATEGY_MINE";      Trigger="WEEKLY-MON-0300" },
-    @{ Name="Apex-Batman-CausalReview";      Task="CAUSAL_REVIEW";      Trigger="DAILY-0400" },
-    @{ Name="Apex-Batman-DoctrineReview";    Task="DOCTRINE_REVIEW";    Trigger="DAILY-0500" },
-    @{ Name="Apex-Alfred-MetaUpgrade";        Task="META_UPGRADE";       Trigger="DAILY-0430" },
-    @{ Name="Apex-Alfred-HealthWatchdog";      Task="HEALTH_WATCHDOG";    Trigger="EVERY-5MIN" },
-    @{ Name="Apex-Alfred-SelfTest";            Task="SELF_TEST";          Trigger="DAILY-0300" },
-    @{ Name="Apex-Robin-LogRotate";            Task="LOG_ROTATE";         Trigger="DAILY-0100" },
-    @{ Name="Apex-Robin-DiskCleanup";          Task="DISK_CLEANUP";       Trigger="WEEKLY-SUN-0200" },
-    @{ Name="Apex-Alfred-Backup";              Task="BACKUP";             Trigger="DAILY-0500" },
-    @{ Name="Apex-Robin-PrometheusExport";     Task="PROMETHEUS_EXPORT";  Trigger="MINUTELY" }
+    @{ Name="ETA-Executor-DashboardAssemble";  Task="DASHBOARD_ASSEMBLE"; Trigger="MINUTELY" },
+    @{ Name="ETA-Executor-LogCompact";         Task="LOG_COMPACT";        Trigger="HOURLY" },
+    @{ Name="ETA-Executor-PromptWarmup";       Task="PROMPT_WARMUP";      Trigger="DAILY-1325" },
+    @{ Name="ETA-Executor-AuditSummarize";     Task="AUDIT_SUMMARIZE";    Trigger="DAILY-0600" },
+    @{ Name="ETA-Steward-ShadowTick";        Task="SHADOW_TICK";        Trigger="EVERY-5MIN" },
+    @{ Name="ETA-Steward-DriftSummary";      Task="DRIFT_SUMMARY";      Trigger="EVERY-15MIN" },
+    @{ Name="ETA-Steward-KaizenRetro";       Task="KAIZEN_RETRO";       Trigger="DAILY-2300" },
+    @{ Name="ETA-Steward-DistillTrain";      Task="DISTILL_TRAIN";      Trigger="WEEKLY-SUN-0200" },
+    @{ Name="ETA-Reasoner-TwinVerdict";       Task="TWIN_VERDICT";       Trigger="DAILY-2200" },
+    @{ Name="ETA-Reasoner-StrategyMine";      Task="STRATEGY_MINE";      Trigger="WEEKLY-MON-0300" },
+    @{ Name="ETA-Reasoner-CausalReview";      Task="CAUSAL_REVIEW";      Trigger="DAILY-0400" },
+    @{ Name="ETA-Reasoner-DoctrineReview";    Task="DOCTRINE_REVIEW";    Trigger="DAILY-0500" },
+    @{ Name="ETA-Steward-MetaUpgrade";        Task="META_UPGRADE";       Trigger="DAILY-0430" },
+    @{ Name="ETA-Steward-HealthWatchdog";      Task="HEALTH_WATCHDOG";    Trigger="EVERY-5MIN" },
+    @{ Name="ETA-Steward-SelfTest";            Task="SELF_TEST";          Trigger="DAILY-0300" },
+    @{ Name="ETA-Executor-LogRotate";            Task="LOG_ROTATE";         Trigger="DAILY-0100" },
+    @{ Name="ETA-Executor-DiskCleanup";          Task="DISK_CLEANUP";       Trigger="WEEKLY-SUN-0200" },
+    @{ Name="ETA-Steward-Backup";              Task="BACKUP";             Trigger="DAILY-0500" },
+    @{ Name="ETA-Executor-PrometheusExport";     Task="PROMETHEUS_EXPORT";  Trigger="MINUTELY" }
 )
 
-function New-ApexTrigger([string]$Spec) {
+function New-ETATrigger([string]$Spec) {
     $maxDur = (New-TimeSpan -Days 9999)
     switch -Regex ($Spec) {
         "^MINUTELY$"          { return New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1)  -RepetitionDuration $maxDur }
@@ -67,7 +67,7 @@ foreach ($t in $tasks) {
     $action = New-ScheduledTaskAction -Execute $venvPython `
         -Argument "-m deploy.scripts.run_task $($t.Task) --state-dir `"$StateDir`" --log-dir `"$LogDir`"" `
         -WorkingDirectory $InstallDir
-    $trigger = New-ApexTrigger -Spec $t.Trigger
+    $trigger = New-ETATrigger -Spec $t.Trigger
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries `
         -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
     Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger `
@@ -77,9 +77,9 @@ foreach ($t in $tasks) {
 
 # ----- 3 boot-time services -------------------------------------------------
 $bootTasks = @(
-    @{ Name="Apex-Jarvis-Live";    Module="eta_engine.scripts.jarvis_live"; Args="--inputs docs\premarket_inputs.json --out-dir `"$StateDir`" --interval 60" },
-    @{ Name="Apex-Avengers-Fleet"; Module="deploy.scripts.avengers_daemon";    Args="--state-dir `"$StateDir`" --log-dir `"$LogDir`"" },
-    @{ Name="Apex-Dashboard";      Module="uvicorn";                           Args="deploy.scripts.dashboard_api:app --host 127.0.0.1 --port 8000" }
+    @{ Name="ETA-Jarvis-Live";    Module="eta_engine.scripts.jarvis_live"; Args="--inputs docs\premarket_inputs.json --out-dir `"$StateDir`" --interval 60" },
+    @{ Name="ETA-Avengers-Fleet"; Module="deploy.scripts.avengers_daemon";    Args="--state-dir `"$StateDir`" --log-dir `"$LogDir`"" },
+    @{ Name="ETA-Dashboard";      Module="uvicorn";                           Args="deploy.scripts.dashboard_api:app --host 127.0.0.1 --port 8000" }
 )
 
 foreach ($t in $bootTasks) {
@@ -95,4 +95,4 @@ foreach ($t in $bootTasks) {
     Write-Host "[ OK ] boot: $($t.Name)" -ForegroundColor Green
 }
 
-Write-Host "[apex-tasks] All 15 tasks registered." -ForegroundColor Cyan
+Write-Host "[ETA-tasks] All 15 tasks registered." -ForegroundColor Cyan

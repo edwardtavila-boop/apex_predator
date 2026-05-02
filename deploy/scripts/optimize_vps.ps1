@@ -2,9 +2,9 @@
 # optimize_vps.ps1 -- Windows Server 2022 tuning for the Evolutionary Trading Algo stack
 #
 # Does (idempotent, each step reports OK/SKIP):
-#   1. Windows Defender exclusions on apex dirs + python/cloudflared
+#   1. Windows Defender exclusions on ETA dirs + python/cloudflared
 #   3. NTFS: disable 8.3 short-name generation + last-access updates
-#   4. All Apex-* tasks -> LogonType=S4U (runs without interactive login)
+#   4. All ETA-* tasks -> LogonType=S4U (runs without interactive login)
 #   6. Pagefile -> fixed 16 GB (no dynamic resizing stalls)
 #
 # Run as the operator user (does NOT need Administrator for exclusions via
@@ -73,8 +73,8 @@ try {
 # ----------------------------------------------------------------------------
 # #4 -- Logon-independent task execution
 # ----------------------------------------------------------------------------
-Log "Step 3/4 -- Apex-* tasks -> run whether user logged on or not (S4U)"
-$tasks = Get-ScheduledTask -TaskName "Apex-*" -ErrorAction SilentlyContinue
+Log "Step 3/4 -- ETA-* tasks -> run whether user logged on or not (S4U)"
+$tasks = Get-ScheduledTask -TaskName "ETA-*" -ErrorAction SilentlyContinue
 if ($tasks) {
     foreach ($task in $tasks) {
         try {
@@ -92,7 +92,7 @@ if ($tasks) {
         }
     }
 } else {
-    Skip "no Apex-* tasks found"
+    Skip "no ETA-* tasks found"
 }
 
 # ----------------------------------------------------------------------------

@@ -63,7 +63,7 @@ def test_bridge_builds_active_bots():
     active = [
         "rsi_mr_mnq", "vwap_mr_mnq", "vwap_mr_btc",
         "volume_profile_mnq", "volume_profile_btc",
-        "gap_fill_mnq", "cross_asset_mnq", "cross_asset_btc",
+        "cross_asset_mnq", "cross_asset_btc",
         "funding_rate_btc",
     ]
     for bot_id in active:

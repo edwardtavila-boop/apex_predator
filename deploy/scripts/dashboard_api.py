@@ -1123,7 +1123,10 @@ _SCORECARD_PAGE = Path(__file__).resolve().parent.parent / "status_page" / "scor
 def root() -> HTMLResponse:
     """Serve the status page at the root URL."""
     if _STATUS_PAGE.exists():
-        return HTMLResponse(_STATUS_PAGE.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            _STATUS_PAGE.read_text(encoding="utf-8"),
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+        )
     return HTMLResponse(
         "<h1>Evolutionary Trading Algo</h1><p>Status page not bundled. See /health or /api/dashboard.</p>",
     )

@@ -488,7 +488,19 @@ def evaluate_request(
     # L4 yield vault, legacy seed) plus the operator are whitelisted for
     # OVERNIGHT if they pass payload['overnight_explicit']=True. Everything
     # else -- notably the US-index futures bots -- must sit out.
-    overnight_whitelist: frozenset[SubsystemId] = CRYPTO_24_7_BOTS | {SubsystemId.OPERATOR}
+    # Crypto bots get the 24/7 whitelist by definition. Index-futures bots
+    # (BOT_MNQ, BOT_NQ) are also allowed through provided they pass
+    # overnight_explicit — the supervisor only consults JARVIS for a signal
+    # whose per-bot confluence threshold has already been met, so by the
+    # time we reach this gate the entry has been pre-validated. Operator
+    # opted in 2026-05-03 once new MNQ/NQ/ES bar history (yfinance, ~2.4yr)
+    # and Wave-18 strategy fleet were in place. Override at runtime by
+    # operator kill switch if a setup proves unsafe overnight.
+    overnight_whitelist: frozenset[SubsystemId] = (
+        CRYPTO_24_7_BOTS
+        | {SubsystemId.OPERATOR}
+        | {SubsystemId.BOT_MNQ, SubsystemId.BOT_NQ}
+    )
     if (
         session == SessionPhase.OVERNIGHT
         and req.action in _RISK_ADDING_ACTIONS

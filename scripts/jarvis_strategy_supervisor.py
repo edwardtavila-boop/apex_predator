@@ -711,15 +711,50 @@ class JarvisStrategySupervisor:
         try:
             from eta_engine.brain.jarvis_admin import (
                 ActionType,
+                CRYPTO_24_7_BOTS,
                 SubsystemId,
                 make_action_request,
             )
             atype = getattr(ActionType, action, ActionType.ORDER_PLACE)
-            sub = getattr(
-                SubsystemId,
-                f"BOT_{bot.bot_id.upper().replace('_', '')}",
-                SubsystemId.BOT_MNQ,
-            )
+
+            # Resolve the per-bot SubsystemId. The legacy lookup stripped
+            # underscores and so e.g. "eth_perp" -> "BOT_ETHPERP" never
+            # matched the actual enum entry "BOT_ETH_PERP", causing every
+            # bot in the fleet to fall back to BOT_MNQ. With the fleet
+            # now spanning crypto + futures, the misclassification meant
+            # crypto bots were being denied as overnight-restricted
+            # futures even on weekends when they should trade 24/7.
+            bot_lower = bot.bot_id.lower()
+            symbol_upper = (getattr(bot, "symbol", "") or "").upper()
+            sub = getattr(SubsystemId, f"BOT_{bot.bot_id.upper()}", None)
+            if sub is None:
+                if "eth" in bot_lower or symbol_upper in ("ETH", "MET"):
+                    sub = SubsystemId.BOT_ETH_PERP
+                elif "btc" in bot_lower or symbol_upper in ("BTC", "MBT"):
+                    sub = SubsystemId.BOT_BTC_HYBRID
+                elif "sol" in bot_lower or symbol_upper == "SOL":
+                    sub = SubsystemId.BOT_SOL_PERP
+                elif "xrp" in bot_lower or symbol_upper == "XRP":
+                    sub = SubsystemId.BOT_XRP_PERP
+                elif "crypto" in bot_lower:
+                    sub = SubsystemId.BOT_CRYPTO_SEED
+                elif symbol_upper == "NQ1":
+                    sub = SubsystemId.BOT_NQ
+                else:
+                    sub = SubsystemId.BOT_MNQ
+
+            # All fleet bots must mark themselves overnight_explicit so
+            # the admin's overnight session gate passes them through. The
+            # gate's check is `subsystem in whitelist AND overnight_explicit`
+            # — both conditions are required. The supervisor only consults
+            # JARVIS once a signal has already cleared the per-bot
+            # confluence threshold, so by this point the entry is
+            # pre-validated; operator opted to allow futures overnight as
+            # well (2026-05-03) given new bar history + Wave-18 strategy
+            # fleet support globex setups.
+            payload = dict(payload)
+            payload.setdefault("overnight_explicit", True)
+
             req = make_action_request(
                 subsystem=sub, action=atype,
                 rationale=narrative, **payload,

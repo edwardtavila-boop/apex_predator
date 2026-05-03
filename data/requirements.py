@@ -379,6 +379,226 @@ REQUIREMENTS: tuple[BotRequirements, ...] = (
         ),
         sources_hint=("IBKR CME bars (via Client Portal Gateway)", "scripts/fetch_ibkr_crypto_bars.py"),
     ),
+
+    # ── Wave-18 fleet additions ────────────────────────────────────
+    # Stub requirements added 2026-05-03 to clear the registry/requirements
+    # sync drift discovered during the live VPS paper-live cutover. Each
+    # entry covers the bot's own symbol bars at the timeframes implied by
+    # its strategy_kind in strategies/per_bot_registry.py. These are the
+    # minimum critical bars needed for honest signals; enrichment (funding,
+    # onchain, sentiment, correlations) can be promoted from optional to
+    # critical bot-by-bot as research validates the dependency.
+
+    # confluence_scorecard variants on BTC — sweep_reclaim sub-strategy
+    BotRequirements(
+        bot_id="btc_optimized",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="regime + macro lens"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+
+    # MNQ confluence_scorecard sweep_reclaim sub-strategy
+    BotRequirements(
+        bot_id="mnq_sweep_reclaim",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("correlation", "ES1", "5m", critical=False,
+                note="ES correlation is a primary MNQ regime driver"),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",),
+    ),
+
+    # RSI mean-reversion variants
+    BotRequirements(
+        bot_id="rsi_mr_mnq",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",),
+    ),
+    BotRequirements(
+        bot_id="rsi_mr_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+
+    # VWAP mean-reversion variants
+    BotRequirements(
+        bot_id="vwap_mr_mnq",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",),
+    ),
+    BotRequirements(
+        bot_id="vwap_mr_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+
+    # Volume-profile (POC/value-area) — needs daily for context
+    BotRequirements(
+        bot_id="volume_profile_mnq",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("bars", "MNQ1", "D", critical=True,
+                note="daily POC anchors session value-area"),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",),
+    ),
+    BotRequirements(
+        bot_id="volume_profile_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="daily POC anchors session value-area"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+
+    # Gap-fill — needs daily to detect overnight gap
+    BotRequirements(
+        bot_id="gap_fill_mnq",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("bars", "MNQ1", "D", critical=True,
+                note="daily prev-close anchors gap detection"),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",),
+    ),
+    BotRequirements(
+        bot_id="gap_fill_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="daily prev-close anchors gap detection"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",),
+    ),
+
+    # Cross-asset (correlation-driven entries)
+    BotRequirements(
+        bot_id="cross_asset_mnq",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("correlation", "ES1", "5m", critical=True,
+                note="ES is the primary cross-asset reference for MNQ"),
+            DataRequirement("correlation", "DXY", "5m", critical=False),
+            DataRequirement("correlation", "VIX", "5m", critical=False),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",
+                      "scripts/fetch_market_context_bars.py"),
+    ),
+    BotRequirements(
+        bot_id="cross_asset_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "5m", critical=True),
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("correlation", "ETH", "1h", critical=True,
+                note="ETH-BTC is the primary intra-crypto cross-asset signal"),
+            DataRequirement("correlation", "DXY", "1h", critical=False),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",
+                      "scripts/fetch_market_context_bars.py"),
+    ),
+
+    # Funding-rate skew bot — funding is the actual edge
+    BotRequirements(
+        bot_id="funding_rate_btc",
+        requirements=(
+            DataRequirement("bars", "BTC", "1h", critical=True),
+            DataRequirement("bars", "BTC", "D", critical=True,
+                note="daily timeframe is the primary signal frame"),
+            DataRequirement("funding", "BTC", "8h", critical=True,
+                note="funding skew IS the edge; non-optional for this bot"),
+        ),
+        sources_hint=("scripts/fetch_btc_bars.py (Coinbase spot bars)",
+                      "scripts/fetch_funding_rates.py (OKX/Binance funding)"),
+    ),
+
+    # ETH compression-breakout
+    BotRequirements(
+        bot_id="eth_compression",
+        requirements=(
+            DataRequirement("bars", "ETH", "5m", critical=True),
+            DataRequirement("bars", "ETH", "1h", critical=True),
+            DataRequirement("correlation", "BTC", "1h", critical=False,
+                note="ETH-BTC correlation as regime confirmation"),
+        ),
+        sources_hint=("Coinbase ETH bars (scripts/fetch_crypto_bars_coinbase.py)",),
+    ),
+
+    # MNQ optimized — full-stack OHLCV + ES correlation
+    BotRequirements(
+        bot_id="mnq_futures_optimized",
+        requirements=(
+            DataRequirement("bars", "MNQ1", "5m", critical=True),
+            DataRequirement("bars", "MNQ1", "1h", critical=True),
+            DataRequirement("bars", "MNQ1", "D", critical=True,
+                note="regime + walk-forward window"),
+            DataRequirement("correlation", "ES1", "5m", critical=True,
+                note="ES correlation is a primary MNQ price driver"),
+            DataRequirement("correlation", "DXY", "5m", critical=False),
+            DataRequirement("correlation", "VIX", "5m", critical=False),
+        ),
+        sources_hint=("scripts/fetch_index_futures_bars.py",
+                      "scripts/fetch_market_context_bars.py"),
+    ),
+
+    # BTC crypto scalper — short-timeframe entry
+    BotRequirements(
+        bot_id="btc_crypto_scalp",
+        requirements=(
+            DataRequirement("bars", "BTC", "1m", critical=True,
+                note="1m bars drive scalp entry timing"),
+            DataRequirement("bars", "BTC", "5m", critical=True),
+        ),
+        sources_hint=("Coinbase 1m granularity (scripts/fetch_crypto_bars_coinbase.py)",),
+    ),
+
+    # SOL sweep scalp — pulls SOL bars at multiple timeframes
+    BotRequirements(
+        bot_id="sol_sweep_scalp",
+        requirements=(
+            DataRequirement("bars", "SOL", "5m", critical=True),
+            DataRequirement("bars", "SOL", "1h", critical=True),
+            DataRequirement("correlation", "BTC", "1h", critical=False,
+                note="BTC-SOL correlation as regime confirmation"),
+        ),
+        sources_hint=("Coinbase SOL bars (scripts/fetch_crypto_bars_coinbase.py)",),
+    ),
+
+    # ETH sweep_reclaim — same shape as btc/sol sweep variants
+    BotRequirements(
+        bot_id="eth_sweep_reclaim",
+        requirements=(
+            DataRequirement("bars", "ETH", "5m", critical=True),
+            DataRequirement("bars", "ETH", "1h", critical=True),
+            DataRequirement("bars", "ETH", "D", critical=True,
+                note="regime + macro lens"),
+            DataRequirement("correlation", "BTC", "1h", critical=False,
+                note="ETH-BTC correlation as regime confirmation"),
+        ),
+        sources_hint=("Coinbase ETH bars (scripts/fetch_crypto_bars_coinbase.py)",),
+    ),
 )
 
 

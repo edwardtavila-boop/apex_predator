@@ -44,7 +44,7 @@ def test_get_requirements_returns_match_or_none() -> None:
 
 def test_critical_requirements_filters() -> None:
     crits = critical_requirements_for("btc_hybrid")
-    assert len(crits) >= 4  # btc_hybrid has many critical reqs
+    assert len(crits) >= 3  # btc_hybrid has BTC bars at 5m/1h/D as critical
     assert all(r.critical for r in crits)
 
 
@@ -117,8 +117,8 @@ def test_audit_blocked_when_critical_missing(tmp_path: Path) -> None:
     assert a is not None
     assert not a.is_runnable
     assert a.critical_coverage_pct == pytest.approx(0.0)
-    # btc_hybrid critical: bars (4 timeframes) + funding + onchain
-    assert len(a.missing_critical) >= 5
+    # btc_hybrid critical: BTC bars at 5m/1h/D (3 reqs after data-audit drift)
+    assert len(a.missing_critical) >= 3
 
 
 def test_audit_separates_critical_from_optional(tmp_path: Path) -> None:

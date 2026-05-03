@@ -883,6 +883,94 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
     ),
 
     # ═══════════════════════════════════════════════════════════════════
+    # MICRO FUTURES — leveraged MBT/MET (1/10th BTC/ETH on CME)
+    # ═══════════════════════════════════════════════════════════════════
+
+    # MBT sweep_reclaim — micro Bitcoin futures. Same diamond formula as
+    # btc_optimized (sweep_reclaim + confluence scorecard) but on CME MBT
+    # with RTH session awareness. 1/10th BTC = 1/10th risk, safe leverage.
+    StrategyAssignment(
+        bot_id="mbt_sweep_reclaim",
+        strategy_id="mbt_sweep_diamond_v1",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=5,
+        strategy_kind="confluence_scorecard",
+        rationale=(
+            "DIAMOND MICRO: btc_optimized formula on MBT (1/10th BTC futures). "
+            "Sweep_reclaim + confluence scorecard. Same 50% WR architecture "
+            "proven on BTC, now on micro futures for safe leveraged exposure. "
+            "RR=3.0, atr_stop=2.0, scorecard min 2/5 factors. "
+            "MBT trades RTH only (CME hours), providing cleaner breaks than "
+            "24/7 crypto spot."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "sub_strategy_kind": "sweep_reclaim",
+            "sub_strategy_extras": {
+                "sweep_preset": "btc",
+                "sweep_config": {
+                    "rr_target": 3.0,
+                    "atr_stop_mult": 2.0,
+                    "max_trades_per_day": 2,
+                    "min_bars_between_trades": 12,
+                },
+            },
+            "scorecard_config": {
+                "min_score": 2, "a_plus_score": 3, "a_plus_size_mult": 1.3,
+                "fast_ema": 21, "mid_ema": 50, "slow_ema": 100,
+            },
+            "per_ticker_optimal": "BTC",
+            "research_candidate": True,
+            "daily_loss_limit_pct": 4.0,
+            "warmup_policy": {"promoted_on": "2026-05-03", "warmup_days": 30, "risk_multiplier_during_warmup": 0.5},
+        },
+    ),
+
+    # MET sweep_reclaim — micro Ether futures. Same diamond formula as
+    # eth_sweep_reclaim (sweep_reclaim on ETH 1h) but on CME MET with
+    # RTH session awareness. 1/10th ETH = 1/10th risk, safe leverage.
+    StrategyAssignment(
+        bot_id="met_sweep_reclaim",
+        strategy_id="met_sweep_diamond_v1",
+        symbol="ETH",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=0.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=5,
+        strategy_kind="sweep_reclaim",
+        rationale=(
+            "DIAMOND MICRO: eth_sweep_reclaim formula on MET (1/10th ETH futures). "
+            "Pure sweep_reclaim — ETH's oscillation pattern produces clean "
+            "liquidity sweeps at prior extremes followed by reclaims. "
+            "Same 60% WR architecture proven on ETH spot, now on micro futures "
+            "for safe 2-3x leveraged exposure. MET trades RTH on CME."
+        ),
+        extras={
+            "promotion_status": "research_candidate",
+            "per_ticker_optimal": "ETH",
+            "sweep_preset": "eth",
+            "level_lookback": 20,
+            "min_wick_pct": 0.60,
+            "min_volume_z": 1.0,
+            "rr_target": 2.0,
+            "atr_stop_mult": 1.5,
+            "max_trades_per_day": 2,
+            "research_candidate": True,
+            "daily_loss_limit_pct": 4.0,
+            "warmup_policy": {"promoted_on": "2026-05-03", "warmup_days": 30, "risk_multiplier_during_warmup": 0.5},
+        },
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
     # SHADOW BENCHMARK — diagnostic only, not for live exposure
     # ═══════════════════════════════════════════════════════════════════
 
@@ -1078,6 +1166,89 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         min_trades_per_window=10,
         rationale="DEACTIVATED — no news/regulatory feed for XRP.",
         extras={"deactivated": True, "deactivation_reason": "no news feed"},
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Deactivated/historical stubs — kept in registry only to satisfy
+    # registry/requirements bidirectional-sync audit. Their data
+    # requirements remain in data/requirements.py because tests and
+    # readiness checks still reference these IDs by name. Reactivate by
+    # flipping deactivated=False in extras and updating strategy_id.
+    # ═══════════════════════════════════════════════════════════════════
+
+    StrategyAssignment(
+        bot_id="mnq_futures",
+        strategy_id="mnq_futures_DEPRECATED",
+        symbol="MNQ1",
+        timeframe="5m",
+        scorer_name="btc",
+        confluence_threshold=10.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=10,
+        rationale="DEPRECATED — superseded by mnq_futures_sage (sage-overlay variant).",
+        extras={"deactivated": True, "deactivation_reason": "superseded by mnq_futures_sage"},
+    ),
+
+    StrategyAssignment(
+        bot_id="nq_futures",
+        strategy_id="nq_futures_DEPRECATED",
+        symbol="NQ1",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=10.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=10,
+        rationale="DEPRECATED — superseded by nq_futures_sage (sage-overlay variant).",
+        extras={"deactivated": True, "deactivation_reason": "superseded by nq_futures_sage"},
+    ),
+
+    StrategyAssignment(
+        bot_id="mnq_sage_consensus",
+        strategy_id="mnq_sage_consensus_DEPRECATED",
+        symbol="MNQ1",
+        timeframe="5m",
+        scorer_name="btc",
+        confluence_threshold=10.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=10,
+        rationale="DEPRECATED — folded into mnq_futures_sage; kept as historical stub for registry sync.",
+        extras={"deactivated": True, "deactivation_reason": "folded into mnq_futures_sage"},
+    ),
+
+    StrategyAssignment(
+        bot_id="nq_daily_drb",
+        strategy_id="nq_daily_drb_DEPRECATED",
+        symbol="NQ1",
+        timeframe="1d",
+        scorer_name="btc",
+        confluence_threshold=10.0,
+        block_regimes=frozenset(),
+        window_days=365,
+        step_days=30,
+        min_trades_per_window=10,
+        rationale="DEPRECATED — daily DRB variant superseded by nq_futures_sage; kept as historical stub.",
+        extras={"deactivated": True, "deactivation_reason": "superseded by nq_futures_sage"},
+    ),
+
+    StrategyAssignment(
+        bot_id="btc_regime_trend",
+        strategy_id="btc_regime_trend_DEPRECATED",
+        symbol="BTC",
+        timeframe="1h",
+        scorer_name="btc",
+        confluence_threshold=10.0,
+        block_regimes=frozenset(),
+        window_days=90,
+        step_days=30,
+        min_trades_per_window=10,
+        rationale="DEPRECATED — superseded by btc_regime_trend_etf (ETF-routed execution).",
+        extras={"deactivated": True, "deactivation_reason": "superseded by btc_regime_trend_etf"},
     ),
 
     # ═══════════════════════════════════════════════════════════════════

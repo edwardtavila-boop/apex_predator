@@ -469,7 +469,7 @@ def eth_compression_preset() -> CompressionBreakoutConfig:
         trend_ema_period=200, require_trend_alignment=True,
         volume_z_lookback=20, min_volume_z=0.4,
         min_close_location=0.65,
-        atr_stop_mult=1.5, rr_target=2.0,             # was 1.8/2.5 — lower stop + RR improves WR
+        atr_stop_mult=1.0, rr_target=1.5,             # was 1.5/2.0 — lower stop+RR improves WR
         risk_per_trade_pct=0.005,
         min_bars_between_trades=12,
         max_trades_per_day=2,

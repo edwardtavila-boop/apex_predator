@@ -189,6 +189,10 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "sub_strategy_kind": "sweep_reclaim",
             "sub_strategy_extras": {
                 "sweep_preset": "btc",
+                "sweep_config": {
+                    "rr_target": 3.0,
+                    "atr_stop_mult": 2.0,
+                },
             },
             "scorecard_config": {
                 "min_score": 2, "a_plus_score": 3, "a_plus_size_mult": 1.3,
@@ -340,8 +344,8 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
         ),
         extras={
             "promotion_status": "production_candidate",
-            "sage_min_conviction": 0.40,
-            "sage_min_alignment": 0.40,
+            "sage_min_conviction": 0.35,
+            "sage_min_alignment": 0.35,
             "sage_lookback_bars": 200,
             "orb_range_minutes": 15,
             "orb_config": {
@@ -435,6 +439,12 @@ ASSIGNMENTS: tuple[StrategyAssignment, ...] = (
             "sub_strategy_kind": "sweep_reclaim",
             "sub_strategy_extras": {
                 "sweep_preset": "mnq",
+                "sweep_config": {
+                    "rr_target": 3.0,
+                    "atr_stop_mult": 1.0,
+                    "max_trades_per_day": 4,
+                    "min_bars_between_trades": 6,
+                },
             },
             "scorecard_config": {
                 "min_score": 2, "a_plus_score": 3, "a_plus_size_mult": 1.3,
